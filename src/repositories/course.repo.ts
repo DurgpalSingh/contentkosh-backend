@@ -130,3 +130,57 @@ export async function deleteCourse(id: number) {
     where: { id },
   });
 }
+export async function findCoursesByBusinessId(businessId: number) {
+  return prisma.course.findMany({
+    where: {
+      exam: {
+        businessId
+      }
+    },
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      duration: true,
+      isActive: true,
+      examId: true,
+      createdAt: true,
+      updatedAt: true,
+      exam: {
+        select: {
+          id: true,
+          name: true
+        }
+      }
+    },
+    orderBy: { name: 'asc' },
+  });
+}
+
+export async function findActiveCoursesByBusinessId(businessId: number) {
+  return prisma.course.findMany({
+    where: {
+      exam: {
+        businessId
+      },
+      isActive: true
+    },
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      duration: true,
+      isActive: true,
+      examId: true,
+      createdAt: true,
+      updatedAt: true,
+      exam: {
+        select: {
+          id: true,
+          name: true
+        }
+      }
+    },
+    orderBy: { name: 'asc' },
+  });
+}
