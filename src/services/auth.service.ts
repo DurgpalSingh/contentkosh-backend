@@ -17,7 +17,7 @@ export class AuthService {
   static generateToken(user: IUser): string {
     const secret = Buffer.from(config.jwt.secret, 'utf8');
     return jwt.sign({
-      userId: user.id,
+      id: user.id,
       businessId: user.businessId,
       role: user.role
     }, secret, { 
