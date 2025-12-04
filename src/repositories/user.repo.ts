@@ -28,6 +28,7 @@ export function findByEmail(email: string) {
 }
 
 export async function exists(id: number): Promise<boolean> {
+  if (!id) return false;
   const user = await prisma.user.findUnique({ where: { id }, select: { id: true } });
   return user !== null;
 }
