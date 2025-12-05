@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { register, login, getProfile, assignUserToBusiness, getUserBusinesses, getBusinessUsers, getBusinessUser, updateBusinessUser, removeUserFromBusiness } from '../controllers/user.controller';
+import { register, login, getProfile, assignUserToBusiness, getUserBusinesses, getBusinessUsers, getBusinessUser, updateBusinessUser, removeUserFromBusiness, getAllUsers } from '../controllers/user.controller';
 import { authenticate, authorize } from '../middlewares/auth.middleware';
 import { ADMIN } from '../dtos/auth.dto';
 
@@ -136,6 +136,43 @@ router.post('/login', login);
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get('/profile', authenticate, getProfile);
+
+/**
+ * @swagger
+ * /api/users/all:
+ *   get:
+ *     summary: Get all users
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: All users fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/ApiResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: array
+ *                       items:
+ *                         $ref: '#/components/schemas/User'
+ *       401:
+ *         description: User not authenticated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+router.get('/all', authenticate, getAllUsers);
 
 // ==================== BUSINESS USER ROUTES ====================
 
@@ -423,4 +460,4 @@ router.put('/business-users/:id', authenticate, authorize(ADMIN), updateBusiness
  */
 router.delete('/business-users/:id', authenticate, authorize(ADMIN), removeUserFromBusiness);
 
-export default router; 
+export default router;

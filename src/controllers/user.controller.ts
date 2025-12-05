@@ -220,3 +220,14 @@ export const removeUserFromBusiness = async (req: Request, res: Response) => {
 
   ApiResponseHandler.success(res, null, 'User removed from business successfully');
 }; 
+
+export const getAllUsers = async (req: Request, res: Response) => {
+  try {
+    const users = await userRepo.findAllUsers();
+    logger.info('All users fetched successfully');
+    ApiResponseHandler.success(res, users, 'All users fetched successfully');
+  } catch (error) {
+    logger.error('Error fetching all users:', error);
+    ApiResponseHandler.error(res, 'Error fetching all users', 500);
+  }
+};
