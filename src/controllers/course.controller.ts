@@ -110,3 +110,22 @@ export const deleteCourse = async (req: Request, res: Response) => {
 
     ApiResponseHandler.success(res, null, 'Course deleted successfully');
 };
+export const getCoursesByBusiness = async (req: Request, res: Response) => {
+    const businessId = Number(req.params.businessId);
+    if (!Number.isInteger(businessId) || businessId <= 0) {
+        throw new BadRequestError('Valid Business ID is required');
+    }
+
+    const activeOnly = req.query.active === 'true';
+
+    let courses;
+    if (activeOnly) {
+        courses = await courseRepo.findActiveCoursesByBusinessId(businessId);
+    } else {
+        courses = await courseRepo.findCoursesByBusinessId(businessId);
+    }
+
+    logger.info(`Courses fetched for business ${businessId}`);
+
+    ApiResponseHandler.success(res, courses, 'Courses fetched successfully');
+};

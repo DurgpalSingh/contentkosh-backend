@@ -55,10 +55,10 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
             req.user = userContext;
             next();
         });
-        
-    } catch (error) {
+
+    } catch (error: any) {
         logger.error('Authentication error:', error);
-        ApiResponseHandler.error(res, 'Authentication error', 401);
+        ApiResponseHandler.error(res, `Authentication error: ${error.message}`, 401);
     }
 }; 
 
