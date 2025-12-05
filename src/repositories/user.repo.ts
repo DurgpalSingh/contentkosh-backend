@@ -40,7 +40,6 @@ export function findPublicById(id: number) {
       id: true,
       email: true,
       name: true,
-      password: true,
       createdAt: true,
       updatedAt: true,
       businessUsers: {
@@ -73,6 +72,18 @@ export function findByEmailWithBusinesses(email: string) {
           isActive: true,
         }
       }
+    }
+  });
+}
+
+export function findAllUsers() {
+  return prisma.user.findMany({
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      createdAt: true,
+      updatedAt: true,
     }
   });
 }
