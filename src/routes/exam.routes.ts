@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createExam, getExam, getExamWithCourses, updateExam, deleteExam } from '../controllers/exam.controller';
+import { createExam, getExam, getExamWithCourses, getExamsByBusiness, updateExam, deleteExam } from '../controllers/exam.controller';
 import { createCourse, getCourse, getCourseWithSubjects, getCoursesByExam, updateCourse, deleteCourse } from '../controllers/course.controller';
 import { createSubject, getSubject, getSubjectsByCourse, updateSubject, deleteSubject } from '../controllers/subject.controller';
 import { authorize } from '../middlewares/auth.middleware';
@@ -50,6 +50,50 @@ const router = Router();
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.post('/', authorize(ADMIN), createExam);
+
+/**
+ * @swagger
+ * /api/exams:
+ *   get:
+ *     summary: Get all exams for a business
+ *     tags: [Exams]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: businessId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Business ID
+ *     responses:
+ *       200:
+ *         description: Exams fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/ApiResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: array
+ *                       items:
+ *                         $ref: '#/components/schemas/Exam'
+ *       400:
+ *         description: Missing business ID
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+router.get('/', getExamsByBusiness);
 
 /**
  * @swagger

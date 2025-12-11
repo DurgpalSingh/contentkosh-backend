@@ -84,7 +84,9 @@ export async function updateExam(id: number, data: Prisma.ExamUncheckedUpdateInp
 }
 
 export async function deleteExam(id: number) {
-  return prisma.exam.delete({
+  // Soft delete
+  return prisma.exam.update({
     where: { id },
+    data: { isActive: false },
   });
 }
