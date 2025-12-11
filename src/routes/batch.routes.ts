@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createBatch, getBatch, getBatchWithUsers, getBatchesByBusiness } from '../controllers/batch.controller';
+import { createBatch, getBatch, getBatchWithUsers, getBatchesByCourse } from '../controllers/batch.controller';
 import {updateBatch, deleteBatch, addUserToBatch, removeUserFromBatch } from '../controllers/batch.controller';
 import {getBatchesByUser, getUsersByBatch, updateBatchUser } from '../controllers/batch.controller';
 
@@ -39,7 +39,7 @@ const router = Router();
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  *       404:
- *         description: Business not found
+ *         description: Course not found
  *         content:
  *           application/json:
  *             schema:
@@ -157,19 +157,19 @@ router.get('/:id/with-users', getBatchWithUsers);
 
 /**
  * @swagger
- * /api/batches/business/{businessId}:
+ * /api/batches/course/{courseId}:
  *   get:
- *     summary: Get all batches for a business
+ *     summary: Get all batches for a course
  *     tags: [Batches]
  *     security:
  *       - bearerAuth: []
  *     parameters:
  *       - in: path
- *         name: businessId
+ *         name: courseId
  *         required: true
  *         schema:
  *           type: integer
- *         description: Business ID
+ *         description: Course ID
  *       - in: query
  *         name: active
  *         schema:
@@ -190,7 +190,7 @@ router.get('/:id/with-users', getBatchWithUsers);
  *                       items:
  *                         $ref: '#/components/schemas/Batch'
  *       400:
- *         description: Invalid business ID
+ *         description: Invalid course ID
  *         content:
  *           application/json:
  *             schema:
@@ -202,7 +202,7 @@ router.get('/:id/with-users', getBatchWithUsers);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/business/:businessId', getBatchesByBusiness);
+router.get('/course/:courseId', getBatchesByCourse);
 
 /**
  * @swagger

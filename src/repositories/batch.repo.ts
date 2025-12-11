@@ -9,14 +9,15 @@ const batchSelect = {
   startDate: true,
   endDate: true,
   isActive: true,
-  businessId: true,
+  courseId: true,
   createdAt: true,
   updatedAt: true,
 };
 
-const businessSelect = {
+const courseSelect = {
   id: true,
-  instituteName: true,
+  name: true,
+  examId: true,
 };
 
 const userSelect = {
@@ -31,7 +32,7 @@ export async function createBatch(data: Prisma.BatchCreateInput) {
       data,
       select: {
         ...batchSelect,
-        business: { select: businessSelect }
+        course: { select: courseSelect }
       },
     });
   } catch (error) {
@@ -44,7 +45,7 @@ export async function findBatchById(id: number) {
     where: { id },
     select: {
       ...batchSelect,
-      business: { select: businessSelect }
+      course: { select: courseSelect }
     },
   });
 }
@@ -54,31 +55,31 @@ export async function findBatchByCodeName(codeName: string) {
     where: { codeName },
     select: {
       ...batchSelect,
-      business: { select: businessSelect }
+      course: { select: courseSelect }
     },
   });
 }
 
-export async function findBatchesByBusinessId(businessId: number) {
+export async function findBatchesByCourseId(courseId: number) {
   return prisma.batch.findMany({
-    where: { businessId },
+    where: { courseId },
     select: {
       ...batchSelect,
-      business: { select: businessSelect }
+      course: { select: courseSelect }
     },
     orderBy: { createdAt: 'desc' },
   });
 }
 
-export async function findActiveBatchesByBusinessId(businessId: number) {
+export async function findActiveBatchesByCourseId(courseId: number) {
   return prisma.batch.findMany({
-    where: { 
-      businessId,
-      isActive: true 
+    where: {
+      courseId,
+      isActive: true
     },
     select: {
       ...batchSelect,
-      business: { select: businessSelect }
+      course: { select: courseSelect }
     },
     orderBy: { createdAt: 'desc' },
   });
@@ -89,7 +90,7 @@ export async function findBatchWithUsers(id: number) {
     where: { id },
     select: {
       ...batchSelect,
-      business: { select: businessSelect },
+      course: { select: courseSelect },
       batchUsers: {
         where: { isActive: true },
         select: {
@@ -111,7 +112,7 @@ export async function updateBatch(id: number, data: Prisma.BatchUpdateInput) {
       data,
       select: {
         ...batchSelect,
-        business: { select: businessSelect }
+        course: { select: courseSelect }
       },
     });
   } catch (error) {
@@ -188,10 +189,10 @@ export async function findBatchesByUserId(userId: number) {
       id: true,
       isActive: true,
       createdAt: true,
-      batch: { 
+      batch: {
         select: {
           ...batchSelect,
-          business: { select: businessSelect }
+          course: { select: courseSelect }
         }
       }
     },

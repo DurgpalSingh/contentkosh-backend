@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { ApiResponseHandler } from '../utils/apiResponse';
 import * as batchRepo from '../repositories/batch.repo';
-import * as businessRepo from '../repositories/business.repo';
+import * as courseRepo from '../repositories/course.repo';
 import * as userRepo from '../repositories/user.repo';
 import logger from '../utils/logger';
 import { BadRequestError, NotFoundError, AlreadyExistsError } from '../errors/api.errors';
@@ -23,8 +23,8 @@ export const createBatch = async (req: Request, res: Response) => {
       throw new BadRequestError('Start date and end date are required');
     }
 
-    if (!batchData.businessId) {
-      throw new BadRequestError('Business ID is required');
+    if (!batchData.courseId) {
+      throw new BadRequestError('Course ID is required');
     }
 
     // Validate date range
@@ -35,10 +35,10 @@ export const createBatch = async (req: Request, res: Response) => {
       throw new BadRequestError('End date must be after start date');
     }
 
-    // Check if business exists
-    const business = await businessRepo.findBusinessById(batchData.businessId);
-    if (!business) {
-      throw new NotFoundError('Business not found');
+    // Check if course exists
+    const course = await courseRepo.findCourseById(batchData.courseId);
+    if (!course) {
+      throw new NotFoundError('Course not found');
     }
 
     // Check if code name already exists
@@ -49,9 +49,9 @@ export const createBatch = async (req: Request, res: Response) => {
 
     const batch = await batchRepo.createBatch({
       ...batchData,
-      business: {
+      course: {
         connect: {
-          id: batchData.businessId
+          id: batchData.courseId
         }
       }
     });
@@ -95,22 +95,22 @@ export const getBatchWithUsers = async (req: Request, res: Response) => {
     ApiResponseHandler.success(res, batch, 'Batch with users fetched successfully');
 };
 
-export const getBatchesByBusiness = async (req: Request, res: Response) => {
-    const businessId = Number(req.params.businessId);
-    if (!Number.isInteger(businessId) || businessId <= 0) {
-        throw new BadRequestError('Valid Business ID is required');
+export const getBatchesByCourse = async (req: Request, res: Response) => {
+    const courseId = Number(req.params.courseId);
+    if (!Number.isInteger(courseId) || courseId <= 0) {
+      throw new BadRequestError('Valid Course ID is required');
     }
 
     const activeOnly = req.query.active === 'true';
     
     let batches;
     if (activeOnly) {
-        batches = await batchRepo.findActiveBatchesByBusinessId(businessId);
+      batches = await batchRepo.findActiveBatchesByCourseId(courseId);
     } else {
-        batches = await batchRepo.findBatchesByBusinessId(businessId);
+      batches = await batchRepo.findBatchesByCourseId(courseId);
     }
 
-    logger.info(`Batches fetched for business ${businessId}`);
+      logger.info(`Batches fetched for course ${courseId}`);
 
     ApiResponseHandler.success(res, batches, 'Batches fetched successfully');
 };
