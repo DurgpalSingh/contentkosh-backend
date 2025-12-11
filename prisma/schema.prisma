@@ -55,7 +55,6 @@ model Business {
   exams         Exam[]
   businessUsers BusinessUser[]
   announcements Announcement[]
-  batches       Batch[]
 
   @@map("business")
 }
@@ -84,12 +83,12 @@ model Batch {
   startDate   DateTime @map("start_date")
   endDate     DateTime @map("end_date")
   isActive    Boolean  @default(true) @map("is_active")
-  businessId  Int      @map("business_id")
+  courseId    Int      @map("course_id")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   // Relations
-  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  course     Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
   batchUsers BatchUser[]
 
   @@map("batches")
@@ -160,6 +159,7 @@ model Course {
   // Relations
   exam     Exam      @relation(fields: [examId], references: [id], onDelete: Cascade)
   subjects Subject[]
+  batches  Batch[]
 
   @@map("courses")
 }

@@ -299,7 +299,7 @@ async function main() {
         startDate: new Date('2024-01-01'),
         endDate: new Date('2024-12-31'),
         isActive: true,
-        businessId: business.id,
+        courseId: courses[0].id,
       },
     }),
     prisma.batch.create({
@@ -309,7 +309,7 @@ async function main() {
         startDate: new Date('2024-01-01'),
         endDate: new Date('2024-12-31'),
         isActive: true,
-        businessId: business.id,
+        courseId: courses[2].id,
       },
     }),
     prisma.batch.create({
@@ -319,7 +319,7 @@ async function main() {
         startDate: new Date('2024-01-01'),
         endDate: new Date('2024-12-31'),
         isActive: true,
-        businessId: business.id,
+        courseId: courses[4].id,
       },
     }),
   ]);
@@ -397,7 +397,6 @@ async function main() {
   console.log(`- ${announcements.length} Announcements`);
   
   console.log('\n🔑 Test Credentials:');
-  console.log('All users have password: password123');
   console.log('- Super Admin: superadmin@contentkosh.com');
   console.log('- Admin: admin@contentkosh.com');
   console.log('- Teacher: teacher@contentkosh.com');
