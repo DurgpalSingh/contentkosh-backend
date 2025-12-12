@@ -36,3 +36,16 @@ All notable changes to this project will be documented in this file.
   - Unit tests: `tests/unit/controllers/course.controller.test.ts` (13 tests)
   - Integration tests: `tests/integration/routes/course.routes.test.ts` (14 tests)
 - **Test Coverage**: All 51 tests passing (22 exam + 29 course tests).
+
+## Version [1.3.0] - Subject & Batch Module Tests
+**P.R raised by**  : aaditya-singh-21  
+**Date** : 2025-12-12
+### Added
+- **Subject Module Tests**:
+  - Unit tests: `tests/unit/controllers/subject.controller.test.ts` (12 tests)
+  - Integration tests: `tests/integration/routes/subject.routes.test.ts` (13 tests)
+- **Batch Module Tests**:
+  - Unit tests: `tests/unit/controllers/batch.controller.test.ts` (30 tests)
+  - Integration tests: `tests/integration/routes/batch.routes.test.ts` (31 tests)
+- **Test Coverage**: All 137 tests passing (8 test suites).
+
