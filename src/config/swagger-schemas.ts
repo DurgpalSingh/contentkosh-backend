@@ -922,9 +922,9 @@ export const swaggerSchemas = {
         type: 'boolean',
         description: 'Whether the batch is active'
       },
-      businessId: {
+      courseId: {
         type: 'integer',
-        description: 'ID of the business this batch belongs to'
+        description: 'ID of the course this batch belongs to'
       },
       createdAt: {
         type: 'string',
@@ -936,16 +936,16 @@ export const swaggerSchemas = {
         format: 'date-time',
         description: 'Batch last update timestamp'
       },
-      business: {
+      course: {
         type: 'object',
         properties: {
           id: {
             type: 'integer',
-            description: 'Business ID'
+            description: 'Course ID'
           },
-          instituteName: {
+          name: {
             type: 'string',
-            description: 'Business institute name'
+            description: 'Course name'
           }
         }
       }
@@ -980,9 +980,9 @@ export const swaggerSchemas = {
         type: 'boolean',
         description: 'Whether the batch is active'
       },
-      businessId: {
+      courseId: {
         type: 'integer',
-        description: 'ID of the business this batch belongs to'
+        description: 'ID of the course this batch belongs to'
       },
       createdAt: {
         type: 'string',
@@ -994,16 +994,16 @@ export const swaggerSchemas = {
         format: 'date-time',
         description: 'Batch last update timestamp'
       },
-      business: {
+      course: {
         type: 'object',
         properties: {
           id: {
             type: 'integer',
-            description: 'Business ID'
+            description: 'Course ID'
           },
-          instituteName: {
+          name: {
             type: 'string',
-            description: 'Business institute name'
+            description: 'Course name'
           }
         }
       },
@@ -1122,9 +1122,9 @@ export const swaggerSchemas = {
             type: 'boolean',
             description: 'Whether the batch is active'
           },
-          businessId: {
+          courseId: {
             type: 'integer',
-            description: 'Business ID'
+            description: 'Course ID'
           },
           createdAt: {
             type: 'string',
@@ -1142,7 +1142,7 @@ export const swaggerSchemas = {
   },
   CreateBatchRequest: {
     type: 'object',
-    required: ['codeName', 'displayName', 'startDate', 'endDate', 'businessId'],
+    required: ['codeName', 'displayName', 'startDate', 'endDate', 'courseId'],
     properties: {
       codeName: {
         type: 'string',
@@ -1169,9 +1169,9 @@ export const swaggerSchemas = {
         default: true,
         description: 'Whether the batch is active'
       },
-      businessId: {
+      courseId: {
         type: 'integer',
-        description: 'ID of the business this batch belongs to (required)'
+        description: 'ID of the course this batch belongs to (required)'
       }
     }
   },

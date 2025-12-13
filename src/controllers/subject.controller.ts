@@ -11,7 +11,7 @@ export const createSubject = async (req: Request, res: Response) => {
 
     // Validate input
     if (!subjectData.name) {
-      throw new BadRequestError('Subject name is required');
+        throw new BadRequestError('Subject name is required');
     }
 
     if (!subjectData.courseId) {
@@ -23,15 +23,24 @@ export const createSubject = async (req: Request, res: Response) => {
         throw new NotFoundError('Course not found');
     }
 
-    const subject = await subjectRepo.createSubject({
-        ...subjectData,
+    const createInput: Prisma.SubjectCreateInput = {
+        name: subjectData.name,
         course: {
             connect: {
                 id: subjectData.courseId
             }
         }
-    });
-    
+    };
+
+    if (subjectData.description !== undefined) {
+        createInput.description = subjectData.description;
+    }
+    if (subjectData.isActive !== undefined) {
+        createInput.isActive = subjectData.isActive;
+    }
+
+    const subject = await subjectRepo.createSubject(createInput);
+
     logger.info(`Subject created successfully: ${subjectData.name}`);
 
     ApiResponseHandler.success(res, subject, 'Subject created successfully', 201);
@@ -66,7 +75,7 @@ export const getSubjectsByCourse = async (req: Request, res: Response) => {
 
     const activeOnly = req.query.active === 'true';
     const subjects = await subjectRepo.findSubjectsByCourseId(courseId);
-    
+
     logger.info(`Subjects fetched for course ${courseId}`);
 
     ApiResponseHandler.success(res, subjects, 'Subjects fetched successfully');
@@ -78,11 +87,11 @@ export const updateSubject = async (req: Request, res: Response) => {
 
     // Validate input
     if (subjectData.name !== undefined && typeof subjectData.name === 'string' && !subjectData.name.trim()) {
-      throw new BadRequestError('Subject name cannot be empty');
+        throw new BadRequestError('Subject name cannot be empty');
     }
 
     const subject = await subjectRepo.updateSubject(id, subjectData);
-    
+
     logger.info(`Subject updated successfully: ${subject.name}`);
 
     ApiResponseHandler.success(res, subject, 'Subject updated successfully');
@@ -90,9 +99,9 @@ export const updateSubject = async (req: Request, res: Response) => {
 
 export const deleteSubject = async (req: Request, res: Response) => {
     const id = getSubjectIdFromRequest(req);
-    
+
     await subjectRepo.deleteSubject(id);
-    
+
     logger.info(`Subject deleted successfully: ID ${id}`);
 
     ApiResponseHandler.success(res, null, 'Subject deleted successfully');

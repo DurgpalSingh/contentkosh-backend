@@ -11,7 +11,7 @@ export const createCourse = async (req: Request, res: Response) => {
 
     // Validate input
     if (!courseData.name) {
-      throw new BadRequestError('Course name is required');
+        throw new BadRequestError('Course name is required');
     }
 
     if (!courseData.examId) {
@@ -23,15 +23,27 @@ export const createCourse = async (req: Request, res: Response) => {
         throw new NotFoundError('Exam not found');
     }
 
-    const course = await courseRepo.createCourse({
-        ...courseData,
+    const createInput: Prisma.CourseCreateInput = {
+        name: courseData.name,
         exam: {
             connect: {
                 id: courseData.examId
             }
         }
-    });
-    
+    };
+
+    if (courseData.description !== undefined) {
+        createInput.description = courseData.description;
+    }
+    if (courseData.duration !== undefined) {
+        createInput.duration = courseData.duration;
+    }
+    if (courseData.isActive !== undefined) {
+        createInput.isActive = courseData.isActive;
+    }
+
+    const course = await courseRepo.createCourse(createInput);
+
     logger.info(`Course created successfully: ${courseData.name}`);
 
     ApiResponseHandler.success(res, course, 'Course created successfully', 201);
@@ -60,12 +72,12 @@ export const getCourse = async (req: Request, res: Response) => {
 
 export const getCourseWithSubjects = async (req: Request, res: Response) => {
     const id = getCourseIdFromRequest(req);
-    
+
     const course = await courseRepo.findCourseWithSubjects(id);
     if (!course) {
         throw new NotFoundError('Course not found');
     }
-    
+
     logger.info(`Course with subjects fetched successfully: ${course.name}`);
 
     ApiResponseHandler.success(res, course, 'Course with subjects fetched successfully');
@@ -79,7 +91,7 @@ export const getCoursesByExam = async (req: Request, res: Response) => {
 
     const activeOnly = req.query.active === 'true';
     const courses = await courseRepo.findCoursesByExamId(examId);
-    
+
     logger.info(`Courses fetched for exam ${examId}`);
 
     ApiResponseHandler.success(res, courses, 'Courses fetched successfully');
@@ -91,11 +103,11 @@ export const updateCourse = async (req: Request, res: Response) => {
 
     // Validate input
     if (courseData.name !== undefined && typeof courseData.name === 'string' && !courseData.name.trim()) {
-      throw new BadRequestError('Course name cannot be empty');
+        throw new BadRequestError('Course name cannot be empty');
     }
 
     const course = await courseRepo.updateCourse(id, courseData);
-    
+
     logger.info(`Course updated successfully: ${course.name}`);
 
     ApiResponseHandler.success(res, course, 'Course updated successfully');
@@ -103,9 +115,9 @@ export const updateCourse = async (req: Request, res: Response) => {
 
 export const deleteCourse = async (req: Request, res: Response) => {
     const id = getCourseIdFromRequest(req);
-    
+
     await courseRepo.deleteCourse(id);
-    
+
     logger.info(`Course deleted successfully: ID ${id}`);
 
     ApiResponseHandler.success(res, null, 'Course deleted successfully');
