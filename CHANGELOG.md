@@ -36,3 +36,26 @@ All notable changes to this project will be documented in this file.
   - Unit tests: `tests/unit/controllers/course.controller.test.ts` (13 tests)
   - Integration tests: `tests/integration/routes/course.routes.test.ts` (14 tests)
 - **Test Coverage**: All 51 tests passing (22 exam + 29 course tests).
+
+## Version [1.3.0] - Subject & Batch Module Tests
+**P.R raised by**  : aaditya-singh-21  
+**Date** : 2025-12-12
+### Added
+- **Subject Module Tests**:
+  - Unit tests: `tests/unit/controllers/subject.controller.test.ts` (12 tests)
+  - Integration tests: `tests/integration/routes/subject.routes.test.ts` (13 tests)
+- **Batch Module Tests**:
+  - Unit tests: `tests/unit/controllers/batch.controller.test.ts` (30 tests)
+  - Integration tests: `tests/integration/routes/batch.routes.test.ts` (31 tests)
+- **Test Coverage**: All 137 tests passing (8 test suites).
+
+## Version [1.3.1] - Subject & Batch Prisma Conflict Fix
+**P.R raised by**  : aaditya-singh-21  
+**Date** : 2025-12-13
+### Fixed
+- **Subject Controller**: Fixed Prisma conflict in `createSubject` where spreading `subjectData` (containing `courseId`) alongside `course: { connect: {...} }` caused a type conflict.
+- **Batch Controller**: Fixed same Prisma conflict in `createBatch` where spreading `batchData` (containing `courseId`) alongside `course: { connect: {...} }` caused a type conflict.
+- **Course Controller**: Fixed same Prisma conflict in `createCourse` where spreading `courseData` (containing `examId`) alongside `exam: { connect: {...} }` caused a type conflict.
+- **Resolution**: Replaced spread operator with explicit property assignment using proper `Prisma.SubjectCreateInput`, `Prisma.BatchCreateInput`, and `Prisma.CourseCreateInput` formats.
+
+
