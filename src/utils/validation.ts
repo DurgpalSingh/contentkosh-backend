@@ -37,4 +37,43 @@ export class ValidationUtils {
         }
         return parsedId;
     }
+
+    /**
+     * Validates that a value is a non-empty string.
+     * @param value The value to check.
+     * @param fieldName The name of the field for the error message.
+     * @returns The trimmed string.
+     */
+    static validateNonEmptyString(value: string | undefined | null, fieldName: string): string {
+        if (!value || typeof value !== 'string' || !value.trim()) {
+            throw new BadRequestError(`${fieldName} is required and cannot be empty`);
+        }
+        return value.trim();
+    }
+
+    /**
+     * Validates that a start date is before an end date.
+     * @param startDate The start date.
+     * @param endDate The end date.
+     * @param fieldNameStart The name of the start date field.
+     * @param fieldNameEnd The name of the end date field.
+     * @returns The parsed Date objects.
+     */
+    static validateDateRange(startDate: Date | string, endDate: Date | string, fieldNameStart: string = 'Start date', fieldNameEnd: string = 'End date'): { start: Date, end: Date } {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+
+        if (isNaN(start.getTime())) {
+            throw new BadRequestError(`Invalid ${fieldNameStart}`);
+        }
+        if (isNaN(end.getTime())) {
+            throw new BadRequestError(`Invalid ${fieldNameEnd}`);
+        }
+
+        if (start >= end) {
+            throw new BadRequestError(`${fieldNameEnd} must be after ${fieldNameStart}`);
+        }
+
+        return { start, end };
+    }
 }
