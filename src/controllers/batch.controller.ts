@@ -6,34 +6,22 @@ import * as userRepo from '../repositories/user.repo';
 import logger from '../utils/logger';
 import { BadRequestError, NotFoundError, AlreadyExistsError } from '../errors/api.errors';
 import { Prisma } from '@prisma/client';
+import { ValidationUtils } from '../utils/validation';
 
 export const createBatch = async (req: Request, res: Response) => {
     const batchData: Prisma.BatchUncheckedCreateInput = req.body;
 
     // Validate input
-    if (!batchData.codeName || !batchData.codeName.trim()) {
-      throw new BadRequestError('Batch code name is required');
-    }
-
-    if (!batchData.displayName || !batchData.displayName.trim()) {
-      throw new BadRequestError('Batch display name is required');
-    }
+    ValidationUtils.validateNonEmptyString(batchData.codeName, 'Batch code name');
+    ValidationUtils.validateNonEmptyString(batchData.displayName, 'Batch display name');
+    ValidationUtils.validateRequired(batchData.courseId, 'Course ID');
 
     if (!batchData.startDate || !batchData.endDate) {
       throw new BadRequestError('Start date and end date are required');
     }
 
-    if (!batchData.courseId) {
-      throw new BadRequestError('Course ID is required');
-    }
-
     // Validate date range
-    const startDate = new Date(batchData.startDate);
-    const endDate = new Date(batchData.endDate);
-    
-    if (startDate >= endDate) {
-      throw new BadRequestError('End date must be after start date');
-    }
+    const { start: startDate, end: endDate } = ValidationUtils.validateDateRange(batchData.startDate, batchData.endDate);
 
     // Check if course exists
     const course = await courseRepo.findCourseById(batchData.courseId);
@@ -47,26 +35,31 @@ export const createBatch = async (req: Request, res: Response) => {
       throw new AlreadyExistsError('Batch with this code name already exists');
     }
 
-    const batch = await batchRepo.createBatch({
-      ...batchData,
-      course: {
-        connect: {
-          id: batchData.courseId
+    const createInput: Prisma.BatchCreateInput = {
+        codeName: batchData.codeName,
+        displayName: batchData.displayName,
+        startDate: batchData.startDate,
+        endDate: batchData.endDate,
+        course: {
+            connect: {
+                id: batchData.courseId
+              }
         }
-      }
-    });
+    };
 
+    if (batchData.isActive !== undefined) {
+      createInput.isActive = batchData.isActive;
+    }
+
+    const batch = await batchRepo.createBatch(createInput);
+    
     logger.info(`Batch created successfully: ${batchData.codeName}`);
 
     ApiResponseHandler.success(res, batch, 'Batch created successfully', 201);
 };
 
 function getBatchIdFromRequest(req: Request): number {
-    const id = Number(req.params.id);
-    if (Number.isInteger(id) && id > 0) {
-        return id;
-    }
-    throw new BadRequestError('Batch ID is required');
+    return ValidationUtils.validateId(req.params.id, 'Batch ID');
 }
 
 export const getBatch = async (req: Request, res: Response) => {
@@ -96,10 +89,7 @@ export const getBatchWithUsers = async (req: Request, res: Response) => {
 };
 
 export const getBatchesByCourse = async (req: Request, res: Response) => {
-    const courseId = Number(req.params.courseId);
-    if (!Number.isInteger(courseId) || courseId <= 0) {
-      throw new BadRequestError('Valid Course ID is required');
-    }
+    const courseId = ValidationUtils.validateId(req.params.courseId, 'Course ID');
 
     const activeOnly = req.query.active === 'true';
     
@@ -120,22 +110,17 @@ export const updateBatch = async (req: Request, res: Response) => {
     const batchData: Prisma.BatchUncheckedUpdateInput = req.body;
 
     // Validate input
-    if (batchData.codeName !== undefined && !batchData.codeName.toString().trim()) {
-      throw new BadRequestError('Batch code name cannot be empty');
+    if (batchData.codeName !== undefined) {
+        ValidationUtils.validateNonEmptyString(batchData.codeName.toString(), 'Batch code name');
     }
 
-    if (batchData.displayName !== undefined && !batchData.displayName.toString().trim()) {
-      throw new BadRequestError('Batch display name cannot be empty');
+    if (batchData.displayName !== undefined) {
+        ValidationUtils.validateNonEmptyString(batchData.displayName.toString(), 'Batch display name');
     }
 
     // Validate date range if both dates are provided
     if (batchData.startDate && batchData.endDate) {
-      const startDate = new Date(batchData.startDate.toString());
-      const endDate = new Date(batchData.endDate.toString());
-      
-      if (startDate >= endDate) {
-        throw new BadRequestError('End date must be after start date');
-      }
+        ValidationUtils.validateDateRange(batchData.startDate.toString(), batchData.endDate.toString());
     }
 
     // Check if code name already exists (if being updated)
@@ -169,9 +154,8 @@ export const addUserToBatch = async (req: Request, res: Response) => {
     const { userId, batchId }: { userId: number; batchId: number } = req.body;
 
     // Validate input
-    if (!userId || !batchId) {
-      throw new BadRequestError('User ID and Batch ID are required');
-    }
+    ValidationUtils.validateId(userId, 'User ID');
+    ValidationUtils.validateId(batchId, 'Batch ID');
 
     // Check if user exists
     const user = await userRepo.findPublicById(userId);
@@ -202,9 +186,8 @@ export const removeUserFromBatch = async (req: Request, res: Response) => {
     const { userId, batchId }: { userId: number; batchId: number } = req.body;
 
     // Validate input
-    if (!userId || !batchId) {
-      throw new BadRequestError('User ID and Batch ID are required');
-    }
+    ValidationUtils.validateId(userId, 'User ID');
+    ValidationUtils.validateId(batchId, 'Batch ID');
 
     // Check if user is in this batch
     const existingBatchUser = await batchRepo.findBatchUser(userId, batchId);
@@ -220,10 +203,7 @@ export const removeUserFromBatch = async (req: Request, res: Response) => {
 };
 
 export const getBatchesByUser = async (req: Request, res: Response) => {
-    const userId = Number(req.params.userId);
-    if (!Number.isInteger(userId) || userId <= 0) {
-        throw new BadRequestError('Valid User ID is required');
-    }
+    const userId = ValidationUtils.validateId(req.params.userId, 'User ID');
 
     const batchUsers = await batchRepo.findBatchesByUserId(userId);
 
@@ -233,10 +213,7 @@ export const getBatchesByUser = async (req: Request, res: Response) => {
 };
 
 export const getUsersByBatch = async (req: Request, res: Response) => {
-    const batchId = Number(req.params.batchId);
-    if (!Number.isInteger(batchId) || batchId <= 0) {
-        throw new BadRequestError('Valid Batch ID is required');
-    }
+    const batchId = ValidationUtils.validateId(req.params.batchId, 'Batch ID');
 
     const batchUsers = await batchRepo.findUsersByBatchId(batchId);
 
@@ -250,13 +227,8 @@ export const updateBatchUser = async (req: Request<{ userId: number; batchId: nu
     const { isActive } = req.body;
 
     // Validate input
-    if (!Number.isInteger(Number(userId)) || Number(userId) <= 0) {
-        throw new BadRequestError('Valid User ID is required');
-    }
-
-    if (!Number.isInteger(Number(batchId)) || Number(batchId) <= 0) {
-        throw new BadRequestError('Valid Batch ID is required');
-    }
+    ValidationUtils.validateId(userId, 'User ID');
+    ValidationUtils.validateId(batchId, 'Batch ID');
 
     // Check if user is in this batch
     const existingBatchUser = await batchRepo.findBatchUser(Number(userId), Number(batchId));

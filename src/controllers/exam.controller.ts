@@ -13,7 +13,7 @@ export const createExam = async (req: Request, res: Response) => {
         logger.info('Creating new exam', { name: examData.name, businessId: examData.businessId });
 
         // Validate input
-        ValidationUtils.validateRequired(examData.name, 'Exam name');
+        ValidationUtils.validateNonEmptyString(examData.name, 'Exam name');
         ValidationUtils.validateMaxLength(examData.name, 50, 'Exam name');
         ValidationUtils.validateRequired(examData.businessId, 'Business ID');
 
@@ -24,9 +24,9 @@ export const createExam = async (req: Request, res: Response) => {
             return ApiResponseHandler.notFound(res, `Business with ID ${examData.businessId} not found`);
         }
 
-    const exam = await examRepo.createExam(examData);
-    
-    logger.info(`Exam created successfully: ${examData.name}`);
+        const exam = await examRepo.createExam(examData);
+
+        logger.info(`Exam created successfully: ${examData.name}`);
 
         ApiResponseHandler.success(res, exam, 'Exam created successfully', 201);
     } catch (error: any) {
@@ -125,7 +125,7 @@ export const updateExam = async (req: Request, res: Response) => {
 
         // Validate input
         if (examData.name !== undefined) {
-            ValidationUtils.validateRequired(examData.name as string, 'Exam name');
+            ValidationUtils.validateNonEmptyString(examData.name as string, 'Exam name');
             ValidationUtils.validateMaxLength(examData.name as string, 50, 'Exam name');
         }
 

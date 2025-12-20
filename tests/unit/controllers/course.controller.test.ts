@@ -42,7 +42,7 @@ describe('Course Controller', () => {
         it('should throw error if course name is missing', async () => {
             req.body = { examId: 1 }; // Missing name
 
-            await expect(CourseController.createCourse(req as Request, res as Response)).rejects.toThrow('Course name is required');
+            await expect(CourseController.createCourse(req as Request, res as Response)).rejects.toThrow('Course name is required and cannot be empty');
         });
 
         it('should throw error if examId is missing', async () => {
@@ -82,7 +82,7 @@ describe('Course Controller', () => {
         it('should throw error if ID is invalid', async () => {
             req.params = { courseId: 'invalid' };
 
-            await expect(CourseController.getCourse(req as Request, res as Response)).rejects.toThrow('Course ID is required');
+            await expect(CourseController.getCourse(req as Request, res as Response)).rejects.toThrow('Course ID is required and must be a valid positive integer');
         });
     });
 
@@ -129,7 +129,7 @@ describe('Course Controller', () => {
             req.params = { examId: 'invalid' };
             req.query = {};
 
-            await expect(CourseController.getCoursesByExam(req as Request, res as Response)).rejects.toThrow('Valid Exam ID is required');
+            await expect(CourseController.getCoursesByExam(req as Request, res as Response)).rejects.toThrow('Exam ID is required and must be a valid positive integer');
         });
     });
 
@@ -151,7 +151,7 @@ describe('Course Controller', () => {
             req.params = { courseId: '1' };
             req.body = { name: '   ' }; // Empty/whitespace name
 
-            await expect(CourseController.updateCourse(req as Request, res as Response)).rejects.toThrow('Course name cannot be empty');
+            await expect(CourseController.updateCourse(req as Request, res as Response)).rejects.toThrow('Course name is required and cannot be empty');
         });
     });
 
@@ -170,7 +170,7 @@ describe('Course Controller', () => {
         it('should throw error if ID is invalid', async () => {
             req.params = { courseId: 'invalid' };
 
-            await expect(CourseController.deleteCourse(req as Request, res as Response)).rejects.toThrow('Course ID is required');
+            await expect(CourseController.deleteCourse(req as Request, res as Response)).rejects.toThrow('Course ID is required and must be a valid positive integer');
         });
     });
 });

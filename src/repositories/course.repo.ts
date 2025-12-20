@@ -79,6 +79,17 @@ export async function findCoursesByExamId(examId: number) {
       examId: true,
       createdAt: true,
       updatedAt: true,
+      exam: {
+        select: {
+          name: true
+        }
+      },
+      subjects: {
+        select: {
+          id: true,
+          name: true
+        }
+      }
     },
     orderBy: { name: 'asc' },
   });
@@ -99,6 +110,17 @@ export async function findActiveCoursesByExamId(examId: number) {
       examId: true,
       createdAt: true,
       updatedAt: true,
+      exam: {
+        select: {
+          name: true
+        }
+      },
+      subjects: {
+        select: {
+          id: true,
+          name: true
+        }
+      }
     },
     orderBy: { name: 'asc' },
   });
