@@ -7,6 +7,8 @@ import { BadRequestError, NotFoundError } from '../errors/api.errors';
 import { Prisma } from '@prisma/client';
 import { ValidationUtils } from '../utils/validation';
 
+import { QueryBuilder } from '../utils/queryBuilder';
+
 export const createExam = async (req: Request, res: Response) => {
     try {
         const examData: Prisma.ExamUncheckedCreateInput = req.body;
@@ -46,15 +48,16 @@ function getExamIdFromRequest(req: Request): number {
 export const getExam = async (req: Request, res: Response) => {
     try {
         const id = getExamIdFromRequest(req);
+        const options = QueryBuilder.parse(req.query);
         logger.info('Fetching exam', { examId: id });
 
-        const exam = await examRepo.findExamById(id);
+        const exam = await examRepo.findExamById(id, options);
         if (!exam) {
             logger.error(`Exam with ID ${id} not found`);
             return ApiResponseHandler.notFound(res, 'Exam not found');
         }
 
-    logger.info(`Exam fetched successfully: ${exam.name}`);
+        logger.info(`Exam fetched successfully: ${exam.name}`);
 
         ApiResponseHandler.success(res, exam, 'Exam fetched successfully');
     } catch (error: any) {
@@ -67,31 +70,12 @@ export const getExam = async (req: Request, res: Response) => {
     }
 };
 
-export const getExamWithCourses = async (req: Request, res: Response) => {
-    try {
-        const id = getExamIdFromRequest(req);
-        logger.info('Fetching exam with courses', { examId: id });
-        const exam = await examRepo.findExamWithCourses(id);
-        if (!exam) {
-            logger.error(`Exam with ID ${id} not found`);
-            return ApiResponseHandler.notFound(res, 'Exam not found');
-        }
-        logger.info(`Exam with courses fetched successfully: ${exam.name}`);
 
-        ApiResponseHandler.success(res, exam, 'Exam with courses fetched successfully');
-    } catch (error: any) {
-        if (error instanceof BadRequestError) {
-            logger.error(`Invalid Exam ID: ${error.message}`);
-            return ApiResponseHandler.badRequest(res, error.message);
-        }
-        logger.error(`Error fetching exam with courses: ${error.message}`);
-        ApiResponseHandler.error(res, 'Failed to fetch exam with courses');
-    }
-};
 
 export const getExamsByBusiness = async (req: Request, res: Response) => {
     try {
         const businessId = ValidationUtils.validateId(req.query.businessId, 'Business ID');
+        const options = QueryBuilder.parse(req.query);
         logger.info('Fetching exams by business', { businessId });
 
         // Validate Business ID existence
@@ -101,7 +85,7 @@ export const getExamsByBusiness = async (req: Request, res: Response) => {
             return ApiResponseHandler.notFound(res, `Business with ID ${businessId} not found`);
         }
 
-        const exams = await examRepo.findActiveExamsByBusinessId(businessId);
+        const exams = await examRepo.findActiveExamsByBusinessId(businessId, options);
 
         logger.info(`Fetched ${exams.length} exams for business ${businessId}`);
 
@@ -129,9 +113,9 @@ export const updateExam = async (req: Request, res: Response) => {
             ValidationUtils.validateMaxLength(examData.name as string, 50, 'Exam name');
         }
 
-    const exam = await examRepo.updateExam(id, examData);
-    
-    logger.info(`Exam updated successfully: ${exam.name}`);
+        const exam = await examRepo.updateExam(id, examData);
+
+        logger.info(`Exam updated successfully: ${exam.name}`);
 
         ApiResponseHandler.success(res, exam, 'Exam updated successfully');
     } catch (error: any) {

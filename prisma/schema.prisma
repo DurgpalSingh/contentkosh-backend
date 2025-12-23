@@ -92,6 +92,7 @@ model Batch {
   batchUsers BatchUser[]
 
   @@map("batches")
+  @@index([courseId])
 }
 
 model BatchUser {
@@ -128,6 +129,7 @@ model Announcement {
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@map("announcements")
+  @@index([businessId])
 }
 
 model Exam {
@@ -144,6 +146,7 @@ model Exam {
   courses  Course[]
 
   @@map("exams")
+  @@index([businessId])
 }
 
 model Course {
@@ -162,6 +165,7 @@ model Course {
   batches  Batch[]
 
   @@map("courses")
+  @@index([examId])
 }
 
 model Subject {
@@ -177,4 +181,5 @@ model Subject {
   course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
   @@map("subjects")
+  @@index([courseId])
 }

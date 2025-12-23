@@ -17,7 +17,9 @@ describe('Exam Controller', () => {
     let res: Partial<Response>;
 
     beforeEach(() => {
-        req = {};
+        req = {
+            query: {}
+        };
         res = {
             status: jest.fn().mockReturnThis(),
             json: jest.fn(),
@@ -77,7 +79,37 @@ describe('Exam Controller', () => {
 
             await ExamController.getExam(req as Request, res as Response);
 
-            expect(ExamRepo.findExamById).toHaveBeenCalledWith(1);
+            expect(ExamRepo.findExamById).toHaveBeenCalledWith(1, {});
+            expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockExam, 'Exam fetched successfully');
+        });
+
+        it('should get an exam with specific fields', async () => {
+            req.params = { id: '1' };
+            req.query = { fields: 'id,name' };
+            const mockExam = { id: 1, name: 'Test Exam' };
+
+            (ExamRepo.findExamById as jest.Mock).mockResolvedValue(mockExam);
+
+            await ExamController.getExam(req as Request, res as Response);
+
+            expect(ExamRepo.findExamById).toHaveBeenCalledWith(1, expect.objectContaining({
+                select: expect.objectContaining({ id: true, name: true })
+            }));
+            expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockExam, 'Exam fetched successfully');
+        });
+
+        it('should get an exam with included relations', async () => {
+            req.params = { id: '1' };
+            req.query = { include: 'courses' };
+            const mockExam = { id: 1, name: 'Test Exam', courses: [] };
+
+            (ExamRepo.findExamById as jest.Mock).mockResolvedValue(mockExam);
+
+            await ExamController.getExam(req as Request, res as Response);
+
+            expect(ExamRepo.findExamById).toHaveBeenCalledWith(1, expect.objectContaining({
+                include: expect.objectContaining({ courses: true })
+            }));
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockExam, 'Exam fetched successfully');
         });
 
@@ -99,6 +131,8 @@ describe('Exam Controller', () => {
         });
     });
 
+
+
     describe('getExamsByBusiness', () => {
         it('should get exams for a business', async () => {
             logger.info('TEST: Starting getExamsByBusiness success test');
@@ -111,7 +145,7 @@ describe('Exam Controller', () => {
             await ExamController.getExamsByBusiness(req as Request, res as Response);
 
             expect(BusinessRepo.findBusinessById).toHaveBeenCalledWith(1);
-            expect(ExamRepo.findActiveExamsByBusinessId).toHaveBeenCalledWith(1);
+            expect(ExamRepo.findActiveExamsByBusinessId).toHaveBeenCalledWith(1, {});
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockExams, 'Exams fetched successfully');
         });
 

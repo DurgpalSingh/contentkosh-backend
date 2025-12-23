@@ -1,6 +1,27 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## Version [1.3.2] - Dynamic API & Optimization
+**P.R raised by**  : aaditya-singh-21  
+**Date** : 2025-12-22
+### Added
+- **Dynamic API Support**: Implemented `QueryBuilder` utility to support sparse fieldsets (`?fields=`) and dynamic relation inclusion (`?include=`).
+- **Optimization**: Updated `Course` and `Exam` endpoints to allow clients to fetch exactly what they need in a single request, reducing over-fetching and solving the N+1 problem.
+
+### Refactored
+- **Code Cleanup**: Removed redundant repository functions `findCourseWithSubjects` and `findExamWithCourses`.
+- **Controller Updates**: Refactored `CourseController` and `ExamController` to use generic `findById` methods with explicit options.
+- **Removed Deprecated**: Deleted `GET /api/exams/:id/with-courses` and `GET /api/exams/:examId/courses/:courseId/with-subjects` endpoints to clean up codebase.
+
+### Tests
+- **Test Updates**: Updated unit and integration tests to cover dynamic query logic and ensure no regressions from the refactor.
+- **Enhanced Coverage**: Added specific unit tests for `fields` and `include` query parameters to verify `QueryBuilder` integration.
+
+### Optimizations
+- **Database Indexing**: Added foreign key indexes to `schema.prisma` for `Exam`, `Course`, `Subject`, `Batch`, and `Announcement` models to improve query performance.
+- **Response Compression**: Enabled `compression` (Gzip/Brotli) middleware in the Express app to reduce API response payload sizes.
+- **Advanced Sorting**: Implemented dynamic sorting support in `QueryBuilder` allowing clients to sort results via `?sort=field:asc` or `?sort=field:desc`.
+
 ## Version [1.3.1] - Subject & Batch Prisma Conflict Fix
 **P.R raised by**  : aaditya-singh-21  
 **Date** : 2025-12-20

@@ -22,10 +22,16 @@ export async function createCourse(data: Prisma.CourseCreateInput) {
   }
 }
 
-export async function findCourseById(id: number) {
-  return prisma.course.findUnique({
-    where: { id },
-    select: {
+export async function findCourseById(id: number, options: any = {}) {
+  const query: any = { where: { id } };
+
+  if (options.select) {
+    query.select = options.select;
+  } else if (options.include) {
+    query.include = options.include;
+  } else {
+    // Default selection
+    query.select = {
       id: true,
       name: true,
       description: true,
@@ -34,43 +40,27 @@ export async function findCourseById(id: number) {
       examId: true,
       createdAt: true,
       updatedAt: true,
-    },
-  });
+    };
+  }
+  return prisma.course.findUnique(query);
 }
 
-export async function findCourseWithSubjects(id: number) {
-  return prisma.course.findUnique({
-    where: { id },
-    select: {
-      id: true,
-      name: true,
-      description: true,
-      duration: true,
-      isActive: true,
-      examId: true,
-      createdAt: true,
-      updatedAt: true,
-      subjects: {
-        where: { isActive: true },
-        select: {
-          id: true,
-          name: true,
-          description: true,
-          isActive: true,
-          courseId: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-        orderBy: { name: 'asc' },
-      },
-    },
-  });
-}
 
-export async function findCoursesByExamId(examId: number) {
-  return prisma.course.findMany({
+
+export async function findCoursesByExamId(examId: number, options: any = {}) {
+  const query: any = {
     where: { examId },
-    select: {
+    orderBy: options.orderBy || { name: 'asc' },
+    skip: options.skip,
+    take: options.take,
+  };
+
+  if (options.select) {
+    query.select = options.select;
+  } else if (options.include) {
+    query.include = options.include;
+  } else {
+    query.select = {
       id: true,
       name: true,
       description: true,
@@ -90,18 +80,29 @@ export async function findCoursesByExamId(examId: number) {
           name: true
         }
       }
-    },
-    orderBy: { name: 'asc' },
-  });
+    };
+  }
+
+  return prisma.course.findMany(query);
 }
 
-export async function findActiveCoursesByExamId(examId: number) {
-  return prisma.course.findMany({
-    where: { 
+export async function findActiveCoursesByExamId(examId: number, options: any = {}) {
+  const query: any = {
+    where: {
       examId,
-      isActive: true 
+      isActive: true
     },
-    select: {
+    orderBy: options.orderBy || { name: 'asc' },
+    skip: options.skip,
+    take: options.take,
+  };
+
+  if (options.select) {
+    query.select = options.select;
+  } else if (options.include) {
+    query.include = options.include;
+  } else {
+    query.select = {
       id: true,
       name: true,
       description: true,
@@ -121,9 +122,10 @@ export async function findActiveCoursesByExamId(examId: number) {
           name: true
         }
       }
-    },
-    orderBy: { name: 'asc' },
-  });
+    };
+  }
+
+  return prisma.course.findMany(query);
 }
 
 export async function updateCourse(id: number, data: Prisma.CourseUpdateInput) {

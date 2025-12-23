@@ -109,33 +109,7 @@ describe('Course Routes', () => {
         });
     });
 
-    describe('GET /api/exams/:examId/courses/:courseId/with-subjects', () => {
-        it('should return a course with its subjects', async () => {
-            const mockCourse = {
-                id: 1,
-                name: 'Test Course',
-                examId: 1,
-                subjects: [
-                    { id: 1, name: 'Subject 1' },
-                    { id: 2, name: 'Subject 2' }
-                ]
-            };
-            (CourseRepo.findCourseWithSubjects as jest.Mock).mockResolvedValue(mockCourse);
 
-            const res = await request(app).get('/api/exams/1/courses/1/with-subjects');
-
-            expect(res.status).toBe(200);
-            expect(res.body.data.subjects).toHaveLength(2);
-        });
-
-        it('should return 404 if course not found', async () => {
-            (CourseRepo.findCourseWithSubjects as jest.Mock).mockResolvedValue(null);
-
-            const res = await request(app).get('/api/exams/1/courses/999/with-subjects');
-
-            expect(res.status).toBe(404);
-        });
-    });
 
     describe('PUT /api/exams/:examId/courses/:courseId', () => {
         it('should update a course', async () => {
