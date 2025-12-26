@@ -1,6 +1,6 @@
 import request from 'supertest';
 import express from 'express';
-import examRoutes from '../../../src/routes/exam.routes'; 
+import examRoutes from '../../../src/routes/exam.routes';
 
 import * as ExamRepo from '../../../src/repositories/exam.repo';
 import * as BusinessRepo from '../../../src/repositories/business.repo';
@@ -130,7 +130,7 @@ describe('Exam Routes', () => {
     describe('DELETE /api/exams/:id', () => {
         it('should delete an exam', async () => {
             logger.info('TEST: Starting DELETE /api/exams/:id success test');
-            (ExamRepo.deleteExam as jest.Mock).mockResolvedValue({ id: 1, isActive: false });
+            (ExamRepo.deleteExam as jest.Mock).mockResolvedValue({ id: 1, status: 'INACTIVE' });
 
             const res = await request(app).delete('/api/exams/1');
 

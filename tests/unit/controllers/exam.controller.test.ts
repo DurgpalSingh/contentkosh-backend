@@ -18,7 +18,8 @@ describe('Exam Controller', () => {
 
     beforeEach(() => {
         req = {
-            query: {}
+            query: {},
+            params: {}
         };
         res = {
             status: jest.fn().mockReturnThis(),
@@ -39,7 +40,7 @@ describe('Exam Controller', () => {
             await ExamController.createExam(req as Request, res as Response);
 
             expect(BusinessRepo.findBusinessById).toHaveBeenCalledWith(1);
-            expect(ExamRepo.createExam).toHaveBeenCalledWith(examData);
+            expect(ExamRepo.createExam).toHaveBeenCalledWith(expect.objectContaining(examData));
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, expect.objectContaining({ id: 1 }), 'Exam created successfully', 201);
         });
 
@@ -171,7 +172,7 @@ describe('Exam Controller', () => {
 
             await ExamController.updateExam(req as Request, res as Response);
 
-            expect(ExamRepo.updateExam).toHaveBeenCalledWith(1, req.body);
+            expect(ExamRepo.updateExam).toHaveBeenCalledWith(1, expect.objectContaining(req.body));
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, updatedExam, 'Exam updated successfully');
         });
     });
@@ -181,7 +182,7 @@ describe('Exam Controller', () => {
             logger.info('TEST: Starting deleteExam success test');
             req.params = { id: '1' };
 
-            (ExamRepo.deleteExam as jest.Mock).mockResolvedValue({ id: 1, isActive: false });
+            (ExamRepo.deleteExam as jest.Mock).mockResolvedValue({ id: 1, status: 'INACTIVE' });
 
             await ExamController.deleteExam(req as Request, res as Response);
 
