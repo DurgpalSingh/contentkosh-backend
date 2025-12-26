@@ -5,8 +5,11 @@ const prisma = new PrismaClient();
 const examSelect = {
   id: true,
   name: true,
+  code: true,
   description: true,
-  isActive: true,
+  status: true,
+  startDate: true,
+  endDate: true,
   businessId: true,
   createdAt: true,
   updatedAt: true,
@@ -37,8 +40,6 @@ export async function findExamById(id: number, options: any = {}) {
   return prisma.exam.findUnique(query);
 }
 
-
-
 export async function findExamsByBusinessId(businessId: number, options: any = {}) {
   const query: any = {
     where: { businessId },
@@ -62,7 +63,7 @@ export async function findActiveExamsByBusinessId(businessId: number, options: a
   const query: any = {
     where: {
       businessId,
-      isActive: true
+      status: 'ACTIVE'
     },
     orderBy: options.orderBy || { name: 'asc' },
     skip: options.skip,
@@ -96,6 +97,6 @@ export async function deleteExam(id: number) {
   // Soft delete
   return prisma.exam.update({
     where: { id },
-    data: { isActive: false },
+    data: { status: 'INACTIVE' } as any,
   });
 }

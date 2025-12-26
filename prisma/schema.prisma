@@ -91,8 +91,8 @@ model Batch {
   course     Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
   batchUsers BatchUser[]
 
-  @@map("batches")
   @@index([courseId])
+  @@map("batches")
 }
 
 model BatchUser {
@@ -128,25 +128,35 @@ model Announcement {
   // Relations
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
-  @@map("announcements")
   @@index([businessId])
+  @@map("announcements")
+}
+
+enum ExamStatus {
+  ACTIVE
+  INACTIVE
 }
 
 model Exam {
   id          Int      @id @default(autoincrement())
-  name        String   // e.g., "UPSC", "NEET"
+  name        String   @unique // e.g., "UPSC", "NEET"
+  code        String?
   description String?
-  isActive    Boolean  @default(true) @map("is_active")
-  businessId  Int      @map("business_id")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  status      ExamStatus @default(ACTIVE)
+  startDate   DateTime?  @map("start_date")
+  endDate     DateTime?  @map("end_date")
+  businessId  Int        @map("business_id")
+  createdBy   Int?       @map("created_by")
+  updatedBy   Int?       @map("updated_by")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
 
   // Relations
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   courses  Course[]
 
-  @@map("exams")
   @@index([businessId])
+  @@map("exams")
 }
 
 model Course {
@@ -164,8 +174,8 @@ model Course {
   subjects Subject[]
   batches  Batch[]
 
-  @@map("courses")
   @@index([examId])
+  @@map("courses")
 }
 
 model Subject {
@@ -180,6 +190,6 @@ model Subject {
   // Relations
   course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
-  @@map("subjects")
   @@index([courseId])
+  @@map("subjects")
 }

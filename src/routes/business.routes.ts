@@ -1,10 +1,71 @@
 import { Router } from 'express';
 import { createBusiness, getBusiness, updateBusiness, deleteBusiness } from '../controllers/business.controller';
+import { createExam, getExamsByBusiness } from '../controllers/exam.controller';
 import { authorize } from '../middlewares/auth.middleware';
 import { ADMIN, SUPERADMIN } from '../dtos/auth.dto';
 
 const router = Router();
 
+
+// ==================== NESTED EXAM ROUTES ====================
+
+/**
+ * @swagger
+ * /api/business/{businessId}/exams:
+ *   post:
+ *     summary: Create exam under business
+ *     tags: [Business, Exams]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: businessId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Business ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/CreateExamRequest'
+ *     responses:
+ *       201:
+ *         description: Exam created successfully
+ *       400:
+ *         description: Invalid input
+ *       404:
+ *         description: Business not found
+ */
+router.post('/:businessId/exams', authorize(ADMIN), createExam);
+
+/**
+ * @swagger
+ * /api/business/{businessId}/exams:
+ *   get:
+ *     summary: List exams for a business
+ *     tags: [Business, Exams]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: businessId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Business ID
+ *     responses:
+ *       200:
+ *         description: Exams fetched successfully
+ *       400:
+ *         description: Invalid Business ID
+ *       404:
+ *         description: Business not found
+ */
+router.get('/:businessId/exams', getExamsByBusiness);
+
+// ==================== BUSINESS ROUTES ====================
 
 /**
  * @swagger

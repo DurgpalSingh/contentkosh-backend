@@ -1,6 +1,18 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## Version [1.3.3] - Exam API Implementation
+**P.R raised by**  : aaditya-singh-21
+**Date** : 2025-12-26
+### Added
+- **Exam Schema**: Updated `Exam` model with `code`, `status` (Enum), `startDate`, `endDate`, and audit fields.
+- **Nested Routes**: Added `POST` and `GET` for `/api/business/:businessId/exams`.
+- **Exam Status**: Replaced `isActive` boolean with `ExamStatus` Enum (ACTIVE/INACTIVE).
+
+### Refactored
+- **Exam Controller**: Implemented strict validation, proper DTO mapping, and business ownership checks.
+- **Exam Repository**: Updated all methods to handle new schema fields and soft delete via status Enum.
+
 ## Version [1.3.2] - Dynamic API & Optimization
 **P.R raised by**  : aaditya-singh-21  
 **Date** : 2025-12-22
