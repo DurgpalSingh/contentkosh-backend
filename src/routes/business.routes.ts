@@ -1,10 +1,72 @@
 import { Router } from 'express';
 import { createBusiness, getBusiness, updateBusiness, deleteBusiness } from '../controllers/business.controller';
+import { getUsersByBusiness, createUserForBusiness } from '../controllers/user.controller';
+import { createExam, getExamsByBusiness } from '../controllers/exam.controller';
 import { authorize } from '../middlewares/auth.middleware';
-import { ADMIN, SUPERADMIN } from '../dtos/auth.dto';
+import { ADMIN } from '../dtos/auth.dto';
 
 const router = Router();
 
+
+// ==================== NESTED EXAM ROUTES ====================
+
+/**
+ * @swagger
+ * /api/business/{businessId}/exams:
+ *   post:
+ *     summary: Create exam under business
+ *     tags: [Business, Exams]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: businessId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Business ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/CreateExamRequest'
+ *     responses:
+ *       201:
+ *         description: Exam created successfully
+ *       400:
+ *         description: Invalid input
+ *       404:
+ *         description: Business not found
+ */
+router.post('/:businessId/exams', authorize(ADMIN), createExam);
+
+/**
+ * @swagger
+ * /api/business/{businessId}/exams:
+ *   get:
+ *     summary: List exams for a business
+ *     tags: [Business, Exams]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: businessId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Business ID
+ *     responses:
+ *       200:
+ *         description: Exams fetched successfully
+ *       400:
+ *         description: Invalid Business ID
+ *       404:
+ *         description: Business not found
+ */
+router.get('/:businessId/exams', getExamsByBusiness);
+
+// ==================== BUSINESS ROUTES ====================
 
 /**
  * @swagger
@@ -86,7 +148,7 @@ router.post('/', authorize(ADMIN), createBusiness);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/', authorize(SUPERADMIN), getBusiness);
+router.get('/', authorize(ADMIN), getBusiness);
 
 /**
  * @swagger
@@ -225,5 +287,43 @@ router.put('/:id', authorize(ADMIN), updateBusiness);
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.delete('/:id', authorize(ADMIN), deleteBusiness);
+
+// ==================== USER MANAGEMENT ROUTES ====================
+
+/**
+ * @swagger
+ * /api/business/{businessId}/users:
+ *   get:
+ *     summary: List users for a business
+ *     tags: [Business, Users]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: businessId
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200: { description: List of users }
+ */
+router.get('/:businessId/users', getUsersByBusiness);
+
+/**
+ * @swagger
+ * /api/business/{businessId}/users:
+ *   post:
+ *     summary: Add user to business (Create or Link)
+ *     tags: [Business, Users]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: businessId
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       201: { description: User added }
+ */
+router.post('/:businessId/users', authorize(ADMIN), createUserForBusiness);
 
 export default router;

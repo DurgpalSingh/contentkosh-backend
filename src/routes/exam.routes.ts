@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { createExam, getExam, getExamWithCourses, getExamsByBusiness, updateExam, deleteExam } from '../controllers/exam.controller';
-import { createCourse, getCourse, getCourseWithSubjects, getCoursesByExam, updateCourse, deleteCourse } from '../controllers/course.controller';
+import { createExam, getExam, getExamsByBusiness, updateExam, deleteExam } from '../controllers/exam.controller';
+import { createCourse, getCourse, getCoursesByExam, updateCourse, deleteCourse } from '../controllers/course.controller';
 import { createSubject, getSubject, getSubjectsByCourse, updateSubject, deleteSubject } from '../controllers/subject.controller';
 import { authorize } from '../middlewares/auth.middleware';
 import { ADMIN } from '../dtos/auth.dto';
@@ -66,6 +66,16 @@ router.post('/', authorize(ADMIN), createExam);
  *         schema:
  *           type: integer
  *         description: Business ID
+ *       - in: query
+ *         name: fields
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of fields to select (e.g. id,name)
+ *       - in: query
+ *         name: include
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of relations to include (e.g. courses)
  *     responses:
  *       200:
  *         description: Exams fetched successfully
@@ -110,6 +120,16 @@ router.get('/', getExamsByBusiness);
  *         schema:
  *           type: integer
  *         description: Exam ID
+ *       - in: query
+ *         name: fields
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of fields to select (e.g. id,name)
+ *       - in: query
+ *         name: include
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of relations to include (e.g. courses.subjects)
  *     responses:
  *       200:
  *         description: Exam fetched successfully
@@ -142,54 +162,6 @@ router.get('/', getExamsByBusiness);
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get('/:id', getExam);
-
-/**
- * @swagger
- * /api/exams/{id}/with-courses:
- *   get:
- *     summary: Get exam with its courses
- *     tags: [Exams]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *         description: Exam ID
- *     responses:
- *       200:
- *         description: Exam with courses fetched successfully
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       $ref: '#/components/schemas/ExamWithCourses'
- *       400:
- *         description: Invalid exam ID
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       404:
- *         description: Exam not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
-router.get('/:id/with-courses', getExamWithCourses);
 
 /**
  * @swagger
@@ -363,6 +335,16 @@ router.post('/:examId/courses', authorize(ADMIN), createCourse);
  *         schema:
  *           type: boolean
  *         description: Filter by active status (true for active only, false for all)
+ *       - in: query
+ *         name: fields
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of fields to select (e.g. id,name)
+ *       - in: query
+ *         name: include
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of relations to include (e.g. subjects)
  *     responses:
  *       200:
  *         description: Courses fetched successfully
@@ -413,6 +395,16 @@ router.get('/:examId/courses', getCoursesByExam);
  *         schema:
  *           type: integer
  *         description: Course ID
+ *       - in: query
+ *         name: fields
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of fields to select (e.g. id,name)
+ *       - in: query
+ *         name: include
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of relations to include (e.g. subjects)
  *     responses:
  *       200:
  *         description: Course fetched successfully
@@ -441,64 +433,9 @@ router.get('/:examId/courses', getCoursesByExam);
  *         description: Internal server error
  *         content:
  *           application/json:
- *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get('/:examId/courses/:courseId', getCourse);
-
-/**
- * @swagger
- * /api/exams/{examId}/courses/{courseId}/with-subjects:
- *   get:
- *     summary: Get course with its subjects under an exam
- *     tags: [Courses]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: examId
- *         required: true
- *         schema:
- *           type: integer
- *         description: Exam ID
- *       - in: path
- *         name: courseId
- *         required: true
- *         schema:
- *           type: integer
- *         description: Course ID
- *     responses:
- *       200:
- *         description: Course with subjects fetched successfully
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       $ref: '#/components/schemas/CourseWithSubjects'
- *       400:
- *         description: Invalid course ID
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       404:
- *         description: Course not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
-router.get('/:examId/courses/:courseId/with-subjects', getCourseWithSubjects);
 
 /**
  * @swagger

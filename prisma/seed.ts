@@ -77,7 +77,7 @@ async function main() {
       data: {
         userId: users[0].id, // SUPERADMIN
         businessId: business.id,
-        role: UserRole.SUPERADMIN,
+        role: UserRole.ADMIN,
         isActive: true,
       },
     }),
@@ -109,7 +109,7 @@ async function main() {
       data: {
         userId: users[4].id, // GUEST
         businessId: business.id,
-        role: UserRole.GUEST,
+        role: UserRole.USER,
         isActive: true,
       },
     }),
@@ -122,24 +122,27 @@ async function main() {
     prisma.exam.create({
       data: {
         name: 'UPSC Civil Services',
+        code: 'UPSC-CS',
         description: 'Union Public Service Commission Civil Services Examination',
-        isActive: true,
+        status: 'ACTIVE',
         businessId: business.id,
       },
     }),
     prisma.exam.create({
       data: {
         name: 'NEET',
+        code: 'NEET-UG',
         description: 'National Eligibility cum Entrance Test for Medical Courses',
-        isActive: true,
+        status: 'ACTIVE',
         businessId: business.id,
       },
     }),
     prisma.exam.create({
       data: {
         name: 'JEE Main',
+        code: 'JEE-MAIN',
         description: 'Joint Entrance Examination for Engineering',
-        isActive: true,
+        status: 'ACTIVE',
         businessId: business.id,
       },
     }),
@@ -395,7 +398,7 @@ async function main() {
   console.log(`- ${batches.length} Batches`);
   console.log(`- ${batchUsers.length} Batch User Assignments`);
   console.log(`- ${announcements.length} Announcements`);
-  
+
   console.log('\n🔑 Test Credentials:');
   console.log('- Super Admin: superadmin@contentkosh.com');
   console.log('- Admin: admin@contentkosh.com');

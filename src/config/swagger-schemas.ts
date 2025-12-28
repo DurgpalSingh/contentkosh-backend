@@ -52,14 +52,38 @@ export const swaggerSchemas = {
         type: 'integer',
         description: 'User ID'
       },
+      businessId: {
+        type: 'integer',
+        nullable: true,
+        description: 'Business ID (optional)'
+      },
       email: {
         type: 'string',
         format: 'email',
         description: 'User email address'
       },
+      mobile: {
+        type: 'string',
+        nullable: true,
+        description: 'User mobile number'
+      },
       name: {
         type: 'string',
         description: 'User full name'
+      },
+      role: {
+        type: 'string',
+        enum: ['ADMIN', 'TEACHER', 'STUDENT', 'USER'],
+        description: 'User role'
+      },
+      status: {
+        type: 'string',
+        enum: ['ACTIVE', 'INACTIVE'],
+        description: 'User status'
+      },
+      emailVerified: {
+        type: 'boolean',
+        description: 'Is email verified'
       },
       createdAt: {
         type: 'string',
@@ -91,6 +115,10 @@ export const swaggerSchemas = {
         type: 'string',
         minLength: 1,
         description: 'User full name'
+      },
+      mobile: {
+        type: 'string',
+        description: 'User mobile number'
       }
     }
   },
@@ -138,7 +166,7 @@ export const swaggerSchemas = {
       },
       role: {
         type: 'string',
-        enum: ['STUDENT', 'TEACHER', 'ADMIN', 'SUPERADMIN'],
+        enum: ['STUDENT', 'TEACHER', 'ADMIN'],
         description: 'User role in the business'
       },
       isActive: {
@@ -201,7 +229,7 @@ export const swaggerSchemas = {
       },
       role: {
         type: 'string',
-        enum: ['STUDENT', 'TEACHER', 'ADMIN', 'SUPERADMIN'],
+        enum: ['STUDENT', 'TEACHER', 'ADMIN'],
         description: 'Role to assign to the user'
       }
     }
@@ -211,7 +239,7 @@ export const swaggerSchemas = {
     properties: {
       role: {
         type: 'string',
-        enum: ['STUDENT', 'TEACHER', 'ADMIN', 'SUPERADMIN'],
+        enum: ['STUDENT', 'TEACHER', 'ADMIN'],
         description: 'New role for the user'
       },
       isActive: {
@@ -922,9 +950,9 @@ export const swaggerSchemas = {
         type: 'boolean',
         description: 'Whether the batch is active'
       },
-      businessId: {
+      courseId: {
         type: 'integer',
-        description: 'ID of the business this batch belongs to'
+        description: 'ID of the course this batch belongs to'
       },
       createdAt: {
         type: 'string',
@@ -936,16 +964,16 @@ export const swaggerSchemas = {
         format: 'date-time',
         description: 'Batch last update timestamp'
       },
-      business: {
+      course: {
         type: 'object',
         properties: {
           id: {
             type: 'integer',
-            description: 'Business ID'
+            description: 'Course ID'
           },
-          instituteName: {
+          name: {
             type: 'string',
-            description: 'Business institute name'
+            description: 'Course name'
           }
         }
       }
@@ -980,9 +1008,9 @@ export const swaggerSchemas = {
         type: 'boolean',
         description: 'Whether the batch is active'
       },
-      businessId: {
+      courseId: {
         type: 'integer',
-        description: 'ID of the business this batch belongs to'
+        description: 'ID of the course this batch belongs to'
       },
       createdAt: {
         type: 'string',
@@ -994,16 +1022,16 @@ export const swaggerSchemas = {
         format: 'date-time',
         description: 'Batch last update timestamp'
       },
-      business: {
+      course: {
         type: 'object',
         properties: {
           id: {
             type: 'integer',
-            description: 'Business ID'
+            description: 'Course ID'
           },
-          instituteName: {
+          name: {
             type: 'string',
-            description: 'Business institute name'
+            description: 'Course name'
           }
         }
       },
@@ -1122,9 +1150,9 @@ export const swaggerSchemas = {
             type: 'boolean',
             description: 'Whether the batch is active'
           },
-          businessId: {
+          courseId: {
             type: 'integer',
-            description: 'Business ID'
+            description: 'Course ID'
           },
           createdAt: {
             type: 'string',
@@ -1142,7 +1170,7 @@ export const swaggerSchemas = {
   },
   CreateBatchRequest: {
     type: 'object',
-    required: ['codeName', 'displayName', 'startDate', 'endDate', 'businessId'],
+    required: ['codeName', 'displayName', 'startDate', 'endDate', 'courseId'],
     properties: {
       codeName: {
         type: 'string',
@@ -1169,9 +1197,9 @@ export const swaggerSchemas = {
         default: true,
         description: 'Whether the batch is active'
       },
-      businessId: {
+      courseId: {
         type: 'integer',
-        description: 'ID of the business this batch belongs to (required)'
+        description: 'ID of the course this batch belongs to (required)'
       }
     }
   },

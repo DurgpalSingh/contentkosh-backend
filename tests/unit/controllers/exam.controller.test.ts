@@ -17,7 +17,10 @@ describe('Exam Controller', () => {
     let res: Partial<Response>;
 
     beforeEach(() => {
-        req = {};
+        req = {
+            query: {},
+            params: {}
+        };
         res = {
             status: jest.fn().mockReturnThis(),
             json: jest.fn(),
@@ -37,7 +40,7 @@ describe('Exam Controller', () => {
             await ExamController.createExam(req as Request, res as Response);
 
             expect(BusinessRepo.findBusinessById).toHaveBeenCalledWith(1);
-            expect(ExamRepo.createExam).toHaveBeenCalledWith(examData);
+            expect(ExamRepo.createExam).toHaveBeenCalledWith(expect.objectContaining(examData));
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, expect.objectContaining({ id: 1 }), 'Exam created successfully', 201);
         });
 
@@ -77,7 +80,37 @@ describe('Exam Controller', () => {
 
             await ExamController.getExam(req as Request, res as Response);
 
-            expect(ExamRepo.findExamById).toHaveBeenCalledWith(1);
+            expect(ExamRepo.findExamById).toHaveBeenCalledWith(1, {});
+            expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockExam, 'Exam fetched successfully');
+        });
+
+        it('should get an exam with specific fields', async () => {
+            req.params = { id: '1' };
+            req.query = { fields: 'id,name' };
+            const mockExam = { id: 1, name: 'Test Exam' };
+
+            (ExamRepo.findExamById as jest.Mock).mockResolvedValue(mockExam);
+
+            await ExamController.getExam(req as Request, res as Response);
+
+            expect(ExamRepo.findExamById).toHaveBeenCalledWith(1, expect.objectContaining({
+                select: expect.objectContaining({ id: true, name: true })
+            }));
+            expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockExam, 'Exam fetched successfully');
+        });
+
+        it('should get an exam with included relations', async () => {
+            req.params = { id: '1' };
+            req.query = { include: 'courses' };
+            const mockExam = { id: 1, name: 'Test Exam', courses: [] };
+
+            (ExamRepo.findExamById as jest.Mock).mockResolvedValue(mockExam);
+
+            await ExamController.getExam(req as Request, res as Response);
+
+            expect(ExamRepo.findExamById).toHaveBeenCalledWith(1, expect.objectContaining({
+                include: expect.objectContaining({ courses: true })
+            }));
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockExam, 'Exam fetched successfully');
         });
 
@@ -99,6 +132,8 @@ describe('Exam Controller', () => {
         });
     });
 
+
+
     describe('getExamsByBusiness', () => {
         it('should get exams for a business', async () => {
             logger.info('TEST: Starting getExamsByBusiness success test');
@@ -111,7 +146,7 @@ describe('Exam Controller', () => {
             await ExamController.getExamsByBusiness(req as Request, res as Response);
 
             expect(BusinessRepo.findBusinessById).toHaveBeenCalledWith(1);
-            expect(ExamRepo.findActiveExamsByBusinessId).toHaveBeenCalledWith(1);
+            expect(ExamRepo.findActiveExamsByBusinessId).toHaveBeenCalledWith(1, {});
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockExams, 'Exams fetched successfully');
         });
 
@@ -137,7 +172,7 @@ describe('Exam Controller', () => {
 
             await ExamController.updateExam(req as Request, res as Response);
 
-            expect(ExamRepo.updateExam).toHaveBeenCalledWith(1, req.body);
+            expect(ExamRepo.updateExam).toHaveBeenCalledWith(1, expect.objectContaining(req.body));
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, updatedExam, 'Exam updated successfully');
         });
     });
@@ -147,7 +182,7 @@ describe('Exam Controller', () => {
             logger.info('TEST: Starting deleteExam success test');
             req.params = { id: '1' };
 
-            (ExamRepo.deleteExam as jest.Mock).mockResolvedValue({ id: 1, isActive: false });
+            (ExamRepo.deleteExam as jest.Mock).mockResolvedValue({ id: 1, status: 'INACTIVE' });
 
             await ExamController.deleteExam(req as Request, res as Response);
 

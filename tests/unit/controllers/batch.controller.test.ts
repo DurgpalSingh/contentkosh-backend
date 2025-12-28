@@ -54,13 +54,13 @@ describe('Batch Controller', () => {
         it('should throw error if codeName is missing', async () => {
             req.body = { ...validBatchData, codeName: '' };
 
-            await expect(BatchController.createBatch(req as Request, res as Response)).rejects.toThrow('Batch code name is required');
+            await expect(BatchController.createBatch(req as Request, res as Response)).rejects.toThrow('Batch code name is required and cannot be empty');
         });
 
         it('should throw error if displayName is missing', async () => {
             req.body = { ...validBatchData, displayName: '' };
 
-            await expect(BatchController.createBatch(req as Request, res as Response)).rejects.toThrow('Batch display name is required');
+            await expect(BatchController.createBatch(req as Request, res as Response)).rejects.toThrow('Batch display name is required and cannot be empty');
         });
 
         it('should throw error if dates are missing', async () => {
@@ -78,7 +78,7 @@ describe('Batch Controller', () => {
         it('should throw error if end date is before start date', async () => {
             req.body = { ...validBatchData, startDate: '2024-06-30', endDate: '2024-01-01' };
 
-            await expect(BatchController.createBatch(req as Request, res as Response)).rejects.toThrow('End date must be after start date');
+            await expect(BatchController.createBatch(req as Request, res as Response)).rejects.toThrow('End date must be after Start date');
         });
 
         it('should throw error if course not found', async () => {
@@ -120,7 +120,7 @@ describe('Batch Controller', () => {
         it('should throw error if ID is invalid', async () => {
             req.params = { id: 'invalid' };
 
-            await expect(BatchController.getBatch(req as Request, res as Response)).rejects.toThrow('Batch ID is required');
+            await expect(BatchController.getBatch(req as Request, res as Response)).rejects.toThrow('Batch ID is required and must be a valid positive integer');
         });
     });
 
@@ -167,7 +167,7 @@ describe('Batch Controller', () => {
             req.params = { courseId: 'invalid' };
             req.query = {};
 
-            await expect(BatchController.getBatchesByCourse(req as Request, res as Response)).rejects.toThrow('Valid Course ID is required');
+            await expect(BatchController.getBatchesByCourse(req as Request, res as Response)).rejects.toThrow('Course ID is required and must be a valid positive integer');
         });
     });
 
@@ -189,14 +189,14 @@ describe('Batch Controller', () => {
             req.params = { id: '1' };
             req.body = { codeName: '   ' };
 
-            await expect(BatchController.updateBatch(req as Request, res as Response)).rejects.toThrow('Batch code name cannot be empty');
+            await expect(BatchController.updateBatch(req as Request, res as Response)).rejects.toThrow('Batch code name is required and cannot be empty');
         });
 
         it('should throw error if displayName is empty', async () => {
             req.params = { id: '1' };
             req.body = { displayName: '   ' };
 
-            await expect(BatchController.updateBatch(req as Request, res as Response)).rejects.toThrow('Batch display name cannot be empty');
+            await expect(BatchController.updateBatch(req as Request, res as Response)).rejects.toThrow('Batch display name is required and cannot be empty');
         });
     });
 
@@ -215,7 +215,7 @@ describe('Batch Controller', () => {
         it('should throw error if ID is invalid', async () => {
             req.params = { id: 'invalid' };
 
-            await expect(BatchController.deleteBatch(req as Request, res as Response)).rejects.toThrow('Batch ID is required');
+            await expect(BatchController.deleteBatch(req as Request, res as Response)).rejects.toThrow('Batch ID is required and must be a valid positive integer');
         });
     });
 
@@ -237,9 +237,9 @@ describe('Batch Controller', () => {
         });
 
         it('should throw error if userId or batchId is missing', async () => {
-            req.body = { userId: 1 };
+            req.body = { batchId: 1 };
 
-            await expect(BatchController.addUserToBatch(req as Request, res as Response)).rejects.toThrow('User ID and Batch ID are required');
+            await expect(BatchController.addUserToBatch(req as Request, res as Response)).rejects.toThrow('User ID is required and must be a valid positive integer');
         });
 
         it('should throw error if user not found', async () => {
@@ -281,9 +281,9 @@ describe('Batch Controller', () => {
         });
 
         it('should throw error if userId or batchId is missing', async () => {
-            req.body = { userId: 1 };
+            req.body = { batchId: 1 };
 
-            await expect(BatchController.removeUserFromBatch(req as Request, res as Response)).rejects.toThrow('User ID and Batch ID are required');
+            await expect(BatchController.removeUserFromBatch(req as Request, res as Response)).rejects.toThrow('User ID is required and must be a valid positive integer');
         });
 
         it('should throw error if user is not in batch', async () => {
@@ -310,7 +310,7 @@ describe('Batch Controller', () => {
         it('should throw error if userId is invalid', async () => {
             req.params = { userId: 'invalid' };
 
-            await expect(BatchController.getBatchesByUser(req as Request, res as Response)).rejects.toThrow('Valid User ID is required');
+            await expect(BatchController.getBatchesByUser(req as Request, res as Response)).rejects.toThrow('User ID is required and must be a valid positive integer');
         });
     });
 
@@ -330,7 +330,7 @@ describe('Batch Controller', () => {
         it('should throw error if batchId is invalid', async () => {
             req.params = { batchId: 'invalid' };
 
-            await expect(BatchController.getUsersByBatch(req as Request, res as Response)).rejects.toThrow('Valid Batch ID is required');
+            await expect(BatchController.getUsersByBatch(req as Request, res as Response)).rejects.toThrow('Batch ID is required and must be a valid positive integer');
         });
     });
 
@@ -352,7 +352,7 @@ describe('Batch Controller', () => {
             req.params = { userId: 'invalid', batchId: '1' };
             req.body = { isActive: false };
 
-            await expect(BatchController.updateBatchUser(req as unknown as Request<{ userId: number; batchId: number }>, res as Response)).rejects.toThrow('Valid User ID is required');
+            await expect(BatchController.updateBatchUser(req as unknown as Request<{ userId: number; batchId: number }>, res as Response)).rejects.toThrow('User ID is required and must be a valid positive integer');
         });
 
         it('should throw error if user is not in batch', async () => {

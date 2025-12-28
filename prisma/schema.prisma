@@ -14,22 +14,34 @@ datasource db {
 }
 
 enum UserRole {
-  STUDENT
-  TEACHER
   ADMIN
-  SUPERADMIN
-  GUEST
+  TEACHER
+  STUDENT
+  USER
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  password  String
-  name      String
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  id             Int        @id @default(autoincrement())
+  businessId     Int?       @map("business_id")
+  name           String
+  email          String     @unique
+  mobile         String?    @unique
+  password       String     @map("password_hash")
+  role           UserRole   @default(USER)
+  status         UserStatus @default(ACTIVE)
+  emailVerified  Boolean    @default(false) @map("email_verified")
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @default(now()) @updatedAt @map("updated_at")
+  createdBy      Int?       @map("created_by")
+  updatedBy      Int?       @map("updated_by")
 
   // Relations
+  business      Business?      @relation(fields: [businessId], references: [id])
   businessUsers BusinessUser[]
   batchUsers    BatchUser[]
 
@@ -52,6 +64,7 @@ model Business {
   updatedAt     DateTime @updatedAt @map("updated_at")
 
   // Relations
+  users         User[]
   exams         Exam[]
   businessUsers BusinessUser[]
   announcements Announcement[]
@@ -91,6 +104,7 @@ model Batch {
   course     Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
   batchUsers BatchUser[]
 
+  @@index([courseId])
   @@map("batches")
 }
 
@@ -127,22 +141,34 @@ model Announcement {
   // Relations
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
+  @@index([businessId])
   @@map("announcements")
+}
+
+enum ExamStatus {
+  ACTIVE
+  INACTIVE
 }
 
 model Exam {
   id          Int      @id @default(autoincrement())
-  name        String   // e.g., "UPSC", "NEET"
+  name        String   @unique // e.g., "UPSC", "NEET"
+  code        String?
   description String?
-  isActive    Boolean  @default(true) @map("is_active")
-  businessId  Int      @map("business_id")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  status      ExamStatus @default(ACTIVE)
+  startDate   DateTime?  @map("start_date")
+  endDate     DateTime?  @map("end_date")
+  businessId  Int        @map("business_id")
+  createdBy   Int?       @map("created_by")
+  updatedBy   Int?       @map("updated_by")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
 
   // Relations
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   courses  Course[]
 
+  @@index([businessId])
   @@map("exams")
 }
 
@@ -161,6 +187,7 @@ model Course {
   subjects Subject[]
   batches  Batch[]
 
+  @@index([examId])
   @@map("courses")
 }
 
@@ -176,5 +203,6 @@ model Subject {
   // Relations
   course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
+  @@index([courseId])
   @@map("subjects")
 }

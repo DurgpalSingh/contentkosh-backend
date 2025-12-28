@@ -16,7 +16,9 @@ describe('Course Controller', () => {
     let res: Partial<Response>;
 
     beforeEach(() => {
-        req = {};
+        req = {
+            query: {}
+        };
         res = {
             status: jest.fn().mockReturnThis(),
             json: jest.fn(),
@@ -42,7 +44,7 @@ describe('Course Controller', () => {
         it('should throw error if course name is missing', async () => {
             req.body = { examId: 1 }; // Missing name
 
-            await expect(CourseController.createCourse(req as Request, res as Response)).rejects.toThrow('Course name is required');
+            await expect(CourseController.createCourse(req as Request, res as Response)).rejects.toThrow('Course name is required and cannot be empty');
         });
 
         it('should throw error if examId is missing', async () => {
@@ -68,7 +70,52 @@ describe('Course Controller', () => {
 
             await CourseController.getCourse(req as Request, res as Response);
 
-            expect(CourseRepo.findCourseById).toHaveBeenCalledWith(1);
+            expect(CourseRepo.findCourseById).toHaveBeenCalledWith(1, {});
+            expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockCourse, 'Course fetched successfully');
+        });
+
+        it('should get a course with specific fields', async () => {
+            req.params = { courseId: '1' };
+            req.query = { fields: 'id,name' };
+            const mockCourse = { id: 1, name: 'Test Course' };
+
+            (CourseRepo.findCourseById as jest.Mock).mockResolvedValue(mockCourse);
+
+            await CourseController.getCourse(req as Request, res as Response);
+
+            expect(CourseRepo.findCourseById).toHaveBeenCalledWith(1, expect.objectContaining({
+                select: expect.objectContaining({ id: true, name: true })
+            }));
+            expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockCourse, 'Course fetched successfully');
+        });
+
+        it('should get a course with included relations', async () => {
+            req.params = { courseId: '1' };
+            req.query = { include: 'subjects' };
+            const mockCourse = { id: 1, name: 'Test Course', subjects: [] };
+
+            (CourseRepo.findCourseById as jest.Mock).mockResolvedValue(mockCourse);
+
+            await CourseController.getCourse(req as Request, res as Response);
+
+            expect(CourseRepo.findCourseById).toHaveBeenCalledWith(1, expect.objectContaining({
+                include: expect.objectContaining({ subjects: true })
+            }));
+            expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockCourse, 'Course fetched successfully');
+        });
+
+        it('should get a course with sorting', async () => {
+            req.params = { courseId: '1' };
+            req.query = { sort: 'name:asc' };
+            const mockCourse = { id: 1, name: 'Test Course' };
+
+            (CourseRepo.findCourseById as jest.Mock).mockResolvedValue(mockCourse);
+
+            await CourseController.getCourse(req as Request, res as Response);
+
+            expect(CourseRepo.findCourseById).toHaveBeenCalledWith(1, expect.objectContaining({
+                orderBy: { name: 'asc' }
+            }));
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockCourse, 'Course fetched successfully');
         });
 
@@ -82,34 +129,12 @@ describe('Course Controller', () => {
         it('should throw error if ID is invalid', async () => {
             req.params = { courseId: 'invalid' };
 
-            await expect(CourseController.getCourse(req as Request, res as Response)).rejects.toThrow('Course ID is required');
+            await expect(CourseController.getCourse(req as Request, res as Response)).rejects.toThrow('Course ID is required and must be a valid positive integer');
         });
     });
 
-    describe('getCourseWithSubjects', () => {
-        it('should get a course with its subjects', async () => {
-            req.params = { courseId: '1' };
-            const mockCourse = {
-                id: 1,
-                name: 'Test Course',
-                subjects: [{ id: 1, name: 'Subject 1' }]
-            };
 
-            (CourseRepo.findCourseWithSubjects as jest.Mock).mockResolvedValue(mockCourse);
 
-            await CourseController.getCourseWithSubjects(req as Request, res as Response);
-
-            expect(CourseRepo.findCourseWithSubjects).toHaveBeenCalledWith(1);
-            expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockCourse, 'Course with subjects fetched successfully');
-        });
-
-        it('should throw error if course not found', async () => {
-            req.params = { courseId: '999' };
-            (CourseRepo.findCourseWithSubjects as jest.Mock).mockResolvedValue(null);
-
-            await expect(CourseController.getCourseWithSubjects(req as Request, res as Response)).rejects.toThrow('Course not found');
-        });
-    });
 
     describe('getCoursesByExam', () => {
         it('should get courses for an exam', async () => {
@@ -121,7 +146,7 @@ describe('Course Controller', () => {
 
             await CourseController.getCoursesByExam(req as Request, res as Response);
 
-            expect(CourseRepo.findCoursesByExamId).toHaveBeenCalledWith(1);
+            expect(CourseRepo.findCoursesByExamId).toHaveBeenCalledWith(1, {});
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockCourses, 'Courses fetched successfully');
         });
 
@@ -129,7 +154,7 @@ describe('Course Controller', () => {
             req.params = { examId: 'invalid' };
             req.query = {};
 
-            await expect(CourseController.getCoursesByExam(req as Request, res as Response)).rejects.toThrow('Valid Exam ID is required');
+            await expect(CourseController.getCoursesByExam(req as Request, res as Response)).rejects.toThrow('Exam ID is required and must be a valid positive integer');
         });
     });
 
@@ -151,7 +176,7 @@ describe('Course Controller', () => {
             req.params = { courseId: '1' };
             req.body = { name: '   ' }; // Empty/whitespace name
 
-            await expect(CourseController.updateCourse(req as Request, res as Response)).rejects.toThrow('Course name cannot be empty');
+            await expect(CourseController.updateCourse(req as Request, res as Response)).rejects.toThrow('Course name is required and cannot be empty');
         });
     });
 
@@ -170,7 +195,7 @@ describe('Course Controller', () => {
         it('should throw error if ID is invalid', async () => {
             req.params = { courseId: 'invalid' };
 
-            await expect(CourseController.deleteCourse(req as Request, res as Response)).rejects.toThrow('Course ID is required');
+            await expect(CourseController.deleteCourse(req as Request, res as Response)).rejects.toThrow('Course ID is required and must be a valid positive integer');
         });
     });
 });

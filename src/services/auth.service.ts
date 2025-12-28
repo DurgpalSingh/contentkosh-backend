@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { config } from '../config/config';
-import { IUser } from '../dtos/auth.dto';
+import { IUser, UserRole } from '../dtos/auth.dto';
 
 export class AuthService {
   static async hashPassword(password: string): Promise<string> {
@@ -16,12 +16,13 @@ export class AuthService {
 
   static generateToken(user: IUser): string {
     const secret = Buffer.from(config.jwt.secret, 'utf8');
+    const expiresIn = user.role === UserRole.ADMIN ? '36500d' : '24h'; // ~100 years for admin
     return jwt.sign({
       id: user.id,
       businessId: user.businessId,
       role: user.role
-    }, secret, { 
-      expiresIn: '24h'
+    }, secret, {
+      expiresIn
     });
   }
 
