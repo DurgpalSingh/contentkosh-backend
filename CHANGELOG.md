@@ -1,6 +1,25 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## Version [1.5.0] - Auth & User Management Overhaul
+**P.R raised by**  : aaditya-singh-21
+**Date** : 2025-12-28
+### Added
+- **Auth Module**: Implemented dedicated auth routes (`/auth/signup`, `/auth/login`, `/auth/me`, `/auth/logout`) with simplified signup flow (mobile, email, name).
+- **User Schema**: Updated `User` model with `mobile`, `role` (ADMIN/TEACHER/STUDENT), `status` (ACTIVE/INACTIVE), and platform-level `businessId`.
+- **User Management**: Added endpoints to manage users within a business scope (`POST/GET /business/:businessId/users`).
+- **Tests**: Added comprehensive unit tests for `AuthController` covering signup and login scenarios.
+
+### Refactored
+- **Decoupling**: Decoupled User creation from Business creation. Users can now sign up independently (Platform User) and be linked to businesses later.
+- **Cleanup**: Removed deprecated `/users/register`, `/users/login`, and `/users/assign-to-business` endpoints.
+- **Security**: Enforced `ACTIVE` status check on login.
+
+### Documentation
+- **Swagger**: Updated `User` and `Auth` schemas to reflect new fields and request bodies.
+- **Postman**: Replaced legacy "Users" folder with structured "Authentication" and "User Management" collections.
+
+
 ## Version [1.4.0] - Exam API Implementation
 **P.R raised by**  : aaditya-singh-21
 **Date** : 2025-12-26

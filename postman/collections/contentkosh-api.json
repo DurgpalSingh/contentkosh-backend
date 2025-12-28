@@ -2499,30 +2499,28 @@
       ]
     },
     {
-      "name": "Users",
+      "name": "Authentication",
       "item": [
         {
-          "name": "Register a new user",
+          "name": "Signup",
           "request": {
             "method": "POST",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/users/register",
+              "raw": "{{baseUrl}}/api/auth/signup",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "users",
-                "register"
-              ],
-              "query": [],
-              "variable": []
+                "auth",
+                "signup"
+              ]
             },
             "body": {
               "mode": "raw",
-              "raw": "{}",
+              "raw": "{\n    \"email\": \"admin@example.com\",\n    \"password\": \"password123\",\n    \"name\": \"Admin User\",\n    \"mobile\": \"9876543210\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -2532,27 +2530,40 @@
           }
         },
         {
-          "name": "Login user",
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.success && jsonData.data && jsonData.data.token) {",
+                  "    pm.collectionVariables.set(\"token\", jsonData.data.token);",
+                  "    console.log(\"Token set successfully\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/users/login",
+              "raw": "{{baseUrl}}/api/auth/login",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "users",
+                "auth",
                 "login"
-              ],
-              "query": [],
-              "variable": []
+              ]
             },
             "body": {
               "mode": "raw",
-              "raw": "{}",
+              "raw": "{\n    \"email\": \"admin@example.com\",\n    \"password\": \"password123\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -2562,7 +2573,7 @@
           }
         },
         {
-          "name": "Get user profile",
+          "name": "Me (Profile)",
           "request": {
             "method": "GET",
             "header": [
@@ -2573,7 +2584,135 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/users/profile",
+              "raw": "{{baseUrl}}/api/auth/me",
+              "protocol": "http",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "me"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/logout",
+              "protocol": "http",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "logout"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "User Management",
+      "item": [
+        {
+          "name": "Get Users by Business",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/business/:businessId/users",
+              "protocol": "http",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "business",
+                ":businessId",
+                "users"
+              ],
+              "variable": [
+                {
+                  "key": "businessId",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Add User to Business",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/business/:businessId/users",
+              "protocol": "http",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "business",
+                ":businessId",
+                "users"
+              ],
+              "variable": [
+                {
+                  "key": "businessId",
+                  "value": "1"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"teacher@example.com\",\n  \"name\": \"NB Teacher\",\n  \"role\": \"TEACHER\",\n  \"password\": \"pass123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/:userId",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -2581,10 +2720,54 @@
               "path": [
                 "api",
                 "users",
-                "profile"
+                ":userId"
               ],
-              "query": [],
-              "variable": []
+              "variable": [
+                {
+                  "key": "userId",
+                  "value": "1"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"INACTIVE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Delete User",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/:userId",
+              "protocol": "http",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                ":userId"
+              ],
+              "variable": [
+                {
+                  "key": "userId",
+                  "value": "1"
+                }
+              ]
             }
           }
         }

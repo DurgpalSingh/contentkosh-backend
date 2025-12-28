@@ -2,7 +2,7 @@ import { UserRole } from "@prisma/client";
 export { UserRole };
 import { Request } from "express";
 
-export const { ADMIN, TEACHER, STUDENT, SUPERADMIN, GUEST } = UserRole;
+export const { ADMIN, TEACHER, STUDENT, USER } = UserRole;
 
 export interface LoginDto {
     email: string;
@@ -14,7 +14,7 @@ export interface IUser {
     id: number;
     email: string;
     name: string;
-    businessId: number
+    businessId?: number | undefined;
     role: UserRole;
 }
 

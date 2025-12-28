@@ -77,7 +77,7 @@ async function main() {
       data: {
         userId: users[0].id, // SUPERADMIN
         businessId: business.id,
-        role: UserRole.SUPERADMIN,
+        role: UserRole.ADMIN,
         isActive: true,
       },
     }),
@@ -109,7 +109,7 @@ async function main() {
       data: {
         userId: users[4].id, // GUEST
         businessId: business.id,
-        role: UserRole.GUEST,
+        role: UserRole.USER,
         isActive: true,
       },
     }),

@@ -14,22 +14,34 @@ datasource db {
 }
 
 enum UserRole {
-  STUDENT
-  TEACHER
   ADMIN
-  SUPERADMIN
-  GUEST
+  TEACHER
+  STUDENT
+  USER
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  password  String
-  name      String
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  id             Int        @id @default(autoincrement())
+  businessId     Int?       @map("business_id")
+  name           String
+  email          String     @unique
+  mobile         String?    @unique
+  password       String     @map("password_hash")
+  role           UserRole   @default(USER)
+  status         UserStatus @default(ACTIVE)
+  emailVerified  Boolean    @default(false) @map("email_verified")
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @default(now()) @updatedAt @map("updated_at")
+  createdBy      Int?       @map("created_by")
+  updatedBy      Int?       @map("updated_by")
 
   // Relations
+  business      Business?      @relation(fields: [businessId], references: [id])
   businessUsers BusinessUser[]
   batchUsers    BatchUser[]
 
@@ -52,6 +64,7 @@ model Business {
   updatedAt     DateTime @updatedAt @map("updated_at")
 
   // Relations
+  users         User[]
   exams         Exam[]
   businessUsers BusinessUser[]
   announcements Announcement[]

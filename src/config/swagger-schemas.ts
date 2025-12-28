@@ -52,14 +52,38 @@ export const swaggerSchemas = {
         type: 'integer',
         description: 'User ID'
       },
+      businessId: {
+        type: 'integer',
+        nullable: true,
+        description: 'Business ID (optional)'
+      },
       email: {
         type: 'string',
         format: 'email',
         description: 'User email address'
       },
+      mobile: {
+        type: 'string',
+        nullable: true,
+        description: 'User mobile number'
+      },
       name: {
         type: 'string',
         description: 'User full name'
+      },
+      role: {
+        type: 'string',
+        enum: ['ADMIN', 'TEACHER', 'STUDENT', 'USER'],
+        description: 'User role'
+      },
+      status: {
+        type: 'string',
+        enum: ['ACTIVE', 'INACTIVE'],
+        description: 'User status'
+      },
+      emailVerified: {
+        type: 'boolean',
+        description: 'Is email verified'
       },
       createdAt: {
         type: 'string',
@@ -91,6 +115,10 @@ export const swaggerSchemas = {
         type: 'string',
         minLength: 1,
         description: 'User full name'
+      },
+      mobile: {
+        type: 'string',
+        description: 'User mobile number'
       }
     }
   },
@@ -138,7 +166,7 @@ export const swaggerSchemas = {
       },
       role: {
         type: 'string',
-        enum: ['STUDENT', 'TEACHER', 'ADMIN', 'SUPERADMIN'],
+        enum: ['STUDENT', 'TEACHER', 'ADMIN'],
         description: 'User role in the business'
       },
       isActive: {
@@ -201,7 +229,7 @@ export const swaggerSchemas = {
       },
       role: {
         type: 'string',
-        enum: ['STUDENT', 'TEACHER', 'ADMIN', 'SUPERADMIN'],
+        enum: ['STUDENT', 'TEACHER', 'ADMIN'],
         description: 'Role to assign to the user'
       }
     }
@@ -211,7 +239,7 @@ export const swaggerSchemas = {
     properties: {
       role: {
         type: 'string',
-        enum: ['STUDENT', 'TEACHER', 'ADMIN', 'SUPERADMIN'],
+        enum: ['STUDENT', 'TEACHER', 'ADMIN'],
         description: 'New role for the user'
       },
       isActive: {
