@@ -3,6 +3,7 @@ import { createExam, getExam, getExamsByBusiness, updateExam, deleteExam } from 
 import { createCourse, getCourse, getCoursesByExam, updateCourse, deleteCourse } from '../controllers/course.controller';
 import { createSubject, getSubject, getSubjectsByCourse, updateSubject, deleteSubject } from '../controllers/subject.controller';
 import { authorize } from '../middlewares/auth.middleware';
+import { validateIdParam, authorizeExamAccess } from '../middlewares/validation.middleware';
 import { ADMIN } from '../dtos/auth.dto';
 
 const router = Router();
@@ -161,7 +162,7 @@ router.get('/', getExamsByBusiness);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/:id', getExam);
+router.get('/:id', validateIdParam('id'), authorizeExamAccess, getExam);
 
 /**
  * @swagger
@@ -215,7 +216,7 @@ router.get('/:id', getExam);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.put('/:id', authorize(ADMIN), updateExam);
+router.put('/:id', authorize(ADMIN), validateIdParam('id'), authorizeExamAccess, updateExam);
 
 /**
  * @swagger
@@ -257,7 +258,7 @@ router.put('/:id', authorize(ADMIN), updateExam);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.delete('/:id', authorize(ADMIN), deleteExam);
+router.delete('/:id', authorize(ADMIN), validateIdParam('id'), authorizeExamAccess, deleteExam);
 
 // ==================== COURSE ROUTES (NESTED UNDER EXAMS) ====================
 
@@ -313,7 +314,7 @@ router.delete('/:id', authorize(ADMIN), deleteExam);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post('/:examId/courses', authorize(ADMIN), createCourse);
+router.post('/:examId/courses', authorize(ADMIN), validateIdParam('examId'), authorizeExamAccess, createCourse);
 
 /**
  * @swagger
@@ -372,7 +373,7 @@ router.post('/:examId/courses', authorize(ADMIN), createCourse);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/:examId/courses', getCoursesByExam);
+router.get('/:examId/courses', validateIdParam('examId'), authorizeExamAccess, getCoursesByExam);
 
 /**
  * @swagger
@@ -435,7 +436,7 @@ router.get('/:examId/courses', getCoursesByExam);
  *           application/json:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/:examId/courses/:courseId', getCourse);
+router.get('/:examId/courses/:courseId', validateIdParam('examId'), validateIdParam('courseId'), authorizeExamAccess, getCourse);
 
 /**
  * @swagger
@@ -495,7 +496,7 @@ router.get('/:examId/courses/:courseId', getCourse);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.put('/:examId/courses/:courseId', authorize(ADMIN), updateCourse);
+router.put('/:examId/courses/:courseId', authorize(ADMIN), validateIdParam('examId'), validateIdParam('courseId'), authorizeExamAccess, updateCourse);
 
 /**
  * @swagger
@@ -543,7 +544,7 @@ router.put('/:examId/courses/:courseId', authorize(ADMIN), updateCourse);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.delete('/:examId/courses/:courseId', authorize(ADMIN), deleteCourse);
+router.delete('/:examId/courses/:courseId', authorize(ADMIN), validateIdParam('examId'), validateIdParam('courseId'), authorizeExamAccess, deleteCourse);
 
 // ==================== SUBJECT ROUTES (NESTED UNDER COURSES) ====================
 
@@ -605,7 +606,7 @@ router.delete('/:examId/courses/:courseId', authorize(ADMIN), deleteCourse);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post('/:examId/courses/:courseId/subjects', authorize(ADMIN), createSubject);
+router.post('/:examId/courses/:courseId/subjects', authorize(ADMIN), validateIdParam('examId'), validateIdParam('courseId'), authorizeExamAccess, createSubject);
 
 /**
  * @swagger
@@ -660,7 +661,7 @@ router.post('/:examId/courses/:courseId/subjects', authorize(ADMIN), createSubje
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/:examId/courses/:courseId/subjects', getSubjectsByCourse);
+router.get('/:examId/courses/:courseId/subjects', validateIdParam('examId'), validateIdParam('courseId'), authorizeExamAccess, getSubjectsByCourse);
 
 /**
  * @swagger
@@ -720,7 +721,7 @@ router.get('/:examId/courses/:courseId/subjects', getSubjectsByCourse);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/:examId/courses/:courseId/subjects/:subjectId', getSubject);
+router.get('/:examId/courses/:courseId/subjects/:subjectId', validateIdParam('examId'), validateIdParam('courseId'), validateIdParam('subjectId'), authorizeExamAccess, getSubject);
 
 /**
  * @swagger
@@ -786,7 +787,7 @@ router.get('/:examId/courses/:courseId/subjects/:subjectId', getSubject);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.put('/:examId/courses/:courseId/subjects/:subjectId', authorize(ADMIN), updateSubject);
+router.put('/:examId/courses/:courseId/subjects/:subjectId', authorize(ADMIN), validateIdParam('examId'), validateIdParam('courseId'), validateIdParam('subjectId'), authorizeExamAccess, updateSubject);
 
 /**
  * @swagger
@@ -840,6 +841,6 @@ router.put('/:examId/courses/:courseId/subjects/:subjectId', authorize(ADMIN), u
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.delete('/:examId/courses/:courseId/subjects/:subjectId', authorize(ADMIN), deleteSubject);
+router.delete('/:examId/courses/:courseId/subjects/:subjectId', authorize(ADMIN), validateIdParam('examId'), validateIdParam('courseId'), validateIdParam('subjectId'), authorizeExamAccess, deleteSubject);
 
 export default router;

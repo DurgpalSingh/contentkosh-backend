@@ -14,6 +14,10 @@ jest.mock('../../../src/repositories/subject.repo');
 jest.mock('../../../src/middlewares/auth.middleware', () => ({
     authorize: () => (req: any, res: any, next: any) => next(),
 }));
+jest.mock('../../../src/middlewares/validation.middleware', () => ({
+    validateIdParam: () => (req: any, res: any, next: any) => next(),
+    authorizeExamAccess: (req: any, res: any, next: any) => next(),
+}));
 jest.mock('../../../src/utils/logger');
 
 const app = express();
