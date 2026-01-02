@@ -1,0 +1,96 @@
+import { Prisma, Exam } from '@prisma/client';
+import * as examRepo from '../repositories/exam.repo';
+import { CreateExamDto, UpdateExamDto } from '../dtos/exam.dto';
+import { NotFoundError, BadRequestError } from '../errors/api.errors';
+import logger from '../utils/logger';
+import { ExamMapper } from '../mappers/exam.mapper';
+
+export class ExamService {
+
+    async createExam(data: CreateExamDto, userId: number): Promise<Exam> {
+        logger.info('ExamService: Creating new exam', { name: data.name, businessId: data.businessId });
+
+        // Map DTO to Prisma input
+        const createData: Prisma.ExamUncheckedCreateInput = {
+            name: data.name,
+            code: data.code ?? null,
+            description: data.description ?? null,
+            startDate: data.startDate ?? null,
+            endDate: data.endDate ?? null,
+            businessId: data.businessId,
+            createdBy: userId
+        };
+
+        try {
+            const exam = await examRepo.createExam(createData);
+            return ExamMapper.toDomain(exam);
+        } catch (error: any) {
+            if (error.code === 'P2002') {
+                throw new BadRequestError('Exam with this name already exists for this business');
+            }
+            throw error;
+        }
+    }
+
+    async getExam(id: number, options?: any): Promise<Exam> {
+        logger.info('ExamService: Fetching exam', { examId: id });
+        const exam = await examRepo.findExamById(id, options);
+        if (!exam) {
+            logger.error(`ExamService: Exam with ID ${id} not found`);
+            throw new NotFoundError('Exam not found');
+        }
+        return ExamMapper.toDomain(exam);
+    }
+
+    async getExamsByBusiness(businessId: number, options?: any): Promise<Exam[]> {
+        logger.info('ExamService: Fetching exams by business', { businessId });
+        const exams = await examRepo.findActiveExamsByBusinessId(businessId, options);
+        return exams.map(e => ExamMapper.toDomain(e));
+    }
+
+    async updateExam(id: number, data: UpdateExamDto, userId: number): Promise<Exam> {
+        logger.info('ExamService: Updating exam', { examId: id });
+
+        // Map DTO to Prisma input (clean undefineds)
+        const updateData: Prisma.ExamUncheckedUpdateInput = {
+            ...(data.name && { name: data.name }),
+            ...(data.code !== undefined && { code: data.code }), // Allow null/empty string if passed, but typically optional in DTO means undefined
+            ...(data.description !== undefined && { description: data.description }),
+            ...(data.startDate !== undefined && { startDate: data.startDate }),
+            ...(data.endDate !== undefined && { endDate: data.endDate }),
+            ...(data.status && { status: data.status }),
+            updatedBy: userId
+        };
+
+        try {
+            const exam = await examRepo.updateExam(id, updateData);
+            logger.info(`ExamService: Exam updated successfully: ${exam.name}`);
+            return ExamMapper.toDomain(exam);
+        } catch (error: any) {
+            if (error.code === 'P2002') {
+                throw new BadRequestError('Exam with this name already exists for this business');
+            }
+            // Assuming updateExam might throw if not found, or returns null. 
+            // Repo 'updateExam' usually throws if ID invalid in Prisma.
+            // We can check existence first if needed, but Prisma will throw P2025.
+            if (error.code === 'P2025') {
+                throw new NotFoundError('Exam not found');
+            }
+            throw error;
+        }
+    }
+
+    async deleteExam(id: number): Promise<void> {
+        logger.info('ExamService: Deleting exam', { examId: id });
+        try {
+            await examRepo.deleteExam(id);
+            logger.info(`ExamService: Exam deleted successfully: ID ${id}`);
+        } catch (error: any) {
+            if (error.code === 'P2025') {
+                throw new NotFoundError('Exam not found');
+            }
+            throw error;
+        }
+    }
+}
+

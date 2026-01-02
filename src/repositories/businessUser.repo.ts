@@ -1,6 +1,7 @@
-import { PrismaClient, Prisma, UserRole } from '@prisma/client';
+import { Prisma, PrismaClient, UserRole } from '@prisma/client';
+import { prisma } from '../config/database';
 
-const prisma = new PrismaClient();
+// const prisma = new PrismaClient();
 
 const businessUserSelect = {
   id: true,
@@ -30,8 +31,8 @@ export async function createBusinessUser(data: Prisma.BusinessUserCreateInput) {
       data,
       select: {
         ...businessUserSelect,
-        user: {select: userSelect},
-        business: {select: businessSelect}
+        user: { select: userSelect },
+        business: { select: businessSelect }
       },
     });
   } catch (error) {
@@ -44,8 +45,8 @@ export async function findBusinessUserById(id: number) {
     where: { id },
     select: {
       ...businessUserSelect,
-      user: {select: userSelect},
-      business: {select: businessSelect}
+      user: { select: userSelect },
+      business: { select: businessSelect }
     },
   });
 }
@@ -60,8 +61,8 @@ export async function findBusinessUserByUserAndBusiness(userId: number, business
     },
     select: {
       ...businessUserSelect,
-      user: {select: userSelect},
-      business: {select: businessSelect}
+      user: { select: userSelect },
+      business: { select: businessSelect }
     },
   });
 }
@@ -71,7 +72,7 @@ export async function findBusinessUsersByUserId(userId: number) {
     where: { userId },
     select: {
       ...businessUserSelect,
-      business: {select: businessSelect}
+      business: { select: businessSelect }
     },
     orderBy: { createdAt: 'desc' },
   });
@@ -82,7 +83,7 @@ export async function findBusinessUsersByBusinessId(businessId: number) {
     where: { businessId },
     select: {
       ...businessUserSelect,
-      user: {select: userSelect},
+      user: { select: userSelect },
     },
     orderBy: { createdAt: 'desc' },
   });
@@ -90,14 +91,14 @@ export async function findBusinessUsersByBusinessId(businessId: number) {
 
 export async function findBusinessUsersByRole(businessId: number, role: UserRole) {
   return prisma.businessUser.findMany({
-    where: { 
+    where: {
       businessId,
       role,
       isActive: true
     },
     select: {
       ...businessUserSelect,
-      user: {select: userSelect},
+      user: { select: userSelect },
     },
     orderBy: { createdAt: 'desc' },
   });
@@ -110,8 +111,8 @@ export async function updateBusinessUser(id: number, data: Prisma.BusinessUserUp
       data,
       select: {
         ...businessUserSelect,
-        user: {select: userSelect},
-        business: {select: businessSelect}
+        user: { select: userSelect },
+        business: { select: businessSelect }
       },
     });
   } catch (error) {

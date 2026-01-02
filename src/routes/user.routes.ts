@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { register, login, getProfile, assignUserToBusiness, getUserBusinesses, getBusinessUsers, getBusinessUser, updateBusinessUser, removeUserFromBusiness } from '../controllers/user.controller';
 import { authenticate, authorize } from '../middlewares/auth.middleware';
-import { ADMIN } from '../dtos/auth.dto';
+import { UserRole } from '@prisma/client';
 
 const router = Router();
 
@@ -190,7 +190,7 @@ router.get('/profile', authenticate, getProfile);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post('/assign-to-business', authenticate, authorize(ADMIN), assignUserToBusiness);
+router.post('/assign-to-business', authenticate, authorize(UserRole.ADMIN), assignUserToBusiness);
 
 /**
  * @swagger
@@ -379,7 +379,7 @@ router.get('/business-users/:id', authenticate, getBusinessUser);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.put('/business-users/:id', authenticate, authorize(ADMIN), updateBusinessUser);
+router.put('/business-users/:id', authenticate, authorize(UserRole.ADMIN), updateBusinessUser);
 
 /**
  * @swagger
@@ -421,6 +421,6 @@ router.put('/business-users/:id', authenticate, authorize(ADMIN), updateBusiness
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.delete('/business-users/:id', authenticate, authorize(ADMIN), removeUserFromBusiness);
+router.delete('/business-users/:id', authenticate, authorize(UserRole.ADMIN), removeUserFromBusiness);
 
 export default router; 

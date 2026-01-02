@@ -1,9 +1,12 @@
 import { Router } from 'express';
-import { createExam, getExam, getExamWithCourses, getExamsByBusiness, updateExam, deleteExam } from '../controllers/exam.controller';
-import { createCourse, getCourse, getCourseWithSubjects, getCoursesByExam, updateCourse, deleteCourse } from '../controllers/course.controller';
+import { createExam, getExam, getExamsByBusiness, updateExam, deleteExam } from '../controllers/exam.controller';
+import { createCourse, getCourse, getCoursesByExam, updateCourse, deleteCourse } from '../controllers/course.controller';
 import { createSubject, getSubject, getSubjectsByCourse, updateSubject, deleteSubject } from '../controllers/subject.controller';
 import { authorize } from '../middlewares/auth.middleware';
-import { ADMIN } from '../dtos/auth.dto';
+import { validateIdParam, authorizeExamAccess } from '../middlewares/validation.middleware';
+import { validateDto } from '../middlewares/validation/dto.middleware';
+import { UserRole } from '@prisma/client';
+import { CreateExamDto, UpdateExamDto } from '../dtos/exam.dto';
 
 const router = Router();
 
@@ -49,243 +52,13 @@ const router = Router();
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post('/', authorize(ADMIN), createExam);
+// POST / and GET / removed as they required businessId in body/query, 
+// which is now strictly enforced as path param via /api/business/:businessId/exams
 
-/**
- * @swagger
- * /api/exams:
- *   get:
- *     summary: Get all exams for a business
- *     tags: [Exams]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: query
- *         name: businessId
- *         required: true
- *         schema:
- *           type: integer
- *         description: Business ID
- *     responses:
- *       200:
- *         description: Exams fetched successfully
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       type: array
- *                       items:
- *                         $ref: '#/components/schemas/Exam'
- *       400:
- *         description: Missing business ID
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
-router.get('/', getExamsByBusiness);
-
-/**
- * @swagger
- * /api/exams/{id}:
- *   get:
- *     summary: Get exam by ID
- *     tags: [Exams]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *         description: Exam ID
- *     responses:
- *       200:
- *         description: Exam fetched successfully
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       $ref: '#/components/schemas/Exam'
- *       400:
- *         description: Invalid exam ID
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       404:
- *         description: Exam not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
-router.get('/:id', getExam);
-
-/**
- * @swagger
- * /api/exams/{id}/with-courses:
- *   get:
- *     summary: Get exam with its courses
- *     tags: [Exams]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *         description: Exam ID
- *     responses:
- *       200:
- *         description: Exam with courses fetched successfully
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       $ref: '#/components/schemas/ExamWithCourses'
- *       400:
- *         description: Invalid exam ID
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       404:
- *         description: Exam not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
-router.get('/:id/with-courses', getExamWithCourses);
-
-/**
- * @swagger
- * /api/exams/{id}:
- *   put:
- *     summary: Update exam
- *     tags: [Exams]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *         description: Exam ID
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/UpdateExamRequest'
- *     responses:
- *       200:
- *         description: Exam updated successfully
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       $ref: '#/components/schemas/Exam'
- *       400:
- *         description: Invalid input data
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       404:
- *         description: Exam not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
-router.put('/:id', authorize(ADMIN), updateExam);
-
-/**
- * @swagger
- * /api/exams/{id}:
- *   delete:
- *     summary: Delete exam
- *     tags: [Exams]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *         description: Exam ID
- *     responses:
- *       200:
- *         description: Exam deleted successfully
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       type: null
- *       400:
- *         description: Invalid exam ID
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
-router.delete('/:id', authorize(ADMIN), deleteExam);
+// Routes migrated to business.routes.ts
+// router.get('/:id', ...);
+// router.put('/:id', ...);
+// router.delete('/:id', ...);
 
 // ==================== COURSE ROUTES (NESTED UNDER EXAMS) ====================
 
@@ -341,7 +114,7 @@ router.delete('/:id', authorize(ADMIN), deleteExam);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post('/:examId/courses', authorize(ADMIN), createCourse);
+router.post('/:examId/courses', authorize(UserRole.ADMIN), validateIdParam('examId'), authorizeExamAccess, createCourse);
 
 /**
  * @swagger
@@ -363,6 +136,16 @@ router.post('/:examId/courses', authorize(ADMIN), createCourse);
  *         schema:
  *           type: boolean
  *         description: Filter by active status (true for active only, false for all)
+ *       - in: query
+ *         name: fields
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of fields to select (e.g. id,name)
+ *       - in: query
+ *         name: include
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of relations to include (e.g. subjects)
  *     responses:
  *       200:
  *         description: Courses fetched successfully
@@ -390,7 +173,7 @@ router.post('/:examId/courses', authorize(ADMIN), createCourse);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/:examId/courses', getCoursesByExam);
+router.get('/:examId/courses', validateIdParam('examId'), authorizeExamAccess, getCoursesByExam);
 
 /**
  * @swagger
@@ -413,6 +196,16 @@ router.get('/:examId/courses', getCoursesByExam);
  *         schema:
  *           type: integer
  *         description: Course ID
+ *       - in: query
+ *         name: fields
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of fields to select (e.g. id,name)
+ *       - in: query
+ *         name: include
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of relations to include (e.g. subjects)
  *     responses:
  *       200:
  *         description: Course fetched successfully
@@ -441,64 +234,9 @@ router.get('/:examId/courses', getCoursesByExam);
  *         description: Internal server error
  *         content:
  *           application/json:
- *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/:examId/courses/:courseId', getCourse);
-
-/**
- * @swagger
- * /api/exams/{examId}/courses/{courseId}/with-subjects:
- *   get:
- *     summary: Get course with its subjects under an exam
- *     tags: [Courses]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: examId
- *         required: true
- *         schema:
- *           type: integer
- *         description: Exam ID
- *       - in: path
- *         name: courseId
- *         required: true
- *         schema:
- *           type: integer
- *         description: Course ID
- *     responses:
- *       200:
- *         description: Course with subjects fetched successfully
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       $ref: '#/components/schemas/CourseWithSubjects'
- *       400:
- *         description: Invalid course ID
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       404:
- *         description: Course not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
-router.get('/:examId/courses/:courseId/with-subjects', getCourseWithSubjects);
+router.get('/:examId/courses/:courseId', validateIdParam('examId'), validateIdParam('courseId'), authorizeExamAccess, getCourse);
 
 /**
  * @swagger
@@ -558,7 +296,7 @@ router.get('/:examId/courses/:courseId/with-subjects', getCourseWithSubjects);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.put('/:examId/courses/:courseId', authorize(ADMIN), updateCourse);
+router.put('/:examId/courses/:courseId', authorize(UserRole.ADMIN), validateIdParam('examId'), validateIdParam('courseId'), authorizeExamAccess, updateCourse);
 
 /**
  * @swagger
@@ -606,7 +344,7 @@ router.put('/:examId/courses/:courseId', authorize(ADMIN), updateCourse);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.delete('/:examId/courses/:courseId', authorize(ADMIN), deleteCourse);
+router.delete('/:examId/courses/:courseId', authorize(UserRole.ADMIN), validateIdParam('examId'), validateIdParam('courseId'), authorizeExamAccess, deleteCourse);
 
 // ==================== SUBJECT ROUTES (NESTED UNDER COURSES) ====================
 
@@ -668,7 +406,7 @@ router.delete('/:examId/courses/:courseId', authorize(ADMIN), deleteCourse);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post('/:examId/courses/:courseId/subjects', authorize(ADMIN), createSubject);
+router.post('/:examId/courses/:courseId/subjects', authorize(UserRole.ADMIN), validateIdParam('examId'), validateIdParam('courseId'), authorizeExamAccess, createSubject);
 
 /**
  * @swagger
@@ -723,7 +461,7 @@ router.post('/:examId/courses/:courseId/subjects', authorize(ADMIN), createSubje
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/:examId/courses/:courseId/subjects', getSubjectsByCourse);
+router.get('/:examId/courses/:courseId/subjects', validateIdParam('examId'), validateIdParam('courseId'), authorizeExamAccess, getSubjectsByCourse);
 
 /**
  * @swagger
@@ -783,7 +521,7 @@ router.get('/:examId/courses/:courseId/subjects', getSubjectsByCourse);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/:examId/courses/:courseId/subjects/:subjectId', getSubject);
+router.get('/:examId/courses/:courseId/subjects/:subjectId', validateIdParam('examId'), validateIdParam('courseId'), validateIdParam('subjectId'), authorizeExamAccess, getSubject);
 
 /**
  * @swagger
@@ -849,7 +587,7 @@ router.get('/:examId/courses/:courseId/subjects/:subjectId', getSubject);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.put('/:examId/courses/:courseId/subjects/:subjectId', authorize(ADMIN), updateSubject);
+router.put('/:examId/courses/:courseId/subjects/:subjectId', authorize(UserRole.ADMIN), validateIdParam('examId'), validateIdParam('courseId'), validateIdParam('subjectId'), authorizeExamAccess, updateSubject);
 
 /**
  * @swagger
@@ -903,6 +641,6 @@ router.put('/:examId/courses/:courseId/subjects/:subjectId', authorize(ADMIN), u
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.delete('/:examId/courses/:courseId/subjects/:subjectId', authorize(ADMIN), deleteSubject);
+router.delete('/:examId/courses/:courseId/subjects/:subjectId', authorize(UserRole.ADMIN), validateIdParam('examId'), validateIdParam('courseId'), validateIdParam('subjectId'), authorizeExamAccess, deleteSubject);
 
 export default router;
