@@ -2,7 +2,7 @@ import { UserRole } from "@prisma/client";
 export { UserRole };
 import { Request } from "express";
 
-export const { ADMIN, TEACHER, STUDENT, SUPERADMIN, GUEST } = UserRole;
+
 
 export interface LoginDto {
     email: string;

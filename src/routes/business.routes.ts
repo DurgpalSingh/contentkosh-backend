@@ -1,13 +1,12 @@
 import { Router } from 'express';
 import { createBusiness, getBusiness, updateBusiness, deleteBusiness } from '../controllers/business.controller';
-import { createExam, getExamsByBusiness } from '../controllers/exam.controller';
+import { createExam, getExamsByBusiness, getExam, updateExam, deleteExam } from '../controllers/exam.controller';
+import { CreateExamDto, UpdateExamDto } from '../dtos/exam.dto';
 import { authorize } from '../middlewares/auth.middleware';
-import { ADMIN, SUPERADMIN } from '../dtos/auth.dto';
+import { UserRole } from '@prisma/client';
+import { validateDto } from '../middlewares/validation/dto.middleware';
 
 const router = Router();
-
-
-// ==================== NESTED EXAM ROUTES ====================
 
 /**
  * @swagger
@@ -15,30 +14,9 @@ const router = Router();
  *   post:
  *     summary: Create exam under business
  *     tags: [Business, Exams]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: businessId
- *         required: true
- *         schema:
- *           type: integer
- *         description: Business ID
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/CreateExamRequest'
- *     responses:
- *       201:
- *         description: Exam created successfully
- *       400:
- *         description: Invalid input
- *       404:
- *         description: Business not found
+
  */
-router.post('/:businessId/exams', authorize(ADMIN), createExam);
+router.post('/:businessId/exams', authorize(UserRole.ADMIN), validateDto(CreateExamDto), createExam);
 
 /**
  * @swagger
@@ -64,6 +42,98 @@ router.post('/:businessId/exams', authorize(ADMIN), createExam);
  *         description: Business not found
  */
 router.get('/:businessId/exams', getExamsByBusiness);
+/**
+ * @swagger
+ * /api/business/{businessId}/exams/{id}:
+ *   get:
+ *     summary: Get exam by ID under a business
+ *     tags: [Business, Exams]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: businessId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Business ID
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Exam ID
+ *       - in: query
+ *         name: fields
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of fields to select
+ *       - in: query
+ *         name: include
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of relations to include
+ *     responses:
+ *       200:
+ *         description: Exam fetched successfully
+ *       404:
+ *         description: Exam not found
+ *   put:
+ *     summary: Update exam under a business
+ *     tags: [Business, Exams]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: businessId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Business ID
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Exam ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/UpdateExamRequest'
+ *     responses:
+ *       200:
+ *         description: Exam updated successfully
+ *       404:
+ *         description: Exam not found
+ *   delete:
+ *     summary: Delete exam under a business
+ *     tags: [Business, Exams]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: businessId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Business ID
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Exam ID
+ *     responses:
+ *       200:
+ *         description: Exam deleted successfully
+ *       404:
+ *         description: Exam not found
+ */
+router.get('/:businessId/exams/:id', getExam);
+router.put('/:businessId/exams/:id', authorize(UserRole.ADMIN), validateDto(UpdateExamDto, true), updateExam);
+router.delete('/:businessId/exams/:id', authorize(UserRole.ADMIN), deleteExam);
 
 // ==================== BUSINESS ROUTES ====================
 
@@ -112,7 +182,7 @@ router.get('/:businessId/exams', getExamsByBusiness);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post('/', authorize(ADMIN), createBusiness);
+router.post('/', authorize(UserRole.ADMIN), createBusiness);
 
 /**
  * @swagger
@@ -147,7 +217,7 @@ router.post('/', authorize(ADMIN), createBusiness);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/', authorize(SUPERADMIN), getBusiness);
+router.get('/', authorize(UserRole.SUPERADMIN), getBusiness);
 
 /**
  * @swagger
@@ -243,7 +313,7 @@ router.get('/:id', getBusiness);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.put('/:id', authorize(ADMIN), updateBusiness);
+router.put('/:id', authorize(UserRole.ADMIN), updateBusiness);
 
 /**
  * @swagger
@@ -285,6 +355,6 @@ router.put('/:id', authorize(ADMIN), updateBusiness);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.delete('/:id', authorize(ADMIN), deleteBusiness);
+router.delete('/:id', authorize(UserRole.ADMIN), deleteBusiness);
 
 export default router;

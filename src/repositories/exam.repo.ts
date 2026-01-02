@@ -1,6 +1,7 @@
-import { PrismaClient, Prisma } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
+import { prisma } from '../config/database';
 
-const prisma = new PrismaClient();
+// const prisma = new PrismaClient(); // Removed local instantiation
 
 const examSelect = {
   id: true,
@@ -26,7 +27,17 @@ export async function createExam(data: Prisma.ExamUncheckedCreateInput) {
   }
 }
 
-export async function findExamById(id: number, options: any = {}) {
+// Define options interface to replace 'any'
+export interface ExamFindOptions {
+  where?: Prisma.ExamWhereInput;
+  orderBy?: Prisma.ExamOrderByWithRelationInput;
+  skip?: number;
+  take?: number;
+  select?: Prisma.ExamSelect;
+  include?: Prisma.ExamInclude;
+}
+
+export async function findExamById(id: number, options: ExamFindOptions = {}) {
   const query: any = { where: { id } };
 
   if (options.select) {
@@ -40,42 +51,58 @@ export async function findExamById(id: number, options: any = {}) {
   return prisma.exam.findUnique(query);
 }
 
-export async function findExamsByBusinessId(businessId: number, options: any = {}) {
-  const query: any = {
-    where: { businessId },
+export async function findExamsByBusinessId(businessId: number, options: ExamFindOptions = {}) {
+  const query: Prisma.ExamFindManyArgs = {
+    where: {
+      businessId,
+      ...(options.where || {}),
+    },
     orderBy: options.orderBy || { name: 'asc' },
-    skip: options.skip,
-    take: options.take,
+
   };
+
+  if (options.skip !== undefined) {
+    query.skip = options.skip;
+  }
+  if (options.take !== undefined) {
+    query.take = options.take;
+  }
 
   if (options.select) {
     query.select = options.select;
   } else if (options.include) {
     query.include = options.include;
   } else {
-    query.select = examSelect;
+    (query as any).select = examSelect;
   }
 
   return prisma.exam.findMany(query);
 }
 
-export async function findActiveExamsByBusinessId(businessId: number, options: any = {}) {
-  const query: any = {
+export async function findActiveExamsByBusinessId(businessId: number, options: ExamFindOptions = {}) {
+  const query: Prisma.ExamFindManyArgs = {
     where: {
       businessId,
-      status: 'ACTIVE'
+      status: 'ACTIVE',
+      ...(options.where || {}),
     },
     orderBy: options.orderBy || { name: 'asc' },
-    skip: options.skip,
-    take: options.take,
+
   };
+
+  if (options.skip !== undefined) {
+    query.skip = options.skip;
+  }
+  if (options.take !== undefined) {
+    query.take = options.take;
+  }
 
   if (options.select) {
     query.select = options.select;
   } else if (options.include) {
     query.include = options.include;
   } else {
-    query.select = examSelect;
+    (query as any).select = examSelect;
   }
 
   return prisma.exam.findMany(query);

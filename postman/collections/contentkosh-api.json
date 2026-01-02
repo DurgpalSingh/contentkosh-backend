@@ -979,13 +979,7 @@
           "name": "Create exam under business",
           "request": {
             "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
-            ],
+            "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/business/:businessId/exams",
               "protocol": "http",
@@ -1000,15 +994,6 @@
               ],
               "query": [],
               "variable": []
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Sample Exam\",\n  \"businessId\": 1,\n  \"isActive\": true\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
             }
           }
         },
@@ -1034,6 +1019,115 @@
                 "business",
                 ":businessId",
                 "exams"
+              ],
+              "query": [],
+              "variable": []
+            }
+          }
+        },
+        {
+          "name": "Get exam by ID under a business",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/business/:businessId/exams/:id",
+              "protocol": "http",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "business",
+                ":businessId",
+                "exams",
+                ":id"
+              ],
+              "query": [
+                {
+                  "key": "fields",
+                  "value": "",
+                  "description": "Comma-separated list of fields to select",
+                  "disabled": true
+                },
+                {
+                  "key": "include",
+                  "value": "",
+                  "description": "Comma-separated list of relations to include",
+                  "disabled": true
+                }
+              ],
+              "variable": []
+            }
+          }
+        },
+        {
+          "name": "Update exam under a business",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/business/:businessId/exams/:id",
+              "protocol": "http",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "business",
+                ":businessId",
+                "exams",
+                ":id"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Sample Exam\",\n  \"businessId\": 1,\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Delete exam under a business",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/business/:businessId/exams/:id",
+              "protocol": "http",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "business",
+                ":businessId",
+                "exams",
+                ":id"
               ],
               "query": [],
               "variable": []
@@ -1890,239 +1984,6 @@
                   "language": "json"
                 }
               }
-            }
-          }
-        },
-        {
-          "name": "Get all exams for a business",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/exams",
-              "protocol": "http",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "exams"
-              ],
-              "query": [
-                {
-                  "key": "businessId",
-                  "value": "",
-                  "description": "Business ID",
-                  "disabled": true
-                },
-                {
-                  "key": "fields",
-                  "value": "",
-                  "description": "Comma-separated list of fields to select (e.g. id,name)",
-                  "disabled": true
-                },
-                {
-                  "key": "include",
-                  "value": "",
-                  "description": "Comma-separated list of relations to include (e.g. courses)",
-                  "disabled": true
-                }
-              ],
-              "variable": []
-            }
-          }
-        },
-        {
-          "name": "Get all exams for a business (with Courses)",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/exams",
-              "protocol": "http",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "exams"
-              ],
-              "query": [
-                {
-                  "key": "businessId",
-                  "value": "",
-                  "description": "Business ID",
-                  "disabled": true
-                },
-                {
-                  "key": "fields",
-                  "value": "",
-                  "description": "Comma-separated list of fields to select (e.g. id,name)",
-                  "disabled": true
-                },
-                {
-                  "key": "include",
-                  "value": "courses",
-                  "description": "Inserted variant parameter",
-                  "disabled": false
-                }
-              ],
-              "variable": []
-            }
-          }
-        },
-        {
-          "name": "Get exam by ID",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/exams/:id",
-              "protocol": "http",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "exams",
-                ":id"
-              ],
-              "query": [
-                {
-                  "key": "fields",
-                  "value": "",
-                  "description": "Comma-separated list of fields to select (e.g. id,name)",
-                  "disabled": true
-                },
-                {
-                  "key": "include",
-                  "value": "",
-                  "description": "Comma-separated list of relations to include (e.g. courses.subjects)",
-                  "disabled": true
-                }
-              ],
-              "variable": []
-            }
-          }
-        },
-        {
-          "name": "Get exam by ID (with Courses)",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/exams/:id",
-              "protocol": "http",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "exams",
-                ":id"
-              ],
-              "query": [
-                {
-                  "key": "fields",
-                  "value": "",
-                  "description": "Comma-separated list of fields to select (e.g. id,name)",
-                  "disabled": true
-                },
-                {
-                  "key": "include",
-                  "value": "courses",
-                  "description": "Inserted variant parameter",
-                  "disabled": false
-                }
-              ],
-              "variable": []
-            }
-          }
-        },
-        {
-          "name": "Update exam",
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/exams/:id",
-              "protocol": "http",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "exams",
-                ":id"
-              ],
-              "query": [],
-              "variable": []
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Sample Exam\",\n  \"businessId\": 1,\n  \"isActive\": true\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
-          }
-        },
-        {
-          "name": "Delete exam",
-          "request": {
-            "method": "DELETE",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/exams/:id",
-              "protocol": "http",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "exams",
-                ":id"
-              ],
-              "query": [],
-              "variable": []
             }
           }
         }

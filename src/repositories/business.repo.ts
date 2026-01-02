@@ -1,11 +1,12 @@
-import { PrismaClient, Prisma } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
+import { prisma } from '../config/database';
 
-const prisma = new PrismaClient();
+// const prisma = new PrismaClient();
 
 export async function createBusiness(data: Prisma.BusinessCreateInput) {
   try {
     return await prisma.business.create({
-        data
+      data
     });
   } catch (error) {
     throw error;
