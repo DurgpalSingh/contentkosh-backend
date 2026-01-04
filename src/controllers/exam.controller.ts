@@ -5,6 +5,7 @@ import logger from '../utils/logger';
 import { BadRequestError, NotFoundError } from '../errors/api.errors';
 import { ValidationUtils } from '../utils/validation';
 import { CreateExamDto, UpdateExamDto } from '../dtos/exam.dto';
+import { plainToInstance } from 'class-transformer';
 import { AuthRequest } from '../dtos/auth.dto';
 import { QueryBuilder } from '../utils/queryBuilder';
 import { ExamService } from '../services/exam.service';
@@ -18,7 +19,7 @@ export const createExam = async (req: Request, res: Response) => {
             return ApiResponseHandler.badRequest(res, 'Business ID is required in path parameters');
         }
 
-        const examDataInput: CreateExamDto = req.body;
+        const examDataInput = plainToInstance(CreateExamDto, req.body);
         examDataInput.businessId = businessIdFromParams;
 
         // Validate Business ID existence

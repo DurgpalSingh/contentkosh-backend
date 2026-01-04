@@ -162,7 +162,7 @@ model Exam {
 
   @@index([businessId])
   @@index([businessId, status])
-  @@index([businessId, name])
+  @@unique([businessId, name])
   @@map("exams")
 }
 
