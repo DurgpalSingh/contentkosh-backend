@@ -6,7 +6,7 @@ import { Prisma, UserRole } from '@prisma/client';
 import * as userRepo from '../repositories/user.repo';
 import * as businessRepo from '../repositories/business.repo';
 import * as businessUserRepo from '../repositories/businessUser.repo';
-import { IUser, LoginDto, GUEST, AuthRequest } from '../dtos/auth.dto';
+import { IUser, LoginDto, AuthRequest } from '../dtos/auth.dto';
 import { BadRequestError, NotFoundError, AlreadyExistsError } from '../errors/api.errors';
 
 export const register = async (req: Request, res: Response) => {
@@ -26,12 +26,12 @@ export const register = async (req: Request, res: Response) => {
 
     // Create user in database
     const user = await userRepo.createUser({ email, password: password, name });
-    
+
 
     logger.info(`User registered successfully: ${email}`);
 
     ApiResponseHandler.success(res, user, 'User registered successfully');
-    
+
   } catch (error) {
     logger.error('Error registering user:', error);
     ApiResponseHandler.error(res, 'Error registering user', 500);
@@ -64,7 +64,7 @@ export const login = async (req: Request, res: Response) => {
       email: user.email,
       name: user.name,
       businessId: user.businessUsers?.[0]?.business.id ?? -1,
-      role: user.businessUsers?.[0]?.role || GUEST
+      role: user.businessUsers?.[0]?.role || UserRole.GUEST
     };
 
     // Generate JWT token
@@ -98,7 +98,7 @@ export const getProfile = async (req: AuthRequest, res: Response) => {
     logger.info(`Profile fetched for user ${userId}`);
 
     ApiResponseHandler.success(res, user, 'Profile fetched successfully');
-    
+
   } catch (error) {
     logger.error('Error fetching profile:', error);
     ApiResponseHandler.error(res, 'Error fetching profile', 500);
@@ -164,7 +164,7 @@ export const getBusinessUsers = async (req: Request, res: Response) => {
   }
 
   const role = req.query.role as UserRole | undefined;
-  
+
   let businessUsers;
   if (role) {
     businessUsers = await businessUserRepo.findBusinessUsersByRole(businessId, role);
@@ -201,7 +201,7 @@ export const updateBusinessUser = async (req: Request, res: Response) => {
 
   const { role, isActive }: { role?: UserRole; isActive?: boolean } = req.body;
 
-  const businessUser = await businessUserRepo.updateBusinessUser(id, { role: role || GUEST, isActive: isActive || true });
+  const businessUser = await businessUserRepo.updateBusinessUser(id, { role: role || UserRole.GUEST, isActive: isActive || true });
 
   logger.info(`Business user ${id} updated successfully`);
 

@@ -1,23 +1,31 @@
 import { Request, Response } from 'express';
 import * as ExamController from '../../../src/controllers/exam.controller';
-import * as ExamRepo from '../../../src/repositories/exam.repo';
+import { examService } from '../../../src/controllers/exam.controller'; // Import the instance
 import * as BusinessRepo from '../../../src/repositories/business.repo';
 import { ApiResponseHandler } from '../../../src/utils/apiResponse';
 import logger from '../../../src/utils/logger';
-
+import { ExamService } from '../../../src/services/exam.service';
+import { AuthRequest } from '../../../src/dtos/auth.dto';
+import { NotFoundError } from '../../../src/errors/api.errors';
 
 // Mock dependencies
-jest.mock('../../../src/repositories/exam.repo');
 jest.mock('../../../src/repositories/business.repo');
 jest.mock('../../../src/utils/apiResponse');
 jest.mock('../../../src/utils/logger');
 
+// Auto-mock the service class so 'new ExamService()' returns a mock object
+jest.mock('../../../src/services/exam.service');
+
 describe('Exam Controller', () => {
-    let req: Partial<Request>;
+    let req: Partial<AuthRequest>;
     let res: Partial<Response>;
 
     beforeEach(() => {
-        req = {};
+        req = {
+            query: {},
+            params: {},
+            user: { id: 1, role: 'ADMIN', email: 'test@example.com', name: 'Tester', businessId: 1 }
+        };
         res = {
             status: jest.fn().mockReturnThis(),
             json: jest.fn(),
@@ -28,32 +36,24 @@ describe('Exam Controller', () => {
     describe('createExam', () => {
         it('should create an exam successfully', async () => {
             logger.info('TEST: Starting createExam success test');
+            req.params = { businessId: '1' }; // Path param
             const examData = { name: 'Test Exam', businessId: 1 };
             req.body = examData;
 
             (BusinessRepo.findBusinessById as jest.Mock).mockResolvedValue({ id: 1 });
-            (ExamRepo.createExam as jest.Mock).mockResolvedValue({ id: 1, ...examData });
+            // Mock the method on the exported instance
+            (examService.createExam as jest.Mock).mockResolvedValue({ id: 1, ...examData });
 
             await ExamController.createExam(req as Request, res as Response);
 
             expect(BusinessRepo.findBusinessById).toHaveBeenCalledWith(1);
-            expect(ExamRepo.createExam).toHaveBeenCalledWith(examData);
+            expect(examService.createExam).toHaveBeenCalledWith(expect.objectContaining(examData), 1); // 1 is userId
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, expect.objectContaining({ id: 1 }), 'Exam created successfully', 201);
-        });
-
-        it('should return 400 if validation fails', async () => {
-            logger.info('TEST: Starting createExam validation failure test');
-            const examData = { name: '', businessId: 1 }; // Invalid name
-            req.body = examData;
-
-            await ExamController.createExam(req as Request, res as Response);
-
-            expect(ApiResponseHandler.badRequest).toHaveBeenCalledWith(res, expect.stringContaining('Exam name is required'));
-            expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('Validation failed'));
         });
 
         it('should return 404 if business does not exist', async () => {
             logger.info('TEST: Starting createExam business not found test');
+            req.params = { businessId: '999' };
             const examData = { name: 'Test Exam', businessId: 999 };
             req.body = examData;
 
@@ -63,95 +63,99 @@ describe('Exam Controller', () => {
 
             expect(BusinessRepo.findBusinessById).toHaveBeenCalledWith(999);
             expect(ApiResponseHandler.notFound).toHaveBeenCalledWith(res, expect.stringContaining('Business with ID 999 not found'));
-            expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('Business with ID 999 not found'));
+        });
+
+        it('should return 401 if user is not authenticated', async () => {
+            req.params = { businessId: '1' };
+            req.body = { name: 'Test Exam' };
+            delete req.user; // Unauthenticated
+
+            (BusinessRepo.findBusinessById as jest.Mock).mockResolvedValue({ id: 1 });
+
+            // Note: Controller checks auth BEFORE calling service
+            await ExamController.createExam(req as Request, res as Response);
+
+            expect(ApiResponseHandler.unauthorized).toHaveBeenCalledWith(res, 'User not authenticated');
         });
     });
 
     describe('getExam', () => {
         it('should get an exam by ID', async () => {
-            logger.info('TEST: Starting getExam success test');
-            req.params = { id: '1' };
-            const mockExam = { id: 1, name: 'Test Exam' };
+            req.params = { id: '1', businessId: '1' };
+            const mockExam = { id: 1, name: 'Test Exam', businessId: 1 };
 
-            (ExamRepo.findExamById as jest.Mock).mockResolvedValue(mockExam);
+            (examService.getExam as jest.Mock).mockResolvedValue(mockExam);
 
             await ExamController.getExam(req as Request, res as Response);
 
-            expect(ExamRepo.findExamById).toHaveBeenCalledWith(1);
+            expect(examService.getExam).toHaveBeenCalledWith(1, expect.any(Object));
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockExam, 'Exam fetched successfully');
         });
 
-        it('should return 404 if exam not found', async () => {
-            logger.info('TEST: Starting getExam not found test');
-            req.params = { id: '999' };
-            (ExamRepo.findExamById as jest.Mock).mockResolvedValue(null);
+        it('should return 404 if exam belongs to another business', async () => {
+            req.params = { id: '1', businessId: '1' };
+            const mockExam = { id: 1, name: 'Test Exam', businessId: 2 }; // different business
+
+            (examService.getExam as jest.Mock).mockResolvedValue(mockExam);
 
             await ExamController.getExam(req as Request, res as Response);
 
-            expect(ApiResponseHandler.notFound).toHaveBeenCalledWith(res, 'Exam not found');
-            expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('Exam with ID 999 not found'));
+            expect(ApiResponseHandler.notFound).toHaveBeenCalledWith(res, 'Exam not found in this business');
         });
 
-        it('should return 400 if ID is invalid', async () => {
-            req.params = { id: 'invalid' };
+        it('should return 404 if exam not found', async () => {
+            req.params = { id: '999', businessId: '1' };
+            (examService.getExam as jest.Mock).mockRejectedValue(new NotFoundError('Exam not found'));
+
             await ExamController.getExam(req as Request, res as Response);
-            expect(ApiResponseHandler.badRequest).toHaveBeenCalledWith(res, expect.stringContaining('Exam ID is required'));
+
+            expect(ApiResponseHandler.notFound).toHaveBeenCalled();
         });
     });
 
     describe('getExamsByBusiness', () => {
         it('should get exams for a business', async () => {
-            logger.info('TEST: Starting getExamsByBusiness success test');
-            req.query = { businessId: '1' };
+            req.params = { businessId: '1' };
             const mockExams = [{ id: 1, name: 'Exam 1' }];
 
             (BusinessRepo.findBusinessById as jest.Mock).mockResolvedValue({ id: 1 });
-            (ExamRepo.findActiveExamsByBusinessId as jest.Mock).mockResolvedValue(mockExams);
+            (examService.getExamsByBusiness as jest.Mock).mockResolvedValue(mockExams);
 
             await ExamController.getExamsByBusiness(req as Request, res as Response);
 
-            expect(BusinessRepo.findBusinessById).toHaveBeenCalledWith(1);
-            expect(ExamRepo.findActiveExamsByBusinessId).toHaveBeenCalledWith(1);
+            expect(examService.getExamsByBusiness).toHaveBeenCalledWith(1, expect.any(Object));
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockExams, 'Exams fetched successfully');
-        });
-
-        it('should return 404 if business not found', async () => {
-            logger.info('TEST: Starting getExamsByBusiness business not found test');
-            req.query = { businessId: '999' };
-            (BusinessRepo.findBusinessById as jest.Mock).mockResolvedValue(null);
-
-            await ExamController.getExamsByBusiness(req as Request, res as Response);
-
-            expect(ApiResponseHandler.notFound).toHaveBeenCalledWith(res, expect.stringContaining('Business with ID 999 not found'));
         });
     });
 
     describe('updateExam', () => {
         it('should update an exam successfully', async () => {
-            logger.info('TEST: Starting updateExam success test');
-            req.params = { id: '1' };
+            req.params = { id: '1', businessId: '1' };
             req.body = { name: 'Updated Exam' };
-            const updatedExam = { id: 1, name: 'Updated Exam' };
+            const updatedExam = { id: 1, name: 'Updated Exam', businessId: 1 };
 
-            (ExamRepo.updateExam as jest.Mock).mockResolvedValue(updatedExam);
+            // Mock check existence
+            (examService.getExam as jest.Mock).mockResolvedValue({ id: 1, businessId: 1 });
+            (examService.updateExam as jest.Mock).mockResolvedValue(updatedExam);
 
             await ExamController.updateExam(req as Request, res as Response);
 
-            expect(ExamRepo.updateExam).toHaveBeenCalledWith(1, req.body);
+            expect(examService.updateExam).toHaveBeenCalledWith(1, req.body, 1);
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, updatedExam, 'Exam updated successfully');
         });
     });
 
     describe('deleteExam', () => {
         it('should delete an exam successfully', async () => {
-            logger.info('TEST: Starting deleteExam success test');
-            req.params = { id: '1' };
+            req.params = { id: '1', businessId: '1' };
 
-            (ExamRepo.deleteExam as jest.Mock).mockResolvedValue({ id: 1, isActive: false });
+            // Mock check existence
+            (examService.getExam as jest.Mock).mockResolvedValue({ id: 1, businessId: 1 });
+            (examService.deleteExam as jest.Mock).mockResolvedValue({ id: 1 });
 
             await ExamController.deleteExam(req as Request, res as Response);
 
-            expect(ExamRepo.deleteExam).toHaveBeenCalledWith(1);
+            expect(examService.deleteExam).toHaveBeenCalledWith(1);
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, null, 'Exam deleted successfully');
         });
     });

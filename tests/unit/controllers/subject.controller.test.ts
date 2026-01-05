@@ -42,7 +42,7 @@ describe('Subject Controller', () => {
         it('should throw error if subject name is missing', async () => {
             req.body = { courseId: 1 }; // Missing name
 
-            await expect(SubjectController.createSubject(req as Request, res as Response)).rejects.toThrow('Subject name is required');
+            await expect(SubjectController.createSubject(req as Request, res as Response)).rejects.toThrow('Subject name is required and cannot be empty');
         });
 
         it('should throw error if courseId is missing', async () => {
@@ -82,7 +82,7 @@ describe('Subject Controller', () => {
         it('should throw error if ID is invalid', async () => {
             req.params = { subjectId: 'invalid' };
 
-            await expect(SubjectController.getSubject(req as Request, res as Response)).rejects.toThrow('Subject ID is required');
+            await expect(SubjectController.getSubject(req as Request, res as Response)).rejects.toThrow('Subject ID is required and must be a valid positive integer');
         });
     });
 
@@ -104,7 +104,7 @@ describe('Subject Controller', () => {
             req.params = { courseId: 'invalid' };
             req.query = {};
 
-            await expect(SubjectController.getSubjectsByCourse(req as Request, res as Response)).rejects.toThrow('Valid Course ID is required');
+            await expect(SubjectController.getSubjectsByCourse(req as Request, res as Response)).rejects.toThrow('Course ID is required and must be a valid positive integer');
         });
     });
 
@@ -126,7 +126,7 @@ describe('Subject Controller', () => {
             req.params = { subjectId: '1' };
             req.body = { name: '   ' }; // Empty/whitespace name
 
-            await expect(SubjectController.updateSubject(req as Request, res as Response)).rejects.toThrow('Subject name cannot be empty');
+            await expect(SubjectController.updateSubject(req as Request, res as Response)).rejects.toThrow('Subject name is required and cannot be empty');
         });
     });
 
@@ -145,7 +145,7 @@ describe('Subject Controller', () => {
         it('should throw error if ID is invalid', async () => {
             req.params = { subjectId: 'invalid' };
 
-            await expect(SubjectController.deleteSubject(req as Request, res as Response)).rejects.toThrow('Subject ID is required');
+            await expect(SubjectController.deleteSubject(req as Request, res as Response)).rejects.toThrow('Subject ID is required and must be a valid positive integer');
         });
     });
 });

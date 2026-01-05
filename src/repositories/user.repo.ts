@@ -1,8 +1,9 @@
 // src/repositories/user.repo.ts
 import { PrismaClient, Prisma } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { prisma } from '../config/database';
 
-const prisma = new PrismaClient();
+// const prisma = new PrismaClient();
 
 export async function createUser(data: Pick<Prisma.UserCreateInput, 'email' | 'password' | 'name'>) {
   const hash = await bcrypt.hash(data.password, 12);
@@ -46,7 +47,7 @@ export function findPublicById(id: number) {
       businessUsers: {
         select: {
           id: true,
-          business: {select: {id: true, instituteName: true}},
+          business: { select: { id: true, instituteName: true } },
           role: true,
           isActive: true,
         }
@@ -68,7 +69,7 @@ export function findByEmailWithBusinesses(email: string) {
       businessUsers: {
         select: {
           id: true,
-          business: {select: {id: true, instituteName: true}},
+          business: { select: { id: true, instituteName: true } },
           role: true,
           isActive: true,
         }

@@ -1,6 +1,7 @@
-import { PrismaClient, Prisma } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
+import { prisma } from '../config/database';
 
-const prisma = new PrismaClient();
+// const prisma = new PrismaClient();
 
 const announcementSelect = {
   id: true,
@@ -60,7 +61,7 @@ export async function findAnnouncementsByBusinessId(businessId: number) {
 export async function findActiveAnnouncementsByBusinessId(businessId: number) {
   const now = new Date();
   return prisma.announcement.findMany({
-    where: { 
+    where: {
       businessId,
       isActive: true,
       startDate: { lte: now },
@@ -89,7 +90,7 @@ export async function findAnnouncementsByRole(businessId: number, role: string) 
   }
 
   return prisma.announcement.findMany({
-    where: { 
+    where: {
       businessId,
       isActive: true,
       startDate: { lte: now },
@@ -106,7 +107,7 @@ export async function findAnnouncementsByRole(businessId: number, role: string) 
 
 export async function findAnnouncementsByDateRange(businessId: number, startDate: Date, endDate: Date) {
   return prisma.announcement.findMany({
-    where: { 
+    where: {
       businessId,
       isActive: true,
       startDate: { lte: endDate },

@@ -5,44 +5,45 @@ import * as courseRepo from '../repositories/course.repo';
 import logger from '../utils/logger';
 import { BadRequestError, NotFoundError } from '../errors/api.errors';
 import { Prisma } from '@prisma/client';
+import { ValidationUtils } from '../utils/validation';
 
 export const createSubject = async (req: Request, res: Response) => {
     const subjectData: Prisma.SubjectUncheckedCreateInput = req.body;
 
     // Validate input
-    if (!subjectData.name) {
-      throw new BadRequestError('Subject name is required');
-    }
-
-    if (!subjectData.courseId) {
-        throw new BadRequestError('Course ID is required');
-    }
+    ValidationUtils.validateNonEmptyString(subjectData.name, 'Subject name');
+    ValidationUtils.validateRequired(subjectData.courseId, 'Course ID');
 
     const course = await courseRepo.findCourseById(subjectData.courseId);
     if (!course) {
         throw new NotFoundError('Course not found');
     }
 
-    const subject = await subjectRepo.createSubject({
-        ...subjectData,
+    const createInput: Prisma.SubjectCreateInput = {
+        name: subjectData.name,
         course: {
             connect: {
                 id: subjectData.courseId
             }
         }
-    });
-    
+    };
+
+    if (subjectData.description !== undefined) {
+        createInput.description = subjectData.description;
+    }
+    if (subjectData.isActive !== undefined) {
+        createInput.isActive = subjectData.isActive;
+    }
+
+    const subject = await subjectRepo.createSubject(createInput);
+
     logger.info(`Subject created successfully: ${subjectData.name}`);
 
     ApiResponseHandler.success(res, subject, 'Subject created successfully', 201);
 };
 
 function getSubjectIdFromRequest(req: Request): number {
-    const id = Number(req.params.subjectId);
-    if (Number.isInteger(id) && id > 0) {
-        return id;
-    }
-    throw new BadRequestError('Subject ID is required');
+    return ValidationUtils.validateId(req.params.subjectId, 'Subject ID');
 }
 
 export const getSubject = async (req: Request, res: Response) => {
@@ -59,10 +60,7 @@ export const getSubject = async (req: Request, res: Response) => {
 };
 
 export const getSubjectsByCourse = async (req: Request, res: Response) => {
-    const courseId = Number(req.params.courseId);
-    if (!Number.isInteger(courseId) || courseId <= 0) {
-        throw new BadRequestError('Valid Course ID is required');
-    }
+    const courseId = ValidationUtils.validateId(req.params.courseId, 'Course ID');
 
     const activeOnly = req.query.active === 'true';
     const subjects = await subjectRepo.findSubjectsByCourseId(courseId);
@@ -77,8 +75,8 @@ export const updateSubject = async (req: Request, res: Response) => {
     const subjectData: Prisma.SubjectUncheckedUpdateInput = req.body;
 
     // Validate input
-    if (subjectData.name !== undefined && typeof subjectData.name === 'string' && !subjectData.name.trim()) {
-      throw new BadRequestError('Subject name cannot be empty');
+    if (subjectData.name !== undefined) {
+        ValidationUtils.validateNonEmptyString(subjectData.name as string, 'Subject name');
     }
 
     const subject = await subjectRepo.updateSubject(id, subjectData);

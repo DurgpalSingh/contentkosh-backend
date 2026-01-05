@@ -1,6 +1,7 @@
-import { PrismaClient, Prisma } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
+import { prisma } from '../config/database';
 
-const prisma = new PrismaClient();
+// const prisma = new PrismaClient();
 
 export async function createSubject(data: Prisma.SubjectCreateInput) {
   try {
@@ -54,9 +55,9 @@ export async function findSubjectsByCourseId(courseId: number) {
 
 export async function findActiveSubjectsByCourseId(courseId: number) {
   return prisma.subject.findMany({
-    where: { 
+    where: {
       courseId,
-      isActive: true 
+      isActive: true
     },
     select: {
       id: true,
