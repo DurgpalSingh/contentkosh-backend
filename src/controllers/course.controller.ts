@@ -1,50 +1,43 @@
 import { Request, Response } from 'express';
 import { ApiResponseHandler } from '../utils/apiResponse';
-import * as courseRepo from '../repositories/course.repo';
 import * as examRepo from '../repositories/exam.repo';
 import logger from '../utils/logger';
 import { BadRequestError, NotFoundError } from '../errors/api.errors';
-import { Prisma } from '@prisma/client';
 import { ValidationUtils } from '../utils/validation';
-
+import { CreateCourseDto, UpdateCourseDto } from '../dtos/course.dto';
+import { plainToInstance } from 'class-transformer';
 import { QueryBuilder } from '../utils/queryBuilder';
+import { CourseService } from '../services/course.service';
+
+export const courseService = new CourseService();
 
 export const createCourse = async (req: Request, res: Response) => {
-    const courseData: Prisma.CourseUncheckedCreateInput = req.body;
+    try {
+        const examId = ValidationUtils.validateId(req.params.examId, 'Exam ID');
 
-    // Validate input
-    ValidationUtils.validateNonEmptyString(courseData.name, 'Course name');
-    ValidationUtils.validateRequired(courseData.examId, 'Exam ID');
+        const courseDataInput = plainToInstance(CreateCourseDto, req.body);
+        courseDataInput.examId = examId;
 
-    const exam = await examRepo.findExamById(courseData.examId);
-    if (!exam) {
-        throw new NotFoundError('Exam not found');
-    }
-
-    const createInput: Prisma.CourseCreateInput = {
-        name: courseData.name,
-        exam: {
-            connect: {
-                id: courseData.examId
-            }
+        // Validate Exam ID existence
+        const exam = await examRepo.findExamById(examId);
+        if (!exam) {
+            logger.error(`Exam with ID ${examId} not found`);
+            return ApiResponseHandler.notFound(res, `Exam with ID ${examId} not found`);
         }
-    };
 
-    if (courseData.description !== undefined) {
-        createInput.description = courseData.description;
+        const course = await courseService.createCourse(courseDataInput);
+
+        ApiResponseHandler.success(res, course, 'Course created successfully', 201);
+    } catch (error: any) {
+        if (error instanceof BadRequestError) {
+            return ApiResponseHandler.badRequest(res, error.message);
+        }
+        if (error instanceof NotFoundError || error.constructor.name === 'NotFoundError') {
+            return ApiResponseHandler.notFound(res, error.message);
+        }
+        logger.error(`Error creating course: ${error.message}`);
+        ApiResponseHandler.error(res, 'Failed to create course');
     }
-    if (courseData.duration !== undefined) {
-        createInput.duration = courseData.duration;
-    }
-    if (courseData.isActive !== undefined) {
-        createInput.isActive = courseData.isActive;
-    }
-
-    const course = await courseRepo.createCourse(createInput);
-
-    logger.info(`Course created successfully: ${courseData.name}`);
-
-    ApiResponseHandler.success(res, course, 'Course created successfully', 201);
 };
 
 function getCourseIdFromRequest(req: Request): number {
@@ -52,68 +45,111 @@ function getCourseIdFromRequest(req: Request): number {
 }
 
 export const getCourse = async (req: Request, res: Response) => {
-    const id = getCourseIdFromRequest(req);
-    const options = QueryBuilder.parse(req.query);
+    try {
+        const id = getCourseIdFromRequest(req);
+        const examId = ValidationUtils.validateId(req.params.examId, 'Exam ID');
+        const options = QueryBuilder.parse(req.query);
 
-    const course = await courseRepo.findCourseById(id, options);
-    if (!course) {
-        throw new NotFoundError('Course not found');
+        const course = await courseService.getCourse(id, options);
+
+        // Strict Check: Ensure course belongs to the exam in the URL
+        if (course.examId !== examId) {
+            return ApiResponseHandler.notFound(res, 'Course not found in this exam');
+        }
+
+        ApiResponseHandler.success(res, course, 'Course fetched successfully');
+    } catch (error: any) {
+        if (error instanceof BadRequestError) {
+            return ApiResponseHandler.badRequest(res, error.message);
+        }
+        if (error instanceof NotFoundError || error.constructor.name === 'NotFoundError') {
+            return ApiResponseHandler.notFound(res, error.message);
+        }
+        logger.error(`Error fetching course: ${error.message}`);
+        ApiResponseHandler.error(res, 'Failed to fetch course');
     }
-
-    logger.info(`Course fetched successfully: ${course.name}`);
-
-    ApiResponseHandler.success(res, course, 'Course fetched successfully');
 };
 
-
-
 export const getCoursesByExam = async (req: Request, res: Response) => {
-    const examId = ValidationUtils.validateId(req.params.examId, 'Exam ID');
-    const options = QueryBuilder.parse(req.query);
+    try {
+        const examId = ValidationUtils.validateId(req.params.examId, 'Exam ID');
+        const options = QueryBuilder.parse(req.query);
 
-    // Legacy support for active query param if not using filter in options
-    if (req.query.active === 'true' && !options.where) {
-        options.where = { isActive: true };
-        // We might need to handle this in repo if repo doesn't support generic where yet
-        // but course repo has findActiveCoursesByExamId. 
-        // Let's stick to existing logic: if active=true, use findActive, else findCourses
-        // But wait, findActive also needs options now.
+        // Legacy support lookup for active param or status
+        if (req.query.active === 'true' && !options.where) {
+            // If active=true, we filter by status ACTIVE.
+            // But we should use new enum. 'ACTIVE'.
+            // Assuming status enum is string 'ACTIVE'.
+            options.where = { status: 'ACTIVE' };
+        }
+
+        // Validate Exam ID existence
+        const exam = await examRepo.findExamById(examId);
+        if (!exam) {
+            return ApiResponseHandler.notFound(res, `Exam with ID ${examId} not found`);
+        }
+
+        const courses = await courseService.getCoursesByExam(examId, options);
+
+        ApiResponseHandler.success(res, courses, 'Courses fetched successfully');
+    } catch (error: any) {
+        if (error instanceof BadRequestError) {
+            return ApiResponseHandler.badRequest(res, error.message);
+        }
+        logger.error(`Error fetching courses by exam: ${error.message}`);
+        ApiResponseHandler.error(res, 'Failed to fetch courses');
     }
-
-    let courses;
-    if (req.query.active === 'true') {
-        courses = await courseRepo.findActiveCoursesByExamId(examId, options);
-    } else {
-        courses = await courseRepo.findCoursesByExamId(examId, options);
-    }
-
-    logger.info(`Courses fetched for exam ${examId}`);
-
-    ApiResponseHandler.success(res, courses, 'Courses fetched successfully');
 };
 
 export const updateCourse = async (req: Request, res: Response) => {
-    const id = getCourseIdFromRequest(req);
-    const courseData: Prisma.CourseUncheckedUpdateInput = req.body;
+    try {
+        const id = getCourseIdFromRequest(req);
+        const examId = ValidationUtils.validateId(req.params.examId, 'Exam ID');
+        const courseDataInput: UpdateCourseDto = req.body;
 
-    // Validate input
-    if (courseData.name !== undefined) {
-        ValidationUtils.validateNonEmptyString(courseData.name as string, 'Course name');
+        // Check existence and scope
+        const existingCourse = await courseService.getCourse(id);
+        if (existingCourse.examId !== examId) {
+            return ApiResponseHandler.notFound(res, 'Course not found in this exam');
+        }
+
+        const course = await courseService.updateCourse(id, courseDataInput);
+
+        ApiResponseHandler.success(res, course, 'Course updated successfully');
+    } catch (error: any) {
+        if (error instanceof BadRequestError) {
+            return ApiResponseHandler.badRequest(res, error.message);
+        }
+        if (error instanceof NotFoundError || error.constructor.name === 'NotFoundError') {
+            return ApiResponseHandler.notFound(res, error.message);
+        }
+        logger.error(`Error updating course: ${error.message}`);
+        ApiResponseHandler.error(res, 'Failed to update course');
     }
-
-    const course = await courseRepo.updateCourse(id, courseData);
-
-    logger.info(`Course updated successfully: ${course.name}`);
-
-    ApiResponseHandler.success(res, course, 'Course updated successfully');
 };
 
 export const deleteCourse = async (req: Request, res: Response) => {
-    const id = getCourseIdFromRequest(req);
+    try {
+        const id = getCourseIdFromRequest(req);
+        const examId = ValidationUtils.validateId(req.params.examId, 'Exam ID');
 
-    await courseRepo.deleteCourse(id);
+        // Check existence and scope
+        const existingCourse = await courseService.getCourse(id);
+        if (existingCourse.examId !== examId) {
+            return ApiResponseHandler.notFound(res, 'Course not found in this exam');
+        }
 
-    logger.info(`Course deleted successfully: ID ${id}`);
+        await courseService.deleteCourse(id);
 
-    ApiResponseHandler.success(res, null, 'Course deleted successfully');
+        ApiResponseHandler.success(res, null, 'Course deleted successfully');
+    } catch (error: any) {
+        if (error instanceof BadRequestError) {
+            return ApiResponseHandler.badRequest(res, error.message);
+        }
+        if (error instanceof NotFoundError || error.constructor.name === 'NotFoundError') {
+            return ApiResponseHandler.notFound(res, error.message);
+        }
+        logger.error(`Error deleting course: ${error.message}`);
+        ApiResponseHandler.error(res, 'Failed to delete course');
+    }
 };

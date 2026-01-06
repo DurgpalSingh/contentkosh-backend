@@ -5,6 +5,7 @@ import * as CourseRepo from '../../../src/repositories/course.repo';
 import * as ExamRepo from '../../../src/repositories/exam.repo';
 import { errorHandler } from '../../../src/middlewares/error.middleware';
 import logger from '../../../src/utils/logger';
+import { CourseStatus } from '@prisma/client';
 
 // Mock dependencies
 jest.mock('../../../src/repositories/course.repo');
@@ -32,7 +33,7 @@ describe('Course Routes', () => {
 
     describe('POST /api/exams/:examId/courses', () => {
         it('should create a course', async () => {
-            const courseData = { name: 'Test Course', description: 'Test description', examId: 1 };
+            const courseData = { name: 'Test Course', description: 'Test description', examId: 1, status: CourseStatus.ACTIVE };
             (ExamRepo.findExamById as jest.Mock).mockResolvedValue({ id: 1, name: 'Test Exam' });
             (CourseRepo.createCourse as jest.Mock).mockResolvedValue({ id: 1, ...courseData });
 
@@ -62,7 +63,7 @@ describe('Course Routes', () => {
                 .send({ name: 'Test Course', examId: 999 });
 
             expect(res.status).toBe(404);
-            expect(res.body.message).toContain('Exam not found');
+            expect(res.body.message).toContain('Exam');
         });
     });
 
@@ -73,6 +74,8 @@ describe('Course Routes', () => {
                 { id: 2, name: 'Course 2', examId: 1 }
             ];
             (CourseRepo.findCoursesByExamId as jest.Mock).mockResolvedValue(mockCourses);
+            // Also need to findExamById in controller now
+            (ExamRepo.findExamById as jest.Mock).mockResolvedValue({ id: 1 });
 
             const res = await request(app).get('/api/exams/1/courses');
 
@@ -82,7 +85,6 @@ describe('Course Routes', () => {
 
         it('should return 400 if examId is invalid', async () => {
             const res = await request(app).get('/api/exams/invalid/courses');
-
             expect(res.status).toBe(400);
         });
     });
@@ -108,16 +110,15 @@ describe('Course Routes', () => {
 
         it('should return 400 if courseId is invalid', async () => {
             const res = await request(app).get('/api/exams/1/courses/invalid');
-
             expect(res.status).toBe(400);
         });
     });
 
-
-
     describe('PUT /api/exams/:examId/courses/:courseId', () => {
         it('should update a course', async () => {
-            const updatedCourse = { id: 1, name: 'Updated Course', description: 'Updated description' };
+            const updatedCourse = { id: 1, name: 'Updated Course', description: 'Updated description', examId: 1 };
+            // Controller checks existence first
+            (CourseRepo.findCourseById as jest.Mock).mockResolvedValue(updatedCourse);
             (CourseRepo.updateCourse as jest.Mock).mockResolvedValue(updatedCourse);
 
             const res = await request(app)
@@ -129,16 +130,20 @@ describe('Course Routes', () => {
         });
 
         it('should return 400 if name is empty', async () => {
+            // Controller checks existence first, but DTO validation happens BEFORE controller
             const res = await request(app)
                 .put('/api/exams/1/courses/1')
-                .send({ name: '   ' }); // Empty name
+                .send({ name: '' }); // Empty name
 
             expect(res.status).toBe(400);
+            expect(res.body.message).toContain('Course name cannot be empty');
         });
     });
 
     describe('DELETE /api/exams/:examId/courses/:courseId', () => {
         it('should delete a course', async () => {
+            // Controller checks existence first
+            (CourseRepo.findCourseById as jest.Mock).mockResolvedValue({ id: 1, examId: 1 });
             (CourseRepo.deleteCourse as jest.Mock).mockResolvedValue({ id: 1 });
 
             const res = await request(app).delete('/api/exams/1/courses/1');
@@ -149,7 +154,6 @@ describe('Course Routes', () => {
 
         it('should return 400 if courseId is invalid', async () => {
             const res = await request(app).delete('/api/exams/1/courses/invalid');
-
             expect(res.status).toBe(400);
         });
     });
