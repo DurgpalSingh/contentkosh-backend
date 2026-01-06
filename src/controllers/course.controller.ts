@@ -8,6 +8,8 @@ import { CreateCourseDto, UpdateCourseDto } from '../dtos/course.dto';
 import { plainToInstance } from 'class-transformer';
 import { QueryBuilder } from '../utils/queryBuilder';
 import { CourseService } from '../services/course.service';
+import { AuthRequest } from '../dtos/auth.dto';
+import { UserRole } from '@prisma/client';
 
 export const courseService = new CourseService();
 
@@ -23,6 +25,11 @@ export const createCourse = async (req: Request, res: Response) => {
         if (!exam) {
             logger.error(`Exam with ID ${examId} not found`);
             return ApiResponseHandler.notFound(res, `Exam with ID ${examId} not found`);
+        }
+
+        const user = (req as AuthRequest).user;
+        if (user && user.role !== UserRole.SUPERADMIN && exam.businessId !== user.businessId) {
+            return ApiResponseHandler.error(res, 'Forbidden: You do not have access to this exam', 403);
         }
 
         const course = await courseService.createCourse(courseDataInput);
@@ -77,9 +84,6 @@ export const getCoursesByExam = async (req: Request, res: Response) => {
 
         // Legacy support lookup for active param or status
         if (req.query.active === 'true' && !options.where) {
-            // If active=true, we filter by status ACTIVE.
-            // But we should use new enum. 'ACTIVE'.
-            // Assuming status enum is string 'ACTIVE'.
             options.where = { status: 'ACTIVE' };
         }
 
@@ -87,6 +91,11 @@ export const getCoursesByExam = async (req: Request, res: Response) => {
         const exam = await examRepo.findExamById(examId);
         if (!exam) {
             return ApiResponseHandler.notFound(res, `Exam with ID ${examId} not found`);
+        }
+
+        const user = (req as AuthRequest).user;
+        if (user && user.role !== UserRole.SUPERADMIN && exam.businessId !== user.businessId) {
+            return ApiResponseHandler.error(res, 'Forbidden: You do not have access to this exam', 403);
         }
 
         const courses = await courseService.getCoursesByExam(examId, options);
