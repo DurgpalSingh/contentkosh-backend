@@ -19,18 +19,14 @@ export class CourseService {
             ...(data.status && { status: data.status }),
         };
 
-        try {
-            const course = await courseRepo.createCourse(createData);
-            return CourseMapper.toDomain(course);
-        } catch (error: any) {
-            if (error.code === 'P2002') {
-                throw new BadRequestError('Course with this name already exists for this exam');
-            }
-            if (error.code === 'P2003') {
-                throw new NotFoundError('Exam not found');
-            }
-            throw error;
+        // Check for duplicate course name
+        const existingCourse = await courseRepo.findCourseByName(data.name, data.examId);
+        if (existingCourse) {
+            throw new BadRequestError('Course with this name already exists for this exam');
         }
+
+        const course = await courseRepo.createCourse(createData);
+        return CourseMapper.toDomain(course);
     }
 
     async getCourse(id: number, options?: any): Promise<Course> {
@@ -59,14 +55,24 @@ export class CourseService {
             ...(data.status && { status: data.status }),
         };
 
+        // Check for duplicate name if name is being updated
+        if (data.name) {
+            const existingCourse = await courseRepo.findCourseById(id);
+            if (!existingCourse) {
+                throw new NotFoundError('Course not found');
+            }
+
+            const duplicateCourse = await courseRepo.findCourseByName(data.name, existingCourse.examId);
+            if (duplicateCourse && duplicateCourse.id !== id) {
+                throw new BadRequestError('Course with this name already exists for this exam');
+            }
+        }
+
         try {
             const course = await courseRepo.updateCourse(id, updateData);
             logger.info(`CourseService: Course updated successfully: ${course.name}`);
             return CourseMapper.toDomain(course);
         } catch (error: any) {
-            if (error.code === 'P2002') {
-                throw new BadRequestError('Course with this name already exists for this exam');
-            }
             if (error.code === 'P2025') {
                 throw new NotFoundError('Course not found');
             }

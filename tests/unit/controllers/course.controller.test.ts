@@ -1,14 +1,13 @@
 import { Request, Response } from 'express';
 // Import courseService from CONTROLLER, because Service file doesn't export it
-import { courseService, createCourse, getCourse, getCoursesByExam, updateCourse, deleteCourse } from '../../../src/controllers/course.controller';
+import { courseService, examService, createCourse, getCourse, getCoursesByExam, updateCourse, deleteCourse } from '../../../src/controllers/course.controller';
 import * as CourseController from '../../../src/controllers/course.controller';
-import * as ExamRepo from '../../../src/repositories/exam.repo';
 import { ApiResponseHandler } from '../../../src/utils/apiResponse';
 import { BadRequestError, NotFoundError } from '../../../src/errors/api.errors';
 import { ValidationUtils } from '../../../src/utils/validation';
 import logger from '../../../src/utils/logger';
 
-// Mock the Service Class
+// Mock the Service Classes
 jest.mock('../../../src/services/course.service', () => {
     return {
         CourseService: jest.fn().mockImplementation(() => {
@@ -23,13 +22,41 @@ jest.mock('../../../src/services/course.service', () => {
     };
 });
 
-jest.mock('../../../src/repositories/exam.repo');
+jest.mock('../../../src/services/exam.service', () => {
+    return {
+        ExamService: jest.fn().mockImplementation(() => {
+            return {
+                getExam: jest.fn()
+            };
+        })
+    };
+});
+
+jest.mock('../../../src/errors/api.errors', () => {
+    return {
+        NotFoundError: class NotFoundError extends Error {
+            statusCode = 404;
+            constructor(resource: string = 'Resource') {
+                super(`${resource} not found`);
+                this.name = 'NotFoundError';
+            }
+        },
+        BadRequestError: class BadRequestError extends Error {
+            statusCode = 400;
+            constructor(message: string) {
+                super(message);
+                this.name = 'BadRequestError';
+            }
+        }
+    };
+});
+
 jest.mock('../../../src/utils/apiResponse');
 jest.mock('../../../src/utils/logger');
 jest.mock('../../../src/utils/validation');
 
 describe('Course Controller', () => {
-    let req: Partial<Request>;
+    let req: any;
     let res: Partial<Response>;
 
     beforeEach(() => {
@@ -52,13 +79,14 @@ describe('Course Controller', () => {
             req.body = courseData;
             req.params = { examId: '1' };
 
-            (ExamRepo.findExamById as jest.Mock).mockResolvedValue({ id: 1, name: 'Test Exam' });
-
+            (examService.getExam as jest.Mock).mockResolvedValue({ id: 1, name: 'Test Exam', businessId: 1 });
             (courseService.createCourse as jest.Mock).mockResolvedValue({ id: 1, ...courseData });
+
+
 
             await createCourse(req as Request, res as Response);
 
-            expect(ExamRepo.findExamById).toHaveBeenCalledWith(1);
+            expect(examService.getExam).toHaveBeenCalledWith(1);
             expect(courseService.createCourse).toHaveBeenCalledWith(expect.objectContaining({
                 name: 'Test Course',
                 examId: 1
@@ -69,8 +97,9 @@ describe('Course Controller', () => {
         it('should return 400 if service throws BadRequestError', async () => {
             req.body = { examId: 1 };
             req.params = { examId: '1' };
-            (ExamRepo.findExamById as jest.Mock).mockResolvedValue({ id: 1 });
 
+
+            (examService.getExam as jest.Mock).mockResolvedValue({ id: 1, businessId: 1 });
             (courseService.createCourse as jest.Mock).mockRejectedValue(new BadRequestError('Course name is required'));
 
             await createCourse(req as Request, res as Response);
@@ -81,11 +110,13 @@ describe('Course Controller', () => {
         it('should return 404 if exam does not exist', async () => {
             req.body = { name: 'Test Course', examId: 999 };
             req.params = { examId: '999' };
-            (ExamRepo.findExamById as jest.Mock).mockResolvedValue(null);
+
+            // ExamService.getExam throws NotFoundError if not found
+            (examService.getExam as jest.Mock).mockRejectedValue(new NotFoundError('Exam'));
 
             await createCourse(req as Request, res as Response);
 
-            expect(ApiResponseHandler.notFound).toHaveBeenCalledWith(res, 'Exam with ID 999 not found');
+            expect(ApiResponseHandler.notFound).toHaveBeenCalledWith(res, 'Exam not found');
         });
     });
 
@@ -130,7 +161,8 @@ describe('Course Controller', () => {
             req.query = {};
             const mockCourses = [{ id: 1, name: 'Course 1' }, { id: 2, name: 'Course 2' }];
 
-            (ExamRepo.findExamById as jest.Mock).mockResolvedValue({ id: 1 });
+
+            (examService.getExam as jest.Mock).mockResolvedValue({ id: 1, businessId: 1 });
             (courseService.getCoursesByExam as jest.Mock).mockResolvedValue(mockCourses);
 
             await getCoursesByExam(req as Request, res as Response);
@@ -141,11 +173,12 @@ describe('Course Controller', () => {
 
         it('should return 404 if exam does not exist', async () => {
             req.params = { examId: '999' };
-            (ExamRepo.findExamById as jest.Mock).mockResolvedValue(null);
+
+            (examService.getExam as jest.Mock).mockRejectedValue(new NotFoundError('Exam'));
 
             await getCoursesByExam(req as Request, res as Response);
 
-            expect(ApiResponseHandler.notFound).toHaveBeenCalledWith(res, 'Exam with ID 999 not found');
+            expect(ApiResponseHandler.notFound).toHaveBeenCalledWith(res, 'Exam not found');
         });
     });
 

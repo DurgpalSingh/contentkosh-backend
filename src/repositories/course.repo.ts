@@ -24,6 +24,12 @@ export async function findCourseById(id: number, options: CourseFindOptions = {}
   });
 }
 
+export async function findCourseByName(name: string, examId: number) {
+  return prisma.course.findFirst({
+    where: { name, examId },
+  });
+}
+
 export async function findCoursesByExamId(examId: number, options: CourseFindOptions = {}) {
   const { where, ...otherOptions } = options;
   return prisma.course.findMany({

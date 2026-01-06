@@ -1,6 +1,5 @@
 import { Request, Response } from 'express';
 import { ApiResponseHandler } from '../utils/apiResponse';
-import * as examRepo from '../repositories/exam.repo';
 import logger from '../utils/logger';
 import { BadRequestError, NotFoundError } from '../errors/api.errors';
 import { ValidationUtils } from '../utils/validation';
@@ -8,10 +7,11 @@ import { CreateCourseDto, UpdateCourseDto } from '../dtos/course.dto';
 import { plainToInstance } from 'class-transformer';
 import { QueryBuilder } from '../utils/queryBuilder';
 import { CourseService } from '../services/course.service';
-import { AuthRequest } from '../dtos/auth.dto';
-import { UserRole } from '@prisma/client';
+import { ExamService } from '../services/exam.service';
+
 
 export const courseService = new CourseService();
+export const examService = new ExamService();
 
 export const createCourse = async (req: Request, res: Response) => {
     try {
@@ -21,16 +21,9 @@ export const createCourse = async (req: Request, res: Response) => {
         courseDataInput.examId = examId;
 
         // Validate Exam ID existence
-        const exam = await examRepo.findExamById(examId);
-        if (!exam) {
-            logger.error(`Exam with ID ${examId} not found`);
-            return ApiResponseHandler.notFound(res, `Exam with ID ${examId} not found`);
-        }
+        const exam = await examService.getExam(examId);
 
-        const user = (req as AuthRequest).user;
-        if (user && user.role !== UserRole.SUPERADMIN && exam.businessId !== user.businessId) {
-            return ApiResponseHandler.error(res, 'Forbidden: You do not have access to this exam', 403);
-        }
+
 
         const course = await courseService.createCourse(courseDataInput);
 
@@ -88,15 +81,9 @@ export const getCoursesByExam = async (req: Request, res: Response) => {
         }
 
         // Validate Exam ID existence
-        const exam = await examRepo.findExamById(examId);
-        if (!exam) {
-            return ApiResponseHandler.notFound(res, `Exam with ID ${examId} not found`);
-        }
+        const exam = await examService.getExam(examId);
 
-        const user = (req as AuthRequest).user;
-        if (user && user.role !== UserRole.SUPERADMIN && exam.businessId !== user.businessId) {
-            return ApiResponseHandler.error(res, 'Forbidden: You do not have access to this exam', 403);
-        }
+
 
         const courses = await courseService.getCoursesByExam(examId, options);
 
@@ -104,6 +91,9 @@ export const getCoursesByExam = async (req: Request, res: Response) => {
     } catch (error: any) {
         if (error instanceof BadRequestError) {
             return ApiResponseHandler.badRequest(res, error.message);
+        }
+        if (error instanceof NotFoundError || error.constructor.name === 'NotFoundError') {
+            return ApiResponseHandler.notFound(res, error.message);
         }
         logger.error(`Error fetching courses by exam: ${error.message}`);
         ApiResponseHandler.error(res, 'Failed to fetch courses');
