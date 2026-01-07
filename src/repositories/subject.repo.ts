@@ -1,99 +1,50 @@
-import { Prisma, PrismaClient } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 
-// const prisma = new PrismaClient();
-
-export async function createSubject(data: Prisma.SubjectCreateInput) {
-  try {
-    return await prisma.subject.create({
-      data,
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        isActive: true,
-        courseId: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
-  } catch (error) {
-    throw error;
-  }
+export interface SubjectFindOptions {
+  select?: Prisma.SubjectSelect;
+  include?: Prisma.SubjectInclude;
+  where?: Prisma.SubjectWhereInput;
+  orderBy?: Prisma.SubjectOrderByWithRelationInput;
+  skip?: number;
+  take?: number;
 }
 
-export async function findSubjectById(id: number) {
+export async function createSubject(data: Prisma.SubjectUncheckedCreateInput) {
+  return await prisma.subject.create({
+    data,
+  });
+}
+
+export async function findSubjectById(id: number, options: SubjectFindOptions = {}) {
+  const { where, orderBy, skip, take, ...findOptions } = options;
   return prisma.subject.findUnique({
     where: { id },
-    select: {
-      id: true,
-      name: true,
-      description: true,
-      isActive: true,
-      courseId: true,
-      createdAt: true,
-      updatedAt: true,
-    },
+    ...findOptions,
   });
 }
 
-export async function findSubjectsByCourseId(courseId: number) {
-  return prisma.subject.findMany({
-    where: { courseId },
-    select: {
-      id: true,
-      name: true,
-      description: true,
-      isActive: true,
-      courseId: true,
-      createdAt: true,
-      updatedAt: true,
-    },
-    orderBy: { name: 'asc' },
-  });
-}
-
-export async function findActiveSubjectsByCourseId(courseId: number) {
+export async function findSubjectsByCourseId(courseId: number, options: SubjectFindOptions = {}) {
+  const { where, ...otherOptions } = options;
   return prisma.subject.findMany({
     where: {
       courseId,
-      isActive: true
+      ...where,
     },
-    select: {
-      id: true,
-      name: true,
-      description: true,
-      isActive: true,
-      courseId: true,
-      createdAt: true,
-      updatedAt: true,
-    },
-    orderBy: { name: 'asc' },
+    orderBy: options.orderBy || { name: 'asc' },
+    ...otherOptions,
   });
 }
 
 export async function updateSubject(id: number, data: Prisma.SubjectUpdateInput) {
-  try {
-    return await prisma.subject.update({
-      where: { id },
-      data,
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        isActive: true,
-        courseId: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
-  } catch (error) {
-    throw error;
-  }
+  return await prisma.subject.update({
+    where: { id },
+    data,
+  });
 }
 
 export async function deleteSubject(id: number) {
-  return prisma.subject.delete({
+  return await prisma.subject.delete({
     where: { id },
   });
 }

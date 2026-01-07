@@ -7,58 +7,19 @@ import { validateIdParam, authorizeExamAccess } from '../middlewares/validation.
 import { validateDto } from '../middlewares/validation/dto.middleware';
 import { UserRole } from '@prisma/client';
 import { CreateExamDto, UpdateExamDto } from '../dtos/exam.dto';
+import { CreateCourseDto, UpdateCourseDto } from '../dtos/course.dto';
+import { CreateSubjectDto, UpdateSubjectDto } from '../dtos/subject.dto';
 
 const router = Router();
 
 
 // ==================== EXAM ROUTES ====================
 
-/**
- * @swagger
- * /api/exams:
- *   post:
- *     summary: Create a new exam
- *     tags: [Exams]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/CreateExamRequest'
- *     responses:
- *       201:
- *         description: Exam created successfully
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       $ref: '#/components/schemas/Exam'
- *       400:
- *         description: Invalid input data
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
-// POST / and GET / removed as they required businessId in body/query, 
-// which is now strictly enforced as path param via /api/business/:businessId/exams
+// NOTE: Top-level Exam routes (POST /api/exams, GET /api/exams) have been migrated to 
+// business.routes.ts (e.g., /api/business/:businessId/exams) to strictly enforce business context.
 
-// Routes migrated to business.routes.ts
-// router.get('/:id', ...);
-// router.put('/:id', ...);
-// router.delete('/:id', ...);
+// The routes below are nested routes that depend on :examId.
+
 
 // ==================== COURSE ROUTES (NESTED UNDER EXAMS) ====================
 
@@ -114,7 +75,7 @@ const router = Router();
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post('/:examId/courses', authorize(UserRole.ADMIN), validateIdParam('examId'), authorizeExamAccess, createCourse);
+router.post('/:examId/courses', authorize(UserRole.ADMIN), validateIdParam('examId'), validateDto(CreateCourseDto), authorizeExamAccess, createCourse);
 
 /**
  * @swagger
@@ -296,7 +257,7 @@ router.get('/:examId/courses/:courseId', validateIdParam('examId'), validateIdPa
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.put('/:examId/courses/:courseId', authorize(UserRole.ADMIN), validateIdParam('examId'), validateIdParam('courseId'), authorizeExamAccess, updateCourse);
+router.put('/:examId/courses/:courseId', authorize(UserRole.ADMIN), validateIdParam('examId'), validateIdParam('courseId'), validateDto(UpdateCourseDto), authorizeExamAccess, updateCourse);
 
 /**
  * @swagger
@@ -406,7 +367,7 @@ router.delete('/:examId/courses/:courseId', authorize(UserRole.ADMIN), validateI
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post('/:examId/courses/:courseId/subjects', authorize(UserRole.ADMIN), validateIdParam('examId'), validateIdParam('courseId'), authorizeExamAccess, createSubject);
+router.post('/:examId/courses/:courseId/subjects', authorize(UserRole.ADMIN), validateIdParam('examId'), validateIdParam('courseId'), validateDto(CreateSubjectDto), authorizeExamAccess, createSubject);
 
 /**
  * @swagger
@@ -587,7 +548,7 @@ router.get('/:examId/courses/:courseId/subjects/:subjectId', validateIdParam('ex
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.put('/:examId/courses/:courseId/subjects/:subjectId', authorize(UserRole.ADMIN), validateIdParam('examId'), validateIdParam('courseId'), validateIdParam('subjectId'), authorizeExamAccess, updateSubject);
+router.put('/:examId/courses/:courseId/subjects/:subjectId', authorize(UserRole.ADMIN), validateIdParam('examId'), validateIdParam('courseId'), validateIdParam('subjectId'), validateDto(UpdateSubjectDto), authorizeExamAccess, updateSubject);
 
 /**
  * @swagger

@@ -139,6 +139,16 @@ enum ExamStatus {
   INACTIVE
 }
 
+enum CourseStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum SubjectStatus {
+  ACTIVE
+  INACTIVE
+}
+
 model Exam {
   id          Int      @id @default(autoincrement())
   name        String   // e.g., "UPSC", "NEET"
@@ -171,7 +181,7 @@ model Course {
   name        String   // e.g., "Civil Services Course", "Medical Entrance Course"
   description String?
   duration    String?  // e.g., "6 months", "1 year"
-  isActive    Boolean  @default(true) @map("is_active")
+  status      CourseStatus @default(ACTIVE)
   examId      Int      @map("exam_id")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
@@ -182,6 +192,7 @@ model Course {
   batches  Batch[]
 
   @@index([examId])
+  @@unique([examId, name])
   @@map("courses")
 }
 
@@ -189,7 +200,7 @@ model Subject {
   id          Int      @id @default(autoincrement())
   name        String   // e.g., "Geography", "History", "Physics"
   description String?
-  isActive    Boolean  @default(true) @map("is_active")
+  status      SubjectStatus @default(ACTIVE)
   courseId    Int      @map("course_id")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
@@ -198,5 +209,6 @@ model Subject {
   course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
   @@index([courseId])
+  @@unique([courseId, name])
   @@map("subjects")
 }

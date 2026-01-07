@@ -1,153 +1,52 @@
-import { Prisma, PrismaClient } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 
-// const prisma = new PrismaClient();
-
-export async function createCourse(data: Prisma.CourseCreateInput) {
-  try {
-    return await prisma.course.create({
-      data,
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        duration: true,
-        isActive: true,
-        examId: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
-  } catch (error) {
-    throw error;
-  }
+export interface CourseFindOptions {
+  select?: Prisma.CourseSelect;
+  include?: Prisma.CourseInclude;
+  where?: Prisma.CourseWhereInput;
+  orderBy?: Prisma.CourseOrderByWithRelationInput;
+  skip?: number;
+  take?: number;
 }
 
-export async function findCourseById(id: number, options: any = {}) {
-  const query: any = { where: { id } };
-
-  if (options.select) {
-    query.select = options.select;
-  } else if (options.include) {
-    query.include = options.include;
-  } else {
-    // Default selection
-    query.select = {
-      id: true,
-      name: true,
-      description: true,
-      duration: true,
-      isActive: true,
-      examId: true,
-      createdAt: true,
-      updatedAt: true,
-    };
-  }
-  return prisma.course.findUnique(query);
+export async function createCourse(data: Prisma.CourseUncheckedCreateInput) {
+  return await prisma.course.create({
+    data,
+  });
 }
 
-
-
-export async function findCoursesByExamId(examId: number, options: any = {}) {
-  const query: any = {
-    where: { examId },
-    orderBy: options.orderBy || { name: 'asc' },
-    skip: options.skip,
-    take: options.take,
-  };
-
-  if (options.select) {
-    query.select = options.select;
-  } else if (options.include) {
-    query.include = options.include;
-  } else {
-    query.select = {
-      id: true,
-      name: true,
-      description: true,
-      duration: true,
-      isActive: true,
-      examId: true,
-      createdAt: true,
-      updatedAt: true,
-      exam: {
-        select: {
-          name: true
-        }
-      },
-      subjects: {
-        select: {
-          id: true,
-          name: true
-        }
-      }
-    };
-  }
-
-  return prisma.course.findMany(query);
+export async function findCourseById(id: number, options: CourseFindOptions = {}) {
+  const { where, orderBy, skip, take, ...findOptions } = options;
+  return prisma.course.findUnique({
+    where: { id },
+    ...findOptions,
+  });
 }
 
-export async function findActiveCoursesByExamId(examId: number, options: any = {}) {
-  const query: any = {
+export async function findCourseByName(name: string, examId: number) {
+  return prisma.course.findFirst({
+    where: { name, examId },
+  });
+}
+
+export async function findCoursesByExamId(examId: number, options: CourseFindOptions = {}) {
+  const { where, ...otherOptions } = options;
+  return prisma.course.findMany({
     where: {
       examId,
-      isActive: true
+      ...where,
     },
     orderBy: options.orderBy || { name: 'asc' },
-    skip: options.skip,
-    take: options.take,
-  };
-
-  if (options.select) {
-    query.select = options.select;
-  } else if (options.include) {
-    query.include = options.include;
-  } else {
-    query.select = {
-      id: true,
-      name: true,
-      description: true,
-      duration: true,
-      isActive: true,
-      examId: true,
-      createdAt: true,
-      updatedAt: true,
-      exam: {
-        select: {
-          name: true
-        }
-      },
-      subjects: {
-        select: {
-          id: true,
-          name: true
-        }
-      }
-    };
-  }
-
-  return prisma.course.findMany(query);
+    ...otherOptions,
+  });
 }
 
 export async function updateCourse(id: number, data: Prisma.CourseUpdateInput) {
-  try {
-    return await prisma.course.update({
-      where: { id },
-      data,
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        duration: true,
-        isActive: true,
-        examId: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
-  } catch (error) {
-    throw error;
-  }
+  return await prisma.course.update({
+    where: { id },
+    data,
+  });
 }
 
 export async function deleteCourse(id: number) {

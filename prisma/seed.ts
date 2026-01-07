@@ -1,4 +1,4 @@
-import { PrismaClient, UserRole } from '@prisma/client';
+import { PrismaClient, UserRole, CourseStatus, SubjectStatus } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -158,7 +158,7 @@ async function main() {
         name: 'UPSC Prelims + Mains',
         description: 'Complete preparation for UPSC Prelims and Mains',
         duration: '12 months',
-        isActive: true,
+        status: CourseStatus.ACTIVE,
         examId: exams[0].id,
       },
     }),
@@ -167,7 +167,7 @@ async function main() {
         name: 'UPSC Optional Subject - Geography',
         description: 'Geography optional subject preparation',
         duration: '8 months',
-        isActive: true,
+        status: CourseStatus.ACTIVE,
         examId: exams[0].id,
       },
     }),
@@ -177,7 +177,7 @@ async function main() {
         name: 'NEET Complete Course',
         description: 'Complete NEET preparation with all subjects',
         duration: '18 months',
-        isActive: true,
+        status: CourseStatus.ACTIVE,
         examId: exams[1].id,
       },
     }),
@@ -186,7 +186,7 @@ async function main() {
         name: 'NEET Crash Course',
         description: 'Intensive NEET preparation for last 6 months',
         duration: '6 months',
-        isActive: true,
+        status: CourseStatus.ACTIVE,
         examId: exams[1].id,
       },
     }),
@@ -196,7 +196,7 @@ async function main() {
         name: 'JEE Main + Advanced',
         description: 'Complete JEE preparation for both Main and Advanced',
         duration: '24 months',
-        isActive: true,
+        status: CourseStatus.ACTIVE,
         examId: exams[2].id,
       },
     }),
@@ -211,7 +211,7 @@ async function main() {
       data: {
         name: 'History',
         description: 'Indian History and World History',
-        isActive: true,
+        status: SubjectStatus.ACTIVE,
         courseId: courses[0].id,
       },
     }),
@@ -219,7 +219,7 @@ async function main() {
       data: {
         name: 'Geography',
         description: 'Physical and Human Geography',
-        isActive: true,
+        status: SubjectStatus.ACTIVE,
         courseId: courses[0].id,
       },
     }),
@@ -227,7 +227,7 @@ async function main() {
       data: {
         name: 'Polity',
         description: 'Indian Constitution and Political System',
-        isActive: true,
+        status: SubjectStatus.ACTIVE,
         courseId: courses[0].id,
       },
     }),
@@ -235,7 +235,7 @@ async function main() {
       data: {
         name: 'Economics',
         description: 'Indian Economy and Economic Concepts',
-        isActive: true,
+        status: SubjectStatus.ACTIVE,
         courseId: courses[0].id,
       },
     }),
@@ -244,7 +244,7 @@ async function main() {
       data: {
         name: 'Physics',
         description: 'Physics for NEET',
-        isActive: true,
+        status: SubjectStatus.ACTIVE,
         courseId: courses[2].id,
       },
     }),
@@ -252,7 +252,7 @@ async function main() {
       data: {
         name: 'Chemistry',
         description: 'Chemistry for NEET',
-        isActive: true,
+        status: SubjectStatus.ACTIVE,
         courseId: courses[2].id,
       },
     }),
@@ -260,7 +260,7 @@ async function main() {
       data: {
         name: 'Biology',
         description: 'Biology for NEET',
-        isActive: true,
+        status: SubjectStatus.ACTIVE,
         courseId: courses[2].id,
       },
     }),
@@ -269,7 +269,7 @@ async function main() {
       data: {
         name: 'Mathematics',
         description: 'Mathematics for JEE',
-        isActive: true,
+        status: SubjectStatus.ACTIVE,
         courseId: courses[4].id,
       },
     }),
@@ -277,7 +277,7 @@ async function main() {
       data: {
         name: 'Physics',
         description: 'Physics for JEE',
-        isActive: true,
+        status: SubjectStatus.ACTIVE,
         courseId: courses[4].id,
       },
     }),
@@ -285,7 +285,7 @@ async function main() {
       data: {
         name: 'Chemistry',
         description: 'Chemistry for JEE',
-        isActive: true,
+        status: SubjectStatus.ACTIVE,
         courseId: courses[4].id,
       },
     }),

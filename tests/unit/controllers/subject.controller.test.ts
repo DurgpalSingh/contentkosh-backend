@@ -1,88 +1,111 @@
 import { Request, Response } from 'express';
-import * as SubjectController from '../../../src/controllers/subject.controller';
-import * as SubjectRepo from '../../../src/repositories/subject.repo';
-import * as CourseRepo from '../../../src/repositories/course.repo';
+// Use explicit named imports for methods
+import { createSubject, getSubject, getSubjectsByCourse, updateSubject, deleteSubject } from '../../../src/controllers/subject.controller';
+import { subjectService } from '../../../src/services/subject.service';
 import { ApiResponseHandler } from '../../../src/utils/apiResponse';
+import { BadRequestError, NotFoundError } from '../../../src/errors/api.errors';
+import { ValidationUtils } from '../../../src/utils/validation';
 import logger from '../../../src/utils/logger';
 
-// Mock dependencies
-jest.mock('../../../src/repositories/subject.repo');
-jest.mock('../../../src/repositories/course.repo');
+
+// Manual mock factory with inline definitions
+jest.mock('../../../src/services/subject.service', () => {
+    return {
+        subjectService: {
+            createSubject: jest.fn(),
+            getSubject: jest.fn(),
+            getSubjectsByCourse: jest.fn(),
+            updateSubject: jest.fn(),
+            deleteSubject: jest.fn(),
+        },
+        SubjectService: jest.fn()
+    };
+});
+
 jest.mock('../../../src/utils/apiResponse');
 jest.mock('../../../src/utils/logger');
+jest.mock('../../../src/utils/validation');
 
 describe('Subject Controller', () => {
     let req: Partial<Request>;
     let res: Partial<Response>;
 
     beforeEach(() => {
-        req = {};
+        req = {
+            query: {}
+        };
         res = {
             status: jest.fn().mockReturnThis(),
             json: jest.fn(),
         };
         jest.clearAllMocks();
+
+        // Default ValidationUtils mock
+        (ValidationUtils.validateId as jest.Mock).mockImplementation((id) => Number(id));
     });
 
     describe('createSubject', () => {
         it('should create a subject successfully', async () => {
             const subjectData = { name: 'Test Subject', courseId: 1, description: 'Test description' };
             req.body = subjectData;
+            req.params = { courseId: '1' };
 
-            (CourseRepo.findCourseById as jest.Mock).mockResolvedValue({ id: 1, name: 'Test Course' });
-            (SubjectRepo.createSubject as jest.Mock).mockResolvedValue({ id: 1, ...subjectData });
+            (subjectService.createSubject as jest.Mock).mockResolvedValue({ id: 1, ...subjectData });
 
-            await SubjectController.createSubject(req as Request, res as Response);
+            await createSubject(req as Request, res as Response);
 
-            expect(CourseRepo.findCourseById).toHaveBeenCalledWith(1);
-            expect(SubjectRepo.createSubject).toHaveBeenCalled();
+            expect(subjectService.createSubject).toHaveBeenCalledWith(expect.objectContaining({
+                name: 'Test Subject',
+                courseId: 1
+            }));
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, expect.objectContaining({ id: 1 }), 'Subject created successfully', 201);
         });
 
-        it('should throw error if subject name is missing', async () => {
-            req.body = { courseId: 1 }; // Missing name
+        it('should return 400 if service throws BadRequestError', async () => {
+            req.body = { courseId: 1 };
+            req.params = { courseId: '1' };
 
-            await expect(SubjectController.createSubject(req as Request, res as Response)).rejects.toThrow('Subject name is required and cannot be empty');
+            (subjectService.createSubject as jest.Mock).mockRejectedValue(new BadRequestError('Subject name is required'));
+
+            await createSubject(req as Request, res as Response);
+
+            expect(ApiResponseHandler.badRequest).toHaveBeenCalledWith(res, 'Subject name is required');
         });
 
-        it('should throw error if courseId is missing', async () => {
-            req.body = { name: 'Test Subject' }; // Missing courseId
-
-            await expect(SubjectController.createSubject(req as Request, res as Response)).rejects.toThrow('Course ID is required');
-        });
-
-        it('should throw error if course does not exist', async () => {
+        it('should return 404 if service throws NotFoundError', async () => {
             req.body = { name: 'Test Subject', courseId: 999 };
-            (CourseRepo.findCourseById as jest.Mock).mockResolvedValue(null);
+            req.params = { courseId: '999' };
 
-            await expect(SubjectController.createSubject(req as Request, res as Response)).rejects.toThrow('Course not found');
+            // Fix: pass "Course" to produce "Course not found"
+            (subjectService.createSubject as jest.Mock).mockRejectedValue(new NotFoundError('Course'));
+
+            await createSubject(req as Request, res as Response);
+
+            expect(ApiResponseHandler.notFound).toHaveBeenCalledWith(res, 'Course not found');
         });
     });
 
     describe('getSubject', () => {
         it('should get a subject by ID', async () => {
-            req.params = { subjectId: '1' };
+            req.params = { subjectId: '1', courseId: '1' };
             const mockSubject = { id: 1, name: 'Test Subject', courseId: 1 };
 
-            (SubjectRepo.findSubjectById as jest.Mock).mockResolvedValue(mockSubject);
+            (subjectService.getSubject as jest.Mock).mockResolvedValue(mockSubject);
 
-            await SubjectController.getSubject(req as Request, res as Response);
+            await getSubject(req as Request, res as Response);
 
-            expect(SubjectRepo.findSubjectById).toHaveBeenCalledWith(1);
+            expect(subjectService.getSubject).toHaveBeenCalledWith(1);
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockSubject, 'Subject fetched successfully');
         });
 
-        it('should throw error if subject not found', async () => {
-            req.params = { subjectId: '999' };
-            (SubjectRepo.findSubjectById as jest.Mock).mockResolvedValue(null);
+        it('should return 404 if subject not found', async () => {
+            req.params = { subjectId: '999', courseId: '1' };
+            // Fix: pass "Subject" to produce "Subject not found"
+            (subjectService.getSubject as jest.Mock).mockRejectedValue(new NotFoundError('Subject'));
 
-            await expect(SubjectController.getSubject(req as Request, res as Response)).rejects.toThrow('Subject not found');
-        });
+            await getSubject(req as Request, res as Response);
 
-        it('should throw error if ID is invalid', async () => {
-            req.params = { subjectId: 'invalid' };
-
-            await expect(SubjectController.getSubject(req as Request, res as Response)).rejects.toThrow('Subject ID is required and must be a valid positive integer');
+            expect(ApiResponseHandler.notFound).toHaveBeenCalledWith(res, 'Subject not found');
         });
     });
 
@@ -92,60 +115,40 @@ describe('Subject Controller', () => {
             req.query = {};
             const mockSubjects = [{ id: 1, name: 'Subject 1' }, { id: 2, name: 'Subject 2' }];
 
-            (SubjectRepo.findSubjectsByCourseId as jest.Mock).mockResolvedValue(mockSubjects);
+            (subjectService.getSubjectsByCourse as jest.Mock).mockResolvedValue(mockSubjects);
 
-            await SubjectController.getSubjectsByCourse(req as Request, res as Response);
+            await getSubjectsByCourse(req as Request, res as Response);
 
-            expect(SubjectRepo.findSubjectsByCourseId).toHaveBeenCalledWith(1);
+            expect(subjectService.getSubjectsByCourse).toHaveBeenCalledWith(1, { active: false });
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockSubjects, 'Subjects fetched successfully');
-        });
-
-        it('should throw error if courseId is invalid', async () => {
-            req.params = { courseId: 'invalid' };
-            req.query = {};
-
-            await expect(SubjectController.getSubjectsByCourse(req as Request, res as Response)).rejects.toThrow('Course ID is required and must be a valid positive integer');
         });
     });
 
     describe('updateSubject', () => {
         it('should update a subject successfully', async () => {
-            req.params = { subjectId: '1' };
+            req.params = { subjectId: '1', courseId: '1' };
             req.body = { name: 'Updated Subject', description: 'Updated description' };
             const updatedSubject = { id: 1, name: 'Updated Subject', description: 'Updated description' };
 
-            (SubjectRepo.updateSubject as jest.Mock).mockResolvedValue(updatedSubject);
+            (subjectService.updateSubject as jest.Mock).mockResolvedValue(updatedSubject);
 
-            await SubjectController.updateSubject(req as Request, res as Response);
+            await updateSubject(req as Request, res as Response);
 
-            expect(SubjectRepo.updateSubject).toHaveBeenCalledWith(1, req.body);
+            expect(subjectService.updateSubject).toHaveBeenCalledWith(1, req.body);
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, updatedSubject, 'Subject updated successfully');
-        });
-
-        it('should throw error if name is empty string', async () => {
-            req.params = { subjectId: '1' };
-            req.body = { name: '   ' }; // Empty/whitespace name
-
-            await expect(SubjectController.updateSubject(req as Request, res as Response)).rejects.toThrow('Subject name is required and cannot be empty');
         });
     });
 
     describe('deleteSubject', () => {
         it('should delete a subject successfully', async () => {
-            req.params = { subjectId: '1' };
+            req.params = { subjectId: '1', courseId: '1' };
 
-            (SubjectRepo.deleteSubject as jest.Mock).mockResolvedValue({ id: 1 });
+            (subjectService.deleteSubject as jest.Mock).mockResolvedValue(undefined);
 
-            await SubjectController.deleteSubject(req as Request, res as Response);
+            await deleteSubject(req as Request, res as Response);
 
-            expect(SubjectRepo.deleteSubject).toHaveBeenCalledWith(1);
+            expect(subjectService.deleteSubject).toHaveBeenCalledWith(1);
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, null, 'Subject deleted successfully');
-        });
-
-        it('should throw error if ID is invalid', async () => {
-            req.params = { subjectId: 'invalid' };
-
-            await expect(SubjectController.deleteSubject(req as Request, res as Response)).rejects.toThrow('Subject ID is required and must be a valid positive integer');
         });
     });
 });

@@ -394,9 +394,10 @@ export const swaggerSchemas = {
         type: 'string',
         description: 'Description of the exam'
       },
-      isActive: {
-        type: 'boolean',
-        description: 'Whether the exam is active'
+      status: {
+        type: 'string',
+        enum: ['ACTIVE', 'INACTIVE'],
+        description: 'Status of the exam'
       },
       businessId: {
         type: 'integer',
@@ -434,10 +435,11 @@ export const swaggerSchemas = {
         type: 'string',
         description: 'Description of the exam'
       },
-      isActive: {
-        type: 'boolean',
-        default: true,
-        description: 'Whether the exam is active'
+      status: {
+        type: 'string',
+        enum: ['ACTIVE', 'INACTIVE'],
+        default: 'ACTIVE',
+        description: 'Status of the exam'
       },
       businessId: {
         type: 'integer',
@@ -457,9 +459,10 @@ export const swaggerSchemas = {
         type: 'string',
         description: 'Description of the exam'
       },
-      isActive: {
-        type: 'boolean',
-        description: 'Whether the exam is active'
+      status: {
+        type: 'string',
+        enum: ['ACTIVE', 'INACTIVE'],
+        description: 'Status of the exam'
       }
     }
   },
@@ -478,9 +481,10 @@ export const swaggerSchemas = {
         type: 'string',
         description: 'Description of the exam'
       },
-      isActive: {
-        type: 'boolean',
-        description: 'Whether the exam is active'
+      status: {
+        type: 'string',
+        enum: ['ACTIVE', 'INACTIVE'],
+        description: 'Status of the exam'
       },
       businessId: {
         type: 'integer',
@@ -526,9 +530,10 @@ export const swaggerSchemas = {
         type: 'string',
         description: 'Duration of the course (e.g., 6 months, 1 year)'
       },
-      isActive: {
-        type: 'boolean',
-        description: 'Whether the course is active'
+      status: {
+        type: 'string',
+        enum: ['ACTIVE', 'INACTIVE'],
+        description: 'Status of the course'
       },
       examId: {
         type: 'integer',
@@ -570,10 +575,11 @@ export const swaggerSchemas = {
         type: 'string',
         description: 'Duration of the course (e.g., 6 months, 1 year)'
       },
-      isActive: {
-        type: 'boolean',
-        default: true,
-        description: 'Whether the course is active'
+      status: {
+        type: 'string',
+        enum: ['ACTIVE', 'INACTIVE'],
+        default: 'ACTIVE',
+        description: 'Status of the course'
       },
       examId: {
         type: 'integer',
@@ -597,9 +603,10 @@ export const swaggerSchemas = {
         type: 'string',
         description: 'Duration of the course (e.g., 6 months, 1 year)'
       },
-      isActive: {
-        type: 'boolean',
-        description: 'Whether the course is active'
+      status: {
+        type: 'string',
+        enum: ['ACTIVE', 'INACTIVE'],
+        description: 'Status of the course'
       }
     }
   },
@@ -622,9 +629,10 @@ export const swaggerSchemas = {
         type: 'string',
         description: 'Duration of the course'
       },
-      isActive: {
-        type: 'boolean',
-        description: 'Whether the course is active'
+      status: {
+        type: 'string',
+        enum: ['ACTIVE', 'INACTIVE'],
+        description: 'Status of the course'
       },
       examId: {
         type: 'integer',
@@ -666,9 +674,10 @@ export const swaggerSchemas = {
         type: 'string',
         description: 'Description of the subject'
       },
-      isActive: {
-        type: 'boolean',
-        description: 'Whether the subject is active'
+      status: {
+        type: 'string',
+        enum: ['ACTIVE', 'INACTIVE'],
+        description: 'Status of the subject'
       },
       courseId: {
         type: 'integer',
@@ -699,10 +708,11 @@ export const swaggerSchemas = {
         type: 'string',
         description: 'Description of the subject'
       },
-      isActive: {
-        type: 'boolean',
-        default: true,
-        description: 'Whether the subject is active'
+      status: {
+        type: 'string',
+        enum: ['ACTIVE', 'INACTIVE'],
+        default: 'ACTIVE',
+        description: 'Status of the subject'
       },
       courseId: {
         type: 'integer',
@@ -722,9 +732,10 @@ export const swaggerSchemas = {
         type: 'string',
         description: 'Description of the subject'
       },
-      isActive: {
-        type: 'boolean',
-        description: 'Whether the subject is active'
+      status: {
+        type: 'string',
+        enum: ['ACTIVE', 'INACTIVE'],
+        description: 'Status of the subject'
       }
     }
   },

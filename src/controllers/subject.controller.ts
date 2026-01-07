@@ -1,97 +1,91 @@
 import { Request, Response } from 'express';
 import { ApiResponseHandler } from '../utils/apiResponse';
-import * as subjectRepo from '../repositories/subject.repo';
-import * as courseRepo from '../repositories/course.repo';
-import logger from '../utils/logger';
-import { BadRequestError, NotFoundError } from '../errors/api.errors';
-import { Prisma } from '@prisma/client';
+import { subjectService } from '../services/subject.service';
+import { CreateSubjectDto, UpdateSubjectDto } from '../dtos/subject.dto';
+import { plainToInstance } from 'class-transformer';
 import { ValidationUtils } from '../utils/validation';
+import { BadRequestError, NotFoundError } from '../errors/api.errors';
+import logger from '../utils/logger';
 
 export const createSubject = async (req: Request, res: Response) => {
-    const subjectData: Prisma.SubjectUncheckedCreateInput = req.body;
+    try {
+        const examId = ValidationUtils.validateId(req.params.examId, 'Exam ID');
+        const courseId = ValidationUtils.validateId(req.params.courseId, 'Course ID');
 
-    // Validate input
-    ValidationUtils.validateNonEmptyString(subjectData.name, 'Subject name');
-    ValidationUtils.validateRequired(subjectData.courseId, 'Course ID');
+        const subjectDataInput = plainToInstance(CreateSubjectDto, req.body);
+        subjectDataInput.courseId = courseId; // Assign courseId from params
 
-    const course = await courseRepo.findCourseById(subjectData.courseId);
-    if (!course) {
-        throw new NotFoundError('Course not found');
-    }
+        const subject = await subjectService.createSubject(subjectDataInput);
 
-    const createInput: Prisma.SubjectCreateInput = {
-        name: subjectData.name,
-        course: {
-            connect: {
-                id: subjectData.courseId
-            }
+        ApiResponseHandler.success(res, subject, 'Subject created successfully', 201);
+    } catch (error: any) {
+        if (error instanceof BadRequestError) {
+            return ApiResponseHandler.badRequest(res, error.message);
         }
-    };
-
-    if (subjectData.description !== undefined) {
-        createInput.description = subjectData.description;
+        if (error instanceof NotFoundError) {
+            return ApiResponseHandler.notFound(res, error.message);
+        }
+        logger.error(`Error creating subject: ${error.message}`);
+        ApiResponseHandler.error(res, 'Failed to create subject');
     }
-    if (subjectData.isActive !== undefined) {
-        createInput.isActive = subjectData.isActive;
-    }
-
-    const subject = await subjectRepo.createSubject(createInput);
-
-    logger.info(`Subject created successfully: ${subjectData.name}`);
-
-    ApiResponseHandler.success(res, subject, 'Subject created successfully', 201);
 };
 
-function getSubjectIdFromRequest(req: Request): number {
-    return ValidationUtils.validateId(req.params.subjectId, 'Subject ID');
-}
-
 export const getSubject = async (req: Request, res: Response) => {
-    const id = getSubjectIdFromRequest(req);
-
-    const subject = await subjectRepo.findSubjectById(id);
-    if (!subject) {
-        throw new NotFoundError('Subject not found');
+    try {
+        const id = ValidationUtils.validateId(req.params.subjectId, 'Subject ID');
+        const subject = await subjectService.getSubject(id);
+        ApiResponseHandler.success(res, subject, 'Subject fetched successfully');
+    } catch (error: any) {
+        if (error instanceof NotFoundError) {
+            return ApiResponseHandler.notFound(res, error.message);
+        }
+        logger.error(`Error fetching subject: ${error.message}`);
+        ApiResponseHandler.error(res, 'Failed to fetch subject');
     }
-
-    logger.info(`Subject fetched successfully: ${subject.name}`);
-
-    ApiResponseHandler.success(res, subject, 'Subject fetched successfully');
 };
 
 export const getSubjectsByCourse = async (req: Request, res: Response) => {
-    const courseId = ValidationUtils.validateId(req.params.courseId, 'Course ID');
+    try {
+        const courseId = ValidationUtils.validateId(req.params.courseId, 'Course ID');
+        const activeOnly = req.query.active === 'true';
 
-    const activeOnly = req.query.active === 'true';
-    const subjects = await subjectRepo.findSubjectsByCourseId(courseId);
-    
-    logger.info(`Subjects fetched for course ${courseId}`);
-
-    ApiResponseHandler.success(res, subjects, 'Subjects fetched successfully');
+        const subjects = await subjectService.getSubjectsByCourse(courseId, { active: activeOnly });
+        ApiResponseHandler.success(res, subjects, 'Subjects fetched successfully');
+    } catch (error: any) {
+        logger.error(`Error fetching subjects: ${error.message}`);
+        ApiResponseHandler.error(res, 'Failed to fetch subjects');
+    }
 };
 
 export const updateSubject = async (req: Request, res: Response) => {
-    const id = getSubjectIdFromRequest(req);
-    const subjectData: Prisma.SubjectUncheckedUpdateInput = req.body;
+    try {
+        const id = ValidationUtils.validateId(req.params.subjectId, 'Subject ID');
+        const subjectDataInput = plainToInstance(UpdateSubjectDto, req.body);
 
-    // Validate input
-    if (subjectData.name !== undefined) {
-        ValidationUtils.validateNonEmptyString(subjectData.name as string, 'Subject name');
+        const subject = await subjectService.updateSubject(id, subjectDataInput);
+        ApiResponseHandler.success(res, subject, 'Subject updated successfully');
+    } catch (error: any) {
+        if (error instanceof BadRequestError) {
+            return ApiResponseHandler.badRequest(res, error.message);
+        }
+        if (error instanceof NotFoundError) {
+            return ApiResponseHandler.notFound(res, error.message);
+        }
+        logger.error(`Error updating subject: ${error.message}`);
+        ApiResponseHandler.error(res, 'Failed to update subject');
     }
-
-    const subject = await subjectRepo.updateSubject(id, subjectData);
-    
-    logger.info(`Subject updated successfully: ${subject.name}`);
-
-    ApiResponseHandler.success(res, subject, 'Subject updated successfully');
 };
 
 export const deleteSubject = async (req: Request, res: Response) => {
-    const id = getSubjectIdFromRequest(req);
-    
-    await subjectRepo.deleteSubject(id);
-    
-    logger.info(`Subject deleted successfully: ID ${id}`);
-
-    ApiResponseHandler.success(res, null, 'Subject deleted successfully');
+    try {
+        const id = ValidationUtils.validateId(req.params.subjectId, 'Subject ID');
+        await subjectService.deleteSubject(id);
+        ApiResponseHandler.success(res, null, 'Subject deleted successfully');
+    } catch (error: any) {
+        if (error instanceof NotFoundError) {
+            return ApiResponseHandler.notFound(res, error.message);
+        }
+        logger.error(`Error deleting subject: ${error.message}`);
+        ApiResponseHandler.error(res, 'Failed to delete subject');
+    }
 };

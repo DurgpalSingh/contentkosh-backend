@@ -1,6 +1,29 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## Version [1.5.0] - Course & Subject API Refactoring
+**P.R raised by**  : aaditya-singh-21
+**Date** : 2026-01-06
+### Added
+- **Course Status**: Replaced `isActive` boolean with `CourseStatus` Enum (ACTIVE/INACTIVE) in Schema.
+- **DTOs**:
+    - Added `CreateCourseDto` and `UpdateCourseDto` with strict `class-validator` rules.
+    - Added `CreateSubjectDto` and `UpdateSubjectDto` with strict `class-validator` rules.
+- **Service Layer**:
+    - Implemented `CourseService` to handle business logic and validation, separating it from the controller.
+    - Implemented `SubjectService` to handle business logic for Subjects.
+- **Mapper**: Added `CourseMapper` and `SubjectMapper` for domain model transformation.
+- **Swagger**: Updated `Course`, `Exam`, and `Subject` schemas to reflect `status` Enum.
+
+### Refactored
+- **Course Controller**: Refactored to use `CourseService` and updated route handlers to use `validateDto` middleware.
+- **Subject Controller**: Refactored to use `SubjectService` and updated route handlers for better error handling and validation.
+- **Course Repository**: Updated to use strict typing (`Prisma.CourseUncheckedCreateInput`) and handle `status` enum.
+- **Routes**: Removed stale Exam route documentation from `exam.routes.ts` and clarified migration to `business.routes.ts`.
+
+### Tests
+- **Integration Tests**: Updated `tests/integration/routes/course.routes.test.ts` to align with new schema (Status Enum) and strict validation rules.
+
 ## Version [1.4.0] - Exam API Implementation
 **P.R raised by**  : aaditya-singh-21
 **Date** : 2025-12-26

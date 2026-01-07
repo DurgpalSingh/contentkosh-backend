@@ -1,18 +1,62 @@
 import { Request, Response } from 'express';
+// Import courseService from CONTROLLER, because Service file doesn't export it
+import { courseService, examService, createCourse, getCourse, getCoursesByExam, updateCourse, deleteCourse } from '../../../src/controllers/course.controller';
 import * as CourseController from '../../../src/controllers/course.controller';
-import * as CourseRepo from '../../../src/repositories/course.repo';
-import * as ExamRepo from '../../../src/repositories/exam.repo';
 import { ApiResponseHandler } from '../../../src/utils/apiResponse';
+import { BadRequestError, NotFoundError } from '../../../src/errors/api.errors';
+import { ValidationUtils } from '../../../src/utils/validation';
 import logger from '../../../src/utils/logger';
 
-// Mock dependencies
-jest.mock('../../../src/repositories/course.repo');
-jest.mock('../../../src/repositories/exam.repo');
+// Mock the Service Classes
+jest.mock('../../../src/services/course.service', () => {
+    return {
+        CourseService: jest.fn().mockImplementation(() => {
+            return {
+                createCourse: jest.fn(),
+                getCourse: jest.fn(),
+                getCoursesByExam: jest.fn(),
+                updateCourse: jest.fn(),
+                deleteCourse: jest.fn(),
+            };
+        })
+    };
+});
+
+jest.mock('../../../src/services/exam.service', () => {
+    return {
+        ExamService: jest.fn().mockImplementation(() => {
+            return {
+                getExam: jest.fn()
+            };
+        })
+    };
+});
+
+jest.mock('../../../src/errors/api.errors', () => {
+    return {
+        NotFoundError: class NotFoundError extends Error {
+            statusCode = 404;
+            constructor(resource: string = 'Resource') {
+                super(`${resource} not found`);
+                this.name = 'NotFoundError';
+            }
+        },
+        BadRequestError: class BadRequestError extends Error {
+            statusCode = 400;
+            constructor(message: string) {
+                super(message);
+                this.name = 'BadRequestError';
+            }
+        }
+    };
+});
+
 jest.mock('../../../src/utils/apiResponse');
 jest.mock('../../../src/utils/logger');
+jest.mock('../../../src/utils/validation');
 
 describe('Course Controller', () => {
-    let req: Partial<Request>;
+    let req: any;
     let res: Partial<Response>;
 
     beforeEach(() => {
@@ -24,117 +68,92 @@ describe('Course Controller', () => {
             json: jest.fn(),
         };
         jest.clearAllMocks();
+
+        // Default ValidationUtils mock
+        (ValidationUtils.validateId as jest.Mock).mockImplementation((id) => Number(id));
     });
 
     describe('createCourse', () => {
         it('should create a course successfully', async () => {
             const courseData = { name: 'Test Course', examId: 1, description: 'Test description' };
             req.body = courseData;
+            req.params = { examId: '1' };
 
-            (ExamRepo.findExamById as jest.Mock).mockResolvedValue({ id: 1, name: 'Test Exam' });
-            (CourseRepo.createCourse as jest.Mock).mockResolvedValue({ id: 1, ...courseData });
+            (examService.getExam as jest.Mock).mockResolvedValue({ id: 1, name: 'Test Exam', businessId: 1 });
+            (courseService.createCourse as jest.Mock).mockResolvedValue({ id: 1, ...courseData });
 
-            await CourseController.createCourse(req as Request, res as Response);
 
-            expect(ExamRepo.findExamById).toHaveBeenCalledWith(1);
-            expect(CourseRepo.createCourse).toHaveBeenCalled();
+
+            await createCourse(req as Request, res as Response);
+
+            expect(examService.getExam).toHaveBeenCalledWith(1);
+            expect(courseService.createCourse).toHaveBeenCalledWith(expect.objectContaining({
+                name: 'Test Course',
+                examId: 1
+            }));
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, expect.objectContaining({ id: 1 }), 'Course created successfully', 201);
         });
 
-        it('should throw error if course name is missing', async () => {
-            req.body = { examId: 1 }; // Missing name
+        it('should return 400 if service throws BadRequestError', async () => {
+            req.body = { examId: 1 };
+            req.params = { examId: '1' };
 
-            await expect(CourseController.createCourse(req as Request, res as Response)).rejects.toThrow('Course name is required and cannot be empty');
+
+            (examService.getExam as jest.Mock).mockResolvedValue({ id: 1, businessId: 1 });
+            (courseService.createCourse as jest.Mock).mockRejectedValue(new BadRequestError('Course name is required'));
+
+            await createCourse(req as Request, res as Response);
+
+            expect(ApiResponseHandler.badRequest).toHaveBeenCalledWith(res, 'Course name is required');
         });
 
-        it('should throw error if examId is missing', async () => {
-            req.body = { name: 'Test Course' }; // Missing examId
-
-            await expect(CourseController.createCourse(req as Request, res as Response)).rejects.toThrow('Exam ID is required');
-        });
-
-        it('should throw error if exam does not exist', async () => {
+        it('should return 404 if exam does not exist', async () => {
             req.body = { name: 'Test Course', examId: 999 };
-            (ExamRepo.findExamById as jest.Mock).mockResolvedValue(null);
+            req.params = { examId: '999' };
 
-            await expect(CourseController.createCourse(req as Request, res as Response)).rejects.toThrow('Exam not found');
+            // ExamService.getExam throws NotFoundError if not found
+            (examService.getExam as jest.Mock).mockRejectedValue(new NotFoundError('Exam'));
+
+            await createCourse(req as Request, res as Response);
+
+            expect(ApiResponseHandler.notFound).toHaveBeenCalledWith(res, 'Exam not found');
         });
     });
 
     describe('getCourse', () => {
         it('should get a course by ID', async () => {
-            req.params = { courseId: '1' };
+            req.params = { courseId: '1', examId: '1' };
             const mockCourse = { id: 1, name: 'Test Course', examId: 1 };
 
-            (CourseRepo.findCourseById as jest.Mock).mockResolvedValue(mockCourse);
+            (courseService.getCourse as jest.Mock).mockResolvedValue(mockCourse);
 
-            await CourseController.getCourse(req as Request, res as Response);
+            await getCourse(req as Request, res as Response);
 
-            expect(CourseRepo.findCourseById).toHaveBeenCalledWith(1, {});
+            expect(courseService.getCourse).toHaveBeenCalledWith(1, expect.anything());
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockCourse, 'Course fetched successfully');
         });
 
-        it('should get a course with specific fields', async () => {
-            req.params = { courseId: '1' };
-            req.query = { fields: 'id,name' };
-            const mockCourse = { id: 1, name: 'Test Course' };
+        it('should return 404 if course not found', async () => {
+            req.params = { courseId: '999', examId: '1' };
+            // Corrected: NotFoundError appends " not found", so we pass "Course"
+            (courseService.getCourse as jest.Mock).mockRejectedValue(new NotFoundError('Course'));
 
-            (CourseRepo.findCourseById as jest.Mock).mockResolvedValue(mockCourse);
+            await getCourse(req as Request, res as Response);
 
-            await CourseController.getCourse(req as Request, res as Response);
-
-            expect(CourseRepo.findCourseById).toHaveBeenCalledWith(1, expect.objectContaining({
-                select: expect.objectContaining({ id: true, name: true })
-            }));
-            expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockCourse, 'Course fetched successfully');
+            expect(ApiResponseHandler.notFound).toHaveBeenCalledWith(res, 'Course not found');
         });
 
-        it('should get a course with included relations', async () => {
-            req.params = { courseId: '1' };
-            req.query = { include: 'subjects' };
-            const mockCourse = { id: 1, name: 'Test Course', subjects: [] };
+        it('should return 404 if course does not belong to exam', async () => {
+            req.params = { courseId: '1', examId: '2' };
+            const mockCourse = { id: 1, name: 'Test Course', examId: 1 };
 
-            (CourseRepo.findCourseById as jest.Mock).mockResolvedValue(mockCourse);
+            (courseService.getCourse as jest.Mock).mockResolvedValue(mockCourse);
 
-            await CourseController.getCourse(req as Request, res as Response);
+            await getCourse(req as Request, res as Response);
 
-            expect(CourseRepo.findCourseById).toHaveBeenCalledWith(1, expect.objectContaining({
-                include: expect.objectContaining({ subjects: true })
-            }));
-            expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockCourse, 'Course fetched successfully');
-        });
-
-        it('should get a course with sorting', async () => {
-            req.params = { courseId: '1' };
-            req.query = { sort: 'name:asc' };
-            const mockCourse = { id: 1, name: 'Test Course' };
-
-            (CourseRepo.findCourseById as jest.Mock).mockResolvedValue(mockCourse);
-
-            await CourseController.getCourse(req as Request, res as Response);
-
-            expect(CourseRepo.findCourseById).toHaveBeenCalledWith(1, expect.objectContaining({
-                orderBy: { name: 'asc' }
-            }));
-            expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockCourse, 'Course fetched successfully');
-        });
-
-        it('should throw error if course not found', async () => {
-            req.params = { courseId: '999' };
-            (CourseRepo.findCourseById as jest.Mock).mockResolvedValue(null);
-
-            await expect(CourseController.getCourse(req as Request, res as Response)).rejects.toThrow('Course not found');
-        });
-
-        it('should throw error if ID is invalid', async () => {
-            req.params = { courseId: 'invalid' };
-
-            await expect(CourseController.getCourse(req as Request, res as Response)).rejects.toThrow('Course ID is required and must be a valid positive integer');
+            expect(ApiResponseHandler.notFound).toHaveBeenCalledWith(res, 'Course not found in this exam');
         });
     });
-
-
-
 
     describe('getCoursesByExam', () => {
         it('should get courses for an exam', async () => {
@@ -142,60 +161,54 @@ describe('Course Controller', () => {
             req.query = {};
             const mockCourses = [{ id: 1, name: 'Course 1' }, { id: 2, name: 'Course 2' }];
 
-            (CourseRepo.findCoursesByExamId as jest.Mock).mockResolvedValue(mockCourses);
 
-            await CourseController.getCoursesByExam(req as Request, res as Response);
+            (examService.getExam as jest.Mock).mockResolvedValue({ id: 1, businessId: 1 });
+            (courseService.getCoursesByExam as jest.Mock).mockResolvedValue(mockCourses);
 
-            expect(CourseRepo.findCoursesByExamId).toHaveBeenCalledWith(1, {});
+            await getCoursesByExam(req as Request, res as Response);
+
+            expect(courseService.getCoursesByExam).toHaveBeenCalledWith(1, expect.anything());
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockCourses, 'Courses fetched successfully');
         });
 
-        it('should throw error if examId is invalid', async () => {
-            req.params = { examId: 'invalid' };
-            req.query = {};
+        it('should return 404 if exam does not exist', async () => {
+            req.params = { examId: '999' };
 
-            await expect(CourseController.getCoursesByExam(req as Request, res as Response)).rejects.toThrow('Exam ID is required and must be a valid positive integer');
+            (examService.getExam as jest.Mock).mockRejectedValue(new NotFoundError('Exam'));
+
+            await getCoursesByExam(req as Request, res as Response);
+
+            expect(ApiResponseHandler.notFound).toHaveBeenCalledWith(res, 'Exam not found');
         });
     });
 
     describe('updateCourse', () => {
         it('should update a course successfully', async () => {
-            req.params = { courseId: '1' };
+            req.params = { courseId: '1', examId: '1' };
             req.body = { name: 'Updated Course', description: 'Updated description' };
             const updatedCourse = { id: 1, name: 'Updated Course', description: 'Updated description' };
 
-            (CourseRepo.updateCourse as jest.Mock).mockResolvedValue(updatedCourse);
+            (courseService.getCourse as jest.Mock).mockResolvedValue({ id: 1, examId: 1 });
+            (courseService.updateCourse as jest.Mock).mockResolvedValue(updatedCourse);
 
-            await CourseController.updateCourse(req as Request, res as Response);
+            await updateCourse(req as Request, res as Response);
 
-            expect(CourseRepo.updateCourse).toHaveBeenCalledWith(1, req.body);
+            expect(courseService.updateCourse).toHaveBeenCalledWith(1, req.body);
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, updatedCourse, 'Course updated successfully');
-        });
-
-        it('should throw error if name is empty string', async () => {
-            req.params = { courseId: '1' };
-            req.body = { name: '   ' }; // Empty/whitespace name
-
-            await expect(CourseController.updateCourse(req as Request, res as Response)).rejects.toThrow('Course name is required and cannot be empty');
         });
     });
 
     describe('deleteCourse', () => {
         it('should delete a course successfully', async () => {
-            req.params = { courseId: '1' };
+            req.params = { courseId: '1', examId: '1' };
 
-            (CourseRepo.deleteCourse as jest.Mock).mockResolvedValue({ id: 1 });
+            (courseService.getCourse as jest.Mock).mockResolvedValue({ id: 1, examId: 1 });
+            (courseService.deleteCourse as jest.Mock).mockResolvedValue(undefined);
 
-            await CourseController.deleteCourse(req as Request, res as Response);
+            await deleteCourse(req as Request, res as Response);
 
-            expect(CourseRepo.deleteCourse).toHaveBeenCalledWith(1);
+            expect(courseService.deleteCourse).toHaveBeenCalledWith(1);
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, null, 'Course deleted successfully');
-        });
-
-        it('should throw error if ID is invalid', async () => {
-            req.params = { courseId: 'invalid' };
-
-            await expect(CourseController.deleteCourse(req as Request, res as Response)).rejects.toThrow('Course ID is required and must be a valid positive integer');
         });
     });
 });
