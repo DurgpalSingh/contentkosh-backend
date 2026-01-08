@@ -1,63 +1,30 @@
 import { Request, Response } from 'express';
-// Import courseService from CONTROLLER, because Service file doesn't export it
-import { courseService, examService, createCourse, getCourse, getCoursesByExam, updateCourse, deleteCourse } from '../../../src/controllers/course.controller';
 import * as CourseController from '../../../src/controllers/course.controller';
+import { CourseService } from '../../../src/services/course.service';
+import { ExamService } from '../../../src/services/exam.service';
 import { ApiResponseHandler } from '../../../src/utils/apiResponse';
 import { BadRequestError, NotFoundError } from '../../../src/errors/api.errors';
 import { ValidationUtils } from '../../../src/utils/validation';
-import logger from '../../../src/utils/logger';
 
-// Mock the Service Classes
-jest.mock('../../../src/services/course.service', () => {
-    return {
-        CourseService: jest.fn().mockImplementation(() => {
-            return {
-                createCourse: jest.fn(),
-                getCourse: jest.fn(),
-                getCoursesByExam: jest.fn(),
-                updateCourse: jest.fn(),
-                deleteCourse: jest.fn(),
-            };
-        })
-    };
-});
+// Do NOT mock Service modules directly. Use spyOn.
+// Do NOT mock ValidationUtils. Use real implementation where possible, or spy if needed.
+// Do NOT mock api.errors. Use real implementation.
 
-jest.mock('../../../src/services/exam.service', () => {
-    return {
-        ExamService: jest.fn().mockImplementation(() => {
-            return {
-                getExam: jest.fn()
-            };
-        })
-    };
-});
-
-jest.mock('../../../src/errors/api.errors', () => {
-    return {
-        NotFoundError: class NotFoundError extends Error {
-            statusCode = 404;
-            constructor(resource: string = 'Resource') {
-                super(`${resource} not found`);
-                this.name = 'NotFoundError';
-            }
-        },
-        BadRequestError: class BadRequestError extends Error {
-            statusCode = 400;
-            constructor(message: string) {
-                super(message);
-                this.name = 'BadRequestError';
-            }
-        }
-    };
-});
-
+// Mock dependencies of ApiResponseHandler and Logger only to avoid noise
 jest.mock('../../../src/utils/apiResponse');
 jest.mock('../../../src/utils/logger');
-jest.mock('../../../src/utils/validation');
 
 describe('Course Controller', () => {
-    let req: any;
+    let req: Partial<Request>;
     let res: Partial<Response>;
+
+    // Spies
+    let createCourseSpy: jest.SpyInstance;
+    let getCourseSpy: jest.SpyInstance;
+    let getCoursesByExamSpy: jest.SpyInstance;
+    let updateCourseSpy: jest.SpyInstance;
+    let deleteCourseSpy: jest.SpyInstance;
+    let getExamSpy: jest.SpyInstance;
 
     beforeEach(() => {
         req = {
@@ -69,52 +36,64 @@ describe('Course Controller', () => {
         };
         jest.clearAllMocks();
 
-        // Default ValidationUtils mock
-        (ValidationUtils.validateId as jest.Mock).mockImplementation((id) => Number(id));
+        // Spy on Service prototype methods
+        createCourseSpy = jest.spyOn(CourseService.prototype, 'createCourse');
+        getCourseSpy = jest.spyOn(CourseService.prototype, 'getCourse');
+        getCoursesByExamSpy = jest.spyOn(CourseService.prototype, 'getCoursesByExam');
+        updateCourseSpy = jest.spyOn(CourseService.prototype, 'updateCourse');
+        deleteCourseSpy = jest.spyOn(CourseService.prototype, 'deleteCourse');
+
+        // ExamService is used in createCourse and getCoursesByExam
+        getExamSpy = jest.spyOn(ExamService.prototype, 'getExam');
+
+        // Mock ValidationUtils.validateId to return the ID as number (simplification)
+        jest.spyOn(ValidationUtils, 'validateId').mockImplementation((id) => Number(id));
+    });
+
+    afterEach(() => {
+        jest.restoreAllMocks();
     });
 
     describe('createCourse', () => {
+        const validCourseData = { name: 'Test Course', examId: 1, description: 'Test description' };
+
         it('should create a course successfully', async () => {
-            const courseData = { name: 'Test Course', examId: 1, description: 'Test description' };
-            req.body = courseData;
+            req.body = validCourseData;
             req.params = { examId: '1' };
+            const createdCourse = { id: 1, ...validCourseData };
 
-            (examService.getExam as jest.Mock).mockResolvedValue({ id: 1, name: 'Test Exam', businessId: 1 });
-            (courseService.createCourse as jest.Mock).mockResolvedValue({ id: 1, ...courseData });
+            getExamSpy.mockResolvedValue({ id: 1, name: 'Test Exam' });
+            createCourseSpy.mockResolvedValue(createdCourse as any);
 
+            await CourseController.createCourse(req as Request, res as Response);
 
-
-            await createCourse(req as Request, res as Response);
-
-            expect(examService.getExam).toHaveBeenCalledWith(1);
-            expect(courseService.createCourse).toHaveBeenCalledWith(expect.objectContaining({
+            expect(getExamSpy).toHaveBeenCalledWith(1);
+            expect(createCourseSpy).toHaveBeenCalledWith(expect.objectContaining({
                 name: 'Test Course',
                 examId: 1
             }));
-            expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, expect.objectContaining({ id: 1 }), 'Course created successfully', 201);
+            expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, createdCourse, 'Course created successfully', 201);
         });
 
         it('should return 400 if service throws BadRequestError', async () => {
             req.body = { examId: 1 };
             req.params = { examId: '1' };
 
+            getExamSpy.mockResolvedValue({ id: 1 });
+            createCourseSpy.mockRejectedValue(new BadRequestError('Course name is required'));
 
-            (examService.getExam as jest.Mock).mockResolvedValue({ id: 1, businessId: 1 });
-            (courseService.createCourse as jest.Mock).mockRejectedValue(new BadRequestError('Course name is required'));
-
-            await createCourse(req as Request, res as Response);
+            await CourseController.createCourse(req as Request, res as Response);
 
             expect(ApiResponseHandler.badRequest).toHaveBeenCalledWith(res, 'Course name is required');
         });
 
         it('should return 404 if exam does not exist', async () => {
-            req.body = { name: 'Test Course', examId: 999 };
+            req.body = validCourseData;
             req.params = { examId: '999' };
 
-            // ExamService.getExam throws NotFoundError if not found
-            (examService.getExam as jest.Mock).mockRejectedValue(new NotFoundError('Exam'));
+            getExamSpy.mockRejectedValue(new NotFoundError('Exam'));
 
-            await createCourse(req as Request, res as Response);
+            await CourseController.createCourse(req as Request, res as Response);
 
             expect(ApiResponseHandler.notFound).toHaveBeenCalledWith(res, 'Exam not found');
         });
@@ -125,20 +104,19 @@ describe('Course Controller', () => {
             req.params = { courseId: '1', examId: '1' };
             const mockCourse = { id: 1, name: 'Test Course', examId: 1 };
 
-            (courseService.getCourse as jest.Mock).mockResolvedValue(mockCourse);
+            getCourseSpy.mockResolvedValue(mockCourse as any);
 
-            await getCourse(req as Request, res as Response);
+            await CourseController.getCourse(req as Request, res as Response);
 
-            expect(courseService.getCourse).toHaveBeenCalledWith(1, expect.anything());
+            expect(getCourseSpy).toHaveBeenCalledWith(1, expect.anything());
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockCourse, 'Course fetched successfully');
         });
 
         it('should return 404 if course not found', async () => {
             req.params = { courseId: '999', examId: '1' };
-            // Corrected: NotFoundError appends " not found", so we pass "Course"
-            (courseService.getCourse as jest.Mock).mockRejectedValue(new NotFoundError('Course'));
+            getCourseSpy.mockRejectedValue(new NotFoundError('Course'));
 
-            await getCourse(req as Request, res as Response);
+            await CourseController.getCourse(req as Request, res as Response);
 
             expect(ApiResponseHandler.notFound).toHaveBeenCalledWith(res, 'Course not found');
         });
@@ -147,9 +125,9 @@ describe('Course Controller', () => {
             req.params = { courseId: '1', examId: '2' };
             const mockCourse = { id: 1, name: 'Test Course', examId: 1 };
 
-            (courseService.getCourse as jest.Mock).mockResolvedValue(mockCourse);
+            getCourseSpy.mockResolvedValue(mockCourse as any);
 
-            await getCourse(req as Request, res as Response);
+            await CourseController.getCourse(req as Request, res as Response);
 
             expect(ApiResponseHandler.notFound).toHaveBeenCalledWith(res, 'Course not found in this exam');
         });
@@ -159,24 +137,34 @@ describe('Course Controller', () => {
         it('should get courses for an exam', async () => {
             req.params = { examId: '1' };
             req.query = {};
-            const mockCourses = [{ id: 1, name: 'Course 1' }, { id: 2, name: 'Course 2' }];
+            const mockCourses = [{ id: 1, name: 'Course 1' }];
 
+            getExamSpy.mockResolvedValue({ id: 1 });
+            getCoursesByExamSpy.mockResolvedValue(mockCourses as any);
 
-            (examService.getExam as jest.Mock).mockResolvedValue({ id: 1, businessId: 1 });
-            (courseService.getCoursesByExam as jest.Mock).mockResolvedValue(mockCourses);
+            await CourseController.getCoursesByExam(req as Request, res as Response);
 
-            await getCoursesByExam(req as Request, res as Response);
-
-            expect(courseService.getCoursesByExam).toHaveBeenCalledWith(1, expect.anything());
+            expect(getCoursesByExamSpy).toHaveBeenCalledWith(1, expect.anything());
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockCourses, 'Courses fetched successfully');
+        });
+
+        it('should handle active filter', async () => {
+            req.params = { examId: '1' };
+            req.query = { active: 'true' };
+
+            getExamSpy.mockResolvedValue({ id: 1 });
+            getCoursesByExamSpy.mockResolvedValue([]);
+
+            await CourseController.getCoursesByExam(req as Request, res as Response);
+
+            expect(getCoursesByExamSpy).toHaveBeenCalledWith(1, expect.objectContaining({ where: { status: 'ACTIVE' } }));
         });
 
         it('should return 404 if exam does not exist', async () => {
             req.params = { examId: '999' };
+            getExamSpy.mockRejectedValue(new NotFoundError('Exam'));
 
-            (examService.getExam as jest.Mock).mockRejectedValue(new NotFoundError('Exam'));
-
-            await getCoursesByExam(req as Request, res as Response);
+            await CourseController.getCoursesByExam(req as Request, res as Response);
 
             expect(ApiResponseHandler.notFound).toHaveBeenCalledWith(res, 'Exam not found');
         });
@@ -185,16 +173,47 @@ describe('Course Controller', () => {
     describe('updateCourse', () => {
         it('should update a course successfully', async () => {
             req.params = { courseId: '1', examId: '1' };
-            req.body = { name: 'Updated Course', description: 'Updated description' };
-            const updatedCourse = { id: 1, name: 'Updated Course', description: 'Updated description' };
+            req.body = { name: 'Updated' };
+            const updatedCourse = { id: 1, name: 'Updated', examId: 1 };
 
-            (courseService.getCourse as jest.Mock).mockResolvedValue({ id: 1, examId: 1 });
-            (courseService.updateCourse as jest.Mock).mockResolvedValue(updatedCourse);
+            // Mock getCourse for the scope check
+            getCourseSpy.mockResolvedValue({ id: 1, examId: 1 });
+            updateCourseSpy.mockResolvedValue(updatedCourse as any);
 
-            await updateCourse(req as Request, res as Response);
+            await CourseController.updateCourse(req as Request, res as Response);
 
-            expect(courseService.updateCourse).toHaveBeenCalledWith(1, req.body);
+            expect(updateCourseSpy).toHaveBeenCalledWith(1, expect.objectContaining({ name: 'Updated' }));
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, updatedCourse, 'Course updated successfully');
+        });
+
+        it('should return 404 if course not found in this exam', async () => {
+            req.params = { courseId: '1', examId: '2' }; // Mismatch
+            getCourseSpy.mockResolvedValue({ id: 1, examId: 1 }); // Belongs to Exam 1
+
+            await CourseController.updateCourse(req as Request, res as Response);
+
+            expect(ApiResponseHandler.notFound).toHaveBeenCalledWith(res, 'Course not found in this exam');
+            expect(updateCourseSpy).not.toHaveBeenCalled();
+        });
+
+        it('should return 404 if course does not exist (from getCourse)', async () => {
+            req.params = { courseId: '999', examId: '1' };
+            getCourseSpy.mockRejectedValue(new NotFoundError('Course'));
+
+            await CourseController.updateCourse(req as Request, res as Response);
+
+            expect(ApiResponseHandler.notFound).toHaveBeenCalledWith(res, 'Course not found');
+        });
+
+        it('should handle BadRequestError', async () => {
+            req.params = { courseId: '1', examId: '1' };
+            req.body = {}; // invalid? DTO validation might handle this, but checking service error
+            getCourseSpy.mockResolvedValue({ id: 1, examId: 1 });
+            updateCourseSpy.mockRejectedValue(new BadRequestError('Invalid data'));
+
+            await CourseController.updateCourse(req as Request, res as Response);
+
+            expect(ApiResponseHandler.badRequest).toHaveBeenCalledWith(res, 'Invalid data');
         });
     });
 
@@ -202,13 +221,32 @@ describe('Course Controller', () => {
         it('should delete a course successfully', async () => {
             req.params = { courseId: '1', examId: '1' };
 
-            (courseService.getCourse as jest.Mock).mockResolvedValue({ id: 1, examId: 1 });
-            (courseService.deleteCourse as jest.Mock).mockResolvedValue(undefined);
+            getCourseSpy.mockResolvedValue({ id: 1, examId: 1 });
+            deleteCourseSpy.mockResolvedValue(undefined);
 
-            await deleteCourse(req as Request, res as Response);
+            await CourseController.deleteCourse(req as Request, res as Response);
 
-            expect(courseService.deleteCourse).toHaveBeenCalledWith(1);
+            expect(deleteCourseSpy).toHaveBeenCalledWith(1);
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, null, 'Course deleted successfully');
+        });
+
+        it('should return 404 if course not found in this exam', async () => {
+            req.params = { courseId: '1', examId: '2' };
+            getCourseSpy.mockResolvedValue({ id: 1, examId: 1 });
+
+            await CourseController.deleteCourse(req as Request, res as Response);
+
+            expect(ApiResponseHandler.notFound).toHaveBeenCalledWith(res, 'Course not found in this exam');
+            expect(deleteCourseSpy).not.toHaveBeenCalled();
+        });
+
+        it('should return 404 if course does not exist', async () => {
+            req.params = { courseId: '999', examId: '1' };
+            getCourseSpy.mockRejectedValue(new NotFoundError('Course'));
+
+            await CourseController.deleteCourse(req as Request, res as Response);
+
+            expect(ApiResponseHandler.notFound).toHaveBeenCalledWith(res, 'Course not found');
         });
     });
 });

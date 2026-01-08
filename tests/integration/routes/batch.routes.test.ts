@@ -7,17 +7,26 @@ import * as UserRepo from '../../../src/repositories/user.repo';
 import { errorHandler } from '../../../src/middlewares/error.middleware';
 import logger from '../../../src/utils/logger';
 
+import * as ExamRepo from '../../../src/repositories/exam.repo';
+
 // Mock dependencies
 jest.mock('../../../src/repositories/batch.repo');
 jest.mock('../../../src/repositories/course.repo');
 jest.mock('../../../src/repositories/user.repo');
+jest.mock('../../../src/repositories/exam.repo');
 jest.mock('../../../src/middlewares/auth.middleware', () => ({
+    authenticate: (req: any, res: any, next: any) => next(),
     authorize: () => (req: any, res: any, next: any) => next(),
 }));
 jest.mock('../../../src/utils/logger');
 
 const app = express();
 app.use(express.json());
+// Middleware to simulate authenticated user
+app.use((req: any, res, next) => {
+    req.user = { id: 1, businessId: 1, role: 'ADMIN' };
+    next();
+});
 app.use('/api/batches', batchRoutes);
 app.use(errorHandler);
 
@@ -84,8 +93,14 @@ describe('Batch Routes', () => {
 
     describe('GET /api/batches/:id', () => {
         it('should return a batch by ID', async () => {
-            const mockBatch = { id: 1, codeName: 'BATCH001', displayName: 'Test Batch' };
+            const mockBatch = {
+                id: 1,
+                codeName: 'BATCH001',
+                displayName: 'Test Batch',
+                course: { examId: 1 }
+            };
             (BatchRepo.findBatchById as jest.Mock).mockResolvedValue(mockBatch);
+            (ExamRepo.findExamById as jest.Mock).mockResolvedValue({ id: 1, businessId: 1 });
 
             const res = await request(app).get('/api/batches/1');
 
@@ -113,15 +128,27 @@ describe('Batch Routes', () => {
             const mockBatch = {
                 id: 1,
                 codeName: 'BATCH001',
+                course: { examId: 1 },
                 batchUsers: [{ id: 1, user: { id: 1, name: 'User 1' } }]
             };
-            (BatchRepo.findBatchWithUsers as jest.Mock).mockResolvedValue(mockBatch);
+            (BatchRepo.findBatchWithUsers as jest.Mock).mockResolvedValue(mockBatch); // Assuming controller uses findBatchWithUsers which calls batchRepo.findBatchWithUsers. Wait, controller uses getBatchWithUsers -> batchRepo.findBatchWithUsers. Correct.
+            // But authorizeBatchAccess calls findBatchById. 
+            // So we also need to mock findBatchById if the middleware calls it?
+            // Yes, middleware calls findBatchById(id). 
+            (BatchRepo.findBatchById as jest.Mock).mockResolvedValue({ ...mockBatch, batchUsers: undefined }); // Middleware call
+            (ExamRepo.findExamById as jest.Mock).mockResolvedValue({ id: 1, businessId: 1 });
 
             const res = await request(app).get('/api/batches/1/with-users');
+
+            // Wait, middleware calls findBatchById which is mocked.
+            // Controller calls findBatchWithUsers which is mocked.
+            // If middleware call fails, we assume 404/500/403.
+            // We need to ensure findBatchById returns data.
 
             expect(res.status).toBe(200);
             expect(res.body.data.batchUsers).toHaveLength(1);
         });
+
 
         it('should return 404 if batch not found', async () => {
             (BatchRepo.findBatchWithUsers as jest.Mock).mockResolvedValue(null);
@@ -139,6 +166,8 @@ describe('Batch Routes', () => {
                 { id: 2, codeName: 'BATCH002' }
             ];
             (BatchRepo.findBatchesByCourseId as jest.Mock).mockResolvedValue(mockBatches);
+            (CourseRepo.findCourseById as jest.Mock).mockResolvedValue({ id: 1, examId: 1 });
+            (ExamRepo.findExamById as jest.Mock).mockResolvedValue({ id: 1, businessId: 1 });
 
             const res = await request(app).get('/api/batches/course/1');
 
@@ -155,8 +184,15 @@ describe('Batch Routes', () => {
 
     describe('PUT /api/batches/:id', () => {
         it('should update a batch', async () => {
-            const updatedBatch = { id: 1, codeName: 'BATCH001', displayName: 'Updated Batch' };
+            const batch = { id: 1, codeName: 'BATCH001', displayName: 'Old Batch', course: { examId: 1 } };
+            const updatedBatch = { id: 1, codeName: 'BATCH001', displayName: 'Updated Batch', course: { examId: 1 } };
+
+            (BatchRepo.findBatchById as jest.Mock).mockResolvedValue(batch); // Middleware & Service check
+            (ExamRepo.findExamById as jest.Mock).mockResolvedValue({ id: 1, businessId: 1 });
             (BatchRepo.updateBatch as jest.Mock).mockResolvedValue(updatedBatch);
+
+            // Service also checks uniqueness if codeName changes. Here codeName is not changing.
+            (BatchRepo.findBatchByCodeName as jest.Mock).mockResolvedValue(null);
 
             const res = await request(app)
                 .put('/api/batches/1')
@@ -167,6 +203,10 @@ describe('Batch Routes', () => {
         });
 
         it('should return 400 if codeName is empty', async () => {
+            (BatchRepo.findBatchById as jest.Mock).mockResolvedValue({ id: 1, courseId: 1, course: { examId: 1 } });
+            (CourseRepo.findCourseById as jest.Mock).mockResolvedValue({ id: 1, examId: 1 });
+            (ExamRepo.findExamById as jest.Mock).mockResolvedValue({ id: 1, businessId: 1 });
+
             const res = await request(app)
                 .put('/api/batches/1')
                 .send({ codeName: '   ' });
@@ -177,7 +217,14 @@ describe('Batch Routes', () => {
 
     describe('DELETE /api/batches/:id', () => {
         it('should delete a batch', async () => {
+            const batch = { id: 1, codeName: 'BATCH001', course: { examId: 1 } };
+            (BatchRepo.findBatchById as jest.Mock).mockResolvedValue(batch); // Middleware
+            (ExamRepo.findExamById as jest.Mock).mockResolvedValue({ id: 1, businessId: 1 });
             (BatchRepo.deleteBatch as jest.Mock).mockResolvedValue({ id: 1 });
+
+            // Service deleteBatch calls repo.deleteBatch. It doesn't check existence itself efficiently?
+            // Actually service calls deleteBatch. Repo throws if not found?
+            // Middleware ensures existence.
 
             const res = await request(app).delete('/api/batches/1');
 
@@ -274,7 +321,11 @@ describe('Batch Routes', () => {
 
     describe('GET /api/batches/:batchId/users', () => {
         it('should return users for a batch', async () => {
+            const batch = { id: 1, course: { examId: 1 } };
             const mockBatchUsers = [{ id: 1, user: { id: 1, name: 'User 1' } }];
+
+            (BatchRepo.findBatchById as jest.Mock).mockResolvedValue(batch); // Middleware
+            (ExamRepo.findExamById as jest.Mock).mockResolvedValue({ id: 1, businessId: 1 });
             (BatchRepo.findUsersByBatchId as jest.Mock).mockResolvedValue(mockBatchUsers);
 
             const res = await request(app).get('/api/batches/1/users');
@@ -292,6 +343,10 @@ describe('Batch Routes', () => {
 
     describe('PUT /api/batches/:batchId/users/:userId', () => {
         it('should update batch user status', async () => {
+            const batch = { id: 1, course: { examId: 1 } };
+            (BatchRepo.findBatchById as jest.Mock).mockResolvedValue(batch); // Middleware
+            (ExamRepo.findExamById as jest.Mock).mockResolvedValue({ id: 1, businessId: 1 });
+
             (BatchRepo.findBatchUser as jest.Mock).mockResolvedValue({ id: 1, userId: 1, batchId: 1 });
             (BatchRepo.updateBatchUser as jest.Mock).mockResolvedValue({ id: 1, userId: 1, batchId: 1, isActive: false });
 
@@ -304,6 +359,10 @@ describe('Batch Routes', () => {
         });
 
         it('should return 404 if user is not in batch', async () => {
+            const batch = { id: 1, course: { examId: 1 } };
+            (BatchRepo.findBatchById as jest.Mock).mockResolvedValue(batch); // Middleware
+            (ExamRepo.findExamById as jest.Mock).mockResolvedValue({ id: 1, businessId: 1 });
+
             (BatchRepo.findBatchUser as jest.Mock).mockResolvedValue(null);
 
             const res = await request(app)
@@ -314,3 +373,4 @@ describe('Batch Routes', () => {
         });
     });
 });
+

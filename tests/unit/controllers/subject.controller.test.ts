@@ -1,34 +1,26 @@
 import { Request, Response } from 'express';
-// Use explicit named imports for methods
-import { createSubject, getSubject, getSubjectsByCourse, updateSubject, deleteSubject } from '../../../src/controllers/subject.controller';
-import { subjectService } from '../../../src/services/subject.service';
+import * as SubjectController from '../../../src/controllers/subject.controller';
+import { SubjectService } from '../../../src/services/subject.service';
 import { ApiResponseHandler } from '../../../src/utils/apiResponse';
 import { BadRequestError, NotFoundError } from '../../../src/errors/api.errors';
 import { ValidationUtils } from '../../../src/utils/validation';
-import logger from '../../../src/utils/logger';
 
-
-// Manual mock factory with inline definitions
-jest.mock('../../../src/services/subject.service', () => {
-    return {
-        subjectService: {
-            createSubject: jest.fn(),
-            getSubject: jest.fn(),
-            getSubjectsByCourse: jest.fn(),
-            updateSubject: jest.fn(),
-            deleteSubject: jest.fn(),
-        },
-        SubjectService: jest.fn()
-    };
-});
+// Use jest.spyOn for SubjectService class methods
+// Do not mock api.errors or ValidationUtils (unless necessary)
 
 jest.mock('../../../src/utils/apiResponse');
 jest.mock('../../../src/utils/logger');
-jest.mock('../../../src/utils/validation');
 
 describe('Subject Controller', () => {
     let req: Partial<Request>;
     let res: Partial<Response>;
+
+    // Spies
+    let createSubjectSpy: jest.SpyInstance;
+    let getSubjectSpy: jest.SpyInstance;
+    let getSubjectsByCourseSpy: jest.SpyInstance;
+    let updateSubjectSpy: jest.SpyInstance;
+    let deleteSubjectSpy: jest.SpyInstance;
 
     beforeEach(() => {
         req = {
@@ -40,46 +32,58 @@ describe('Subject Controller', () => {
         };
         jest.clearAllMocks();
 
-        // Default ValidationUtils mock
-        (ValidationUtils.validateId as jest.Mock).mockImplementation((id) => Number(id));
+        // Spy on SubjectService prototype
+        createSubjectSpy = jest.spyOn(SubjectService.prototype, 'createSubject');
+        getSubjectSpy = jest.spyOn(SubjectService.prototype, 'getSubject');
+        getSubjectsByCourseSpy = jest.spyOn(SubjectService.prototype, 'getSubjectsByCourse');
+        updateSubjectSpy = jest.spyOn(SubjectService.prototype, 'updateSubject');
+        deleteSubjectSpy = jest.spyOn(SubjectService.prototype, 'deleteSubject');
+
+        // Mock ValidationUtils.validateId to return ID as number
+        jest.spyOn(ValidationUtils, 'validateId').mockImplementation((id) => Number(id));
+    });
+
+    afterEach(() => {
+        jest.restoreAllMocks();
     });
 
     describe('createSubject', () => {
+        const validSubjectData = { name: 'Test Subject', courseId: 1, description: 'Test description' };
+
         it('should create a subject successfully', async () => {
-            const subjectData = { name: 'Test Subject', courseId: 1, description: 'Test description' };
-            req.body = subjectData;
-            req.params = { courseId: '1' };
+            req.body = validSubjectData;
+            req.params = { courseId: '1', examId: '1' };
+            const createdSubject = { id: 1, ...validSubjectData };
 
-            (subjectService.createSubject as jest.Mock).mockResolvedValue({ id: 1, ...subjectData });
+            createSubjectSpy.mockResolvedValue(createdSubject as any);
 
-            await createSubject(req as Request, res as Response);
+            await SubjectController.createSubject(req as Request, res as Response);
 
-            expect(subjectService.createSubject).toHaveBeenCalledWith(expect.objectContaining({
+            expect(createSubjectSpy).toHaveBeenCalledWith(expect.objectContaining({
                 name: 'Test Subject',
                 courseId: 1
             }));
-            expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, expect.objectContaining({ id: 1 }), 'Subject created successfully', 201);
+            expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, createdSubject, 'Subject created successfully', 201);
         });
 
         it('should return 400 if service throws BadRequestError', async () => {
-            req.body = { courseId: 1 };
+            req.body = validSubjectData;
             req.params = { courseId: '1' };
 
-            (subjectService.createSubject as jest.Mock).mockRejectedValue(new BadRequestError('Subject name is required'));
+            createSubjectSpy.mockRejectedValue(new BadRequestError('Subject name is required'));
 
-            await createSubject(req as Request, res as Response);
+            await SubjectController.createSubject(req as Request, res as Response);
 
             expect(ApiResponseHandler.badRequest).toHaveBeenCalledWith(res, 'Subject name is required');
         });
 
-        it('should return 404 if service throws NotFoundError', async () => {
-            req.body = { name: 'Test Subject', courseId: 999 };
+        it('should return 404 if service throws NotFoundError (Course not found)', async () => {
+            req.body = validSubjectData;
             req.params = { courseId: '999' };
 
-            // Fix: pass "Course" to produce "Course not found"
-            (subjectService.createSubject as jest.Mock).mockRejectedValue(new NotFoundError('Course'));
+            createSubjectSpy.mockRejectedValue(new NotFoundError('Course'));
 
-            await createSubject(req as Request, res as Response);
+            await SubjectController.createSubject(req as Request, res as Response);
 
             expect(ApiResponseHandler.notFound).toHaveBeenCalledWith(res, 'Course not found');
         });
@@ -90,20 +94,19 @@ describe('Subject Controller', () => {
             req.params = { subjectId: '1', courseId: '1' };
             const mockSubject = { id: 1, name: 'Test Subject', courseId: 1 };
 
-            (subjectService.getSubject as jest.Mock).mockResolvedValue(mockSubject);
+            getSubjectSpy.mockResolvedValue(mockSubject as any);
 
-            await getSubject(req as Request, res as Response);
+            await SubjectController.getSubject(req as Request, res as Response);
 
-            expect(subjectService.getSubject).toHaveBeenCalledWith(1);
+            expect(getSubjectSpy).toHaveBeenCalledWith(1);
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockSubject, 'Subject fetched successfully');
         });
 
         it('should return 404 if subject not found', async () => {
             req.params = { subjectId: '999', courseId: '1' };
-            // Fix: pass "Subject" to produce "Subject not found"
-            (subjectService.getSubject as jest.Mock).mockRejectedValue(new NotFoundError('Subject'));
+            getSubjectSpy.mockRejectedValue(new NotFoundError('Subject'));
 
-            await getSubject(req as Request, res as Response);
+            await SubjectController.getSubject(req as Request, res as Response);
 
             expect(ApiResponseHandler.notFound).toHaveBeenCalledWith(res, 'Subject not found');
         });
@@ -113,13 +116,26 @@ describe('Subject Controller', () => {
         it('should get subjects for a course', async () => {
             req.params = { courseId: '1' };
             req.query = {};
-            const mockSubjects = [{ id: 1, name: 'Subject 1' }, { id: 2, name: 'Subject 2' }];
+            const mockSubjects = [{ id: 1, name: 'Subject 1' }];
 
-            (subjectService.getSubjectsByCourse as jest.Mock).mockResolvedValue(mockSubjects);
+            getSubjectsByCourseSpy.mockResolvedValue(mockSubjects as any);
 
-            await getSubjectsByCourse(req as Request, res as Response);
+            await SubjectController.getSubjectsByCourse(req as Request, res as Response);
 
-            expect(subjectService.getSubjectsByCourse).toHaveBeenCalledWith(1, { active: false });
+            expect(getSubjectsByCourseSpy).toHaveBeenCalledWith(1, { active: false });
+            expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockSubjects, 'Subjects fetched successfully');
+        });
+
+        it('should handle active filter', async () => {
+            req.params = { courseId: '1' };
+            req.query = { active: 'true' };
+            const mockSubjects = [{ id: 1, name: 'Active Subject' }];
+
+            getSubjectsByCourseSpy.mockResolvedValue(mockSubjects as any);
+
+            await SubjectController.getSubjectsByCourse(req as Request, res as Response);
+
+            expect(getSubjectsByCourseSpy).toHaveBeenCalledWith(1, { active: true });
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockSubjects, 'Subjects fetched successfully');
         });
     });
@@ -127,28 +143,56 @@ describe('Subject Controller', () => {
     describe('updateSubject', () => {
         it('should update a subject successfully', async () => {
             req.params = { subjectId: '1', courseId: '1' };
-            req.body = { name: 'Updated Subject', description: 'Updated description' };
-            const updatedSubject = { id: 1, name: 'Updated Subject', description: 'Updated description' };
+            req.body = { name: 'Updated Subject' };
+            const updatedSubject = { id: 1, name: 'Updated Subject' };
 
-            (subjectService.updateSubject as jest.Mock).mockResolvedValue(updatedSubject);
+            updateSubjectSpy.mockResolvedValue(updatedSubject as any);
 
-            await updateSubject(req as Request, res as Response);
+            await SubjectController.updateSubject(req as Request, res as Response);
 
-            expect(subjectService.updateSubject).toHaveBeenCalledWith(1, req.body);
+            expect(updateSubjectSpy).toHaveBeenCalledWith(1, expect.objectContaining({ name: 'Updated Subject' }));
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, updatedSubject, 'Subject updated successfully');
+        });
+
+        it('should return 404 if subject not found', async () => {
+            req.params = { subjectId: '999' };
+            req.body = { name: 'Updated' };
+            updateSubjectSpy.mockRejectedValue(new NotFoundError('Subject'));
+
+            await SubjectController.updateSubject(req as Request, res as Response);
+
+            expect(ApiResponseHandler.notFound).toHaveBeenCalledWith(res, 'Subject not found');
+        });
+
+        it('should return 400 if service throws BadRequestError', async () => {
+            req.params = { subjectId: '1' };
+            req.body = { name: 'Duplicate' };
+            updateSubjectSpy.mockRejectedValue(new BadRequestError('Duplicate name'));
+
+            await SubjectController.updateSubject(req as Request, res as Response);
+
+            expect(ApiResponseHandler.badRequest).toHaveBeenCalledWith(res, 'Duplicate name');
         });
     });
 
     describe('deleteSubject', () => {
         it('should delete a subject successfully', async () => {
             req.params = { subjectId: '1', courseId: '1' };
+            deleteSubjectSpy.mockResolvedValue(undefined);
 
-            (subjectService.deleteSubject as jest.Mock).mockResolvedValue(undefined);
+            await SubjectController.deleteSubject(req as Request, res as Response);
 
-            await deleteSubject(req as Request, res as Response);
-
-            expect(subjectService.deleteSubject).toHaveBeenCalledWith(1);
+            expect(deleteSubjectSpy).toHaveBeenCalledWith(1);
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, null, 'Subject deleted successfully');
+        });
+
+        it('should return 404 if subject not found', async () => {
+            req.params = { subjectId: '999' };
+            deleteSubjectSpy.mockRejectedValue(new NotFoundError('Subject'));
+
+            await SubjectController.deleteSubject(req as Request, res as Response);
+
+            expect(ApiResponseHandler.notFound).toHaveBeenCalledWith(res, 'Subject not found');
         });
     });
 });

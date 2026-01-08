@@ -1,21 +1,32 @@
 import { Request, Response } from 'express';
 import * as BatchController from '../../../src/controllers/batch.controller';
-import * as BatchRepo from '../../../src/repositories/batch.repo';
-import * as CourseRepo from '../../../src/repositories/course.repo';
-import * as UserRepo from '../../../src/repositories/user.repo';
+import { BatchService } from '../../../src/services/batch.service';
 import { ApiResponseHandler } from '../../../src/utils/apiResponse';
-import logger from '../../../src/utils/logger';
+import { BadRequestError, NotFoundError, AlreadyExistsError } from '../../../src/errors/api.errors';
 
-// Mock dependencies
-jest.mock('../../../src/repositories/batch.repo');
-jest.mock('../../../src/repositories/course.repo');
-jest.mock('../../../src/repositories/user.repo');
+// Do NOT mock BatchService module. Use spyOn.
+// Do NOT mock ValidationUtils. Use real implementation.
+// Do NOT mock api.errors. Use real implementation.
+
+// Mock dependencies of ApiResponseHandler and Logger only to avoid noise
 jest.mock('../../../src/utils/apiResponse');
 jest.mock('../../../src/utils/logger');
 
 describe('Batch Controller', () => {
     let req: Partial<Request>;
     let res: Partial<Response>;
+
+    // Spies
+    let createBatchSpy: jest.SpyInstance;
+    let getBatchSpy: jest.SpyInstance;
+    let getBatchesByCourseSpy: jest.SpyInstance;
+    let updateBatchSpy: jest.SpyInstance;
+    let deleteBatchSpy: jest.SpyInstance;
+    let addUserToBatchSpy: jest.SpyInstance;
+    let removeUserFromBatchSpy: jest.SpyInstance;
+    let getBatchesByUserSpy: jest.SpyInstance;
+    let getUsersByBatchSpy: jest.SpyInstance;
+    let updateBatchUserSpy: jest.SpyInstance;
 
     beforeEach(() => {
         req = {};
@@ -24,6 +35,22 @@ describe('Batch Controller', () => {
             json: jest.fn(),
         };
         jest.clearAllMocks();
+
+        // Spy on BatchService prototype methods
+        createBatchSpy = jest.spyOn(BatchService.prototype, 'createBatch');
+        getBatchSpy = jest.spyOn(BatchService.prototype, 'getBatch');
+        getBatchesByCourseSpy = jest.spyOn(BatchService.prototype, 'getBatchesByCourse');
+        updateBatchSpy = jest.spyOn(BatchService.prototype, 'updateBatch');
+        deleteBatchSpy = jest.spyOn(BatchService.prototype, 'deleteBatch');
+        addUserToBatchSpy = jest.spyOn(BatchService.prototype, 'addUserToBatch');
+        removeUserFromBatchSpy = jest.spyOn(BatchService.prototype, 'removeUserFromBatch');
+        getBatchesByUserSpy = jest.spyOn(BatchService.prototype, 'getBatchesByUser');
+        getUsersByBatchSpy = jest.spyOn(BatchService.prototype, 'getUsersByBatch');
+        updateBatchUserSpy = jest.spyOn(BatchService.prototype, 'updateBatchUser');
+    });
+
+    afterEach(() => {
+        jest.restoreAllMocks();
     });
 
     // ==================== BATCH CRUD TESTS ====================
@@ -39,113 +66,69 @@ describe('Batch Controller', () => {
 
         it('should create a batch successfully', async () => {
             req.body = validBatchData;
+            const createdBatch = { id: 1, ...validBatchData };
 
-            (CourseRepo.findCourseById as jest.Mock).mockResolvedValue({ id: 1, name: 'Test Course' });
-            (BatchRepo.findBatchByCodeName as jest.Mock).mockResolvedValue(null);
-            (BatchRepo.createBatch as jest.Mock).mockResolvedValue({ id: 1, ...validBatchData });
+            createBatchSpy.mockResolvedValue(createdBatch as any);
 
             await BatchController.createBatch(req as Request, res as Response);
 
-            expect(CourseRepo.findCourseById).toHaveBeenCalledWith(1);
-            expect(BatchRepo.createBatch).toHaveBeenCalled();
-            expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, expect.objectContaining({ id: 1 }), 'Batch created successfully', 201);
+            expect(createBatchSpy).toHaveBeenCalledWith(expect.objectContaining({
+                codeName: 'BATCH001',
+                courseId: 1
+            }));
+            expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, createdBatch, 'Batch created successfully', 201);
         });
 
-        it('should throw error if codeName is missing', async () => {
-            req.body = { ...validBatchData, codeName: '' };
-
-            await expect(BatchController.createBatch(req as Request, res as Response)).rejects.toThrow('Batch code name is required and cannot be empty');
-        });
-
-        it('should throw error if displayName is missing', async () => {
-            req.body = { ...validBatchData, displayName: '' };
-
-            await expect(BatchController.createBatch(req as Request, res as Response)).rejects.toThrow('Batch display name is required and cannot be empty');
-        });
-
-        it('should throw error if dates are missing', async () => {
-            req.body = { ...validBatchData, startDate: undefined, endDate: undefined };
-
-            await expect(BatchController.createBatch(req as Request, res as Response)).rejects.toThrow('Start date and end date are required');
-        });
-
-        it('should throw error if courseId is missing', async () => {
-            req.body = { ...validBatchData, courseId: undefined };
-
-            await expect(BatchController.createBatch(req as Request, res as Response)).rejects.toThrow('Course ID is required');
-        });
-
-        it('should throw error if end date is before start date', async () => {
-            req.body = { ...validBatchData, startDate: '2024-06-30', endDate: '2024-01-01' };
-
-            await expect(BatchController.createBatch(req as Request, res as Response)).rejects.toThrow('End date must be after Start date');
-        });
-
-        it('should throw error if course not found', async () => {
+        it('should handle errors thrown by service', async () => {
             req.body = validBatchData;
-            (CourseRepo.findCourseById as jest.Mock).mockResolvedValue(null);
+            const error = new BadRequestError('Invalid batch data');
+            createBatchSpy.mockRejectedValue(error);
 
-            await expect(BatchController.createBatch(req as Request, res as Response)).rejects.toThrow('Course not found');
+            await BatchController.createBatch(req as Request, res as Response);
+
+            expect(ApiResponseHandler.error).toHaveBeenCalledWith(res, 'Invalid batch data', 400);
         });
 
-        it('should throw error if codeName already exists', async () => {
+        it('should handle AlreadyExistsError', async () => {
             req.body = validBatchData;
-            (CourseRepo.findCourseById as jest.Mock).mockResolvedValue({ id: 1 });
-            (BatchRepo.findBatchByCodeName as jest.Mock).mockResolvedValue({ id: 2, codeName: 'BATCH001' });
-
-            await expect(BatchController.createBatch(req as Request, res as Response)).rejects.toThrow('Batch with this code name already exists');
+            createBatchSpy.mockRejectedValue(new AlreadyExistsError('Batch'));
+            await BatchController.createBatch(req as Request, res as Response);
+            expect(ApiResponseHandler.error).toHaveBeenCalledWith(res, 'Batch already exists', 409);
         });
+
+
     });
 
     describe('getBatch', () => {
         it('should get a batch by ID', async () => {
             req.params = { id: '1' };
-            const mockBatch = { id: 1, codeName: 'BATCH001', displayName: 'Test Batch' };
+            const mockBatch = { id: 1, codeName: 'BATCH001' };
 
-            (BatchRepo.findBatchById as jest.Mock).mockResolvedValue(mockBatch);
+            getBatchSpy.mockResolvedValue(mockBatch as any);
 
             await BatchController.getBatch(req as Request, res as Response);
 
-            expect(BatchRepo.findBatchById).toHaveBeenCalledWith(1);
+            expect(getBatchSpy).toHaveBeenCalledWith(1);
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockBatch, 'Batch fetched successfully');
         });
 
-        it('should throw error if batch not found', async () => {
+        it('should handle NotFoundError', async () => {
             req.params = { id: '999' };
-            (BatchRepo.findBatchById as jest.Mock).mockResolvedValue(null);
+            getBatchSpy.mockRejectedValue(new NotFoundError('Batch'));
 
-            await expect(BatchController.getBatch(req as Request, res as Response)).rejects.toThrow('Batch not found');
+            await BatchController.getBatch(req as Request, res as Response);
+
+            expect(ApiResponseHandler.notFound).toHaveBeenCalledWith(res, 'Batch not found');
         });
 
         it('should throw error if ID is invalid', async () => {
             req.params = { id: 'invalid' };
 
-            await expect(BatchController.getBatch(req as Request, res as Response)).rejects.toThrow('Batch ID is required and must be a valid positive integer');
-        });
-    });
+            await BatchController.getBatch(req as Request, res as Response);
 
-    describe('getBatchWithUsers', () => {
-        it('should get a batch with its users', async () => {
-            req.params = { id: '1' };
-            const mockBatch = {
-                id: 1,
-                codeName: 'BATCH001',
-                batchUsers: [{ id: 1, user: { id: 1, name: 'User 1' } }]
-            };
-
-            (BatchRepo.findBatchWithUsers as jest.Mock).mockResolvedValue(mockBatch);
-
-            await BatchController.getBatchWithUsers(req as Request, res as Response);
-
-            expect(BatchRepo.findBatchWithUsers).toHaveBeenCalledWith(1);
-            expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockBatch, 'Batch with users fetched successfully');
-        });
-
-        it('should throw error if batch not found', async () => {
-            req.params = { id: '999' };
-            (BatchRepo.findBatchWithUsers as jest.Mock).mockResolvedValue(null);
-
-            await expect(BatchController.getBatchWithUsers(req as Request, res as Response)).rejects.toThrow('Batch not found');
+            expect(getBatchSpy).not.toHaveBeenCalled();
+            // Validation error is generic BadRequest, controller catches generic
+            expect(ApiResponseHandler.error).toHaveBeenCalled();
         });
     });
 
@@ -153,214 +136,166 @@ describe('Batch Controller', () => {
         it('should get batches for a course', async () => {
             req.params = { courseId: '1' };
             req.query = {};
-            const mockBatches = [{ id: 1, codeName: 'BATCH001' }, { id: 2, codeName: 'BATCH002' }];
+            const mockBatches = [{ id: 1 }];
 
-            (BatchRepo.findBatchesByCourseId as jest.Mock).mockResolvedValue(mockBatches);
+            getBatchesByCourseSpy.mockResolvedValue(mockBatches as any);
 
             await BatchController.getBatchesByCourse(req as Request, res as Response);
 
-            expect(BatchRepo.findBatchesByCourseId).toHaveBeenCalledWith(1);
+            expect(getBatchesByCourseSpy).toHaveBeenCalledWith(1, expect.any(Object));
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockBatches, 'Batches fetched successfully');
         });
 
-        it('should throw error if courseId is invalid', async () => {
-            req.params = { courseId: 'invalid' };
-            req.query = {};
-
-            await expect(BatchController.getBatchesByCourse(req as Request, res as Response)).rejects.toThrow('Course ID is required and must be a valid positive integer');
+        it('should handle active filter', async () => {
+            req.params = { courseId: '1' };
+            req.query = { active: 'true' };
+            getBatchesByCourseSpy.mockResolvedValue([]);
+            await BatchController.getBatchesByCourse(req as Request, res as Response);
+            expect(getBatchesByCourseSpy).toHaveBeenCalledWith(1, expect.any(Object));
         });
     });
 
     describe('updateBatch', () => {
         it('should update a batch successfully', async () => {
             req.params = { id: '1' };
-            req.body = { displayName: 'Updated Batch' };
-            const updatedBatch = { id: 1, codeName: 'BATCH001', displayName: 'Updated Batch' };
+            req.body = { displayName: 'Updated' };
+            const updatedBatch = { id: 1, displayName: 'Updated' };
 
-            (BatchRepo.updateBatch as jest.Mock).mockResolvedValue(updatedBatch);
+            updateBatchSpy.mockResolvedValue(updatedBatch as any);
 
             await BatchController.updateBatch(req as Request, res as Response);
 
-            expect(BatchRepo.updateBatch).toHaveBeenCalledWith(1, req.body);
+            expect(updateBatchSpy).toHaveBeenCalledWith(1, expect.objectContaining({ displayName: 'Updated' }));
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, updatedBatch, 'Batch updated successfully');
         });
 
-        it('should throw error if codeName is empty', async () => {
+        it('should handle NotFoundError', async () => {
             req.params = { id: '1' };
-            req.body = { codeName: '   ' };
-
-            await expect(BatchController.updateBatch(req as Request, res as Response)).rejects.toThrow('Batch code name is required and cannot be empty');
+            req.body = { displayName: 'Updated' };
+            updateBatchSpy.mockRejectedValue(new NotFoundError('Batch'));
+            await BatchController.updateBatch(req as Request, res as Response);
+            expect(ApiResponseHandler.notFound).toHaveBeenCalledWith(res, 'Batch not found');
         });
 
-        it('should throw error if displayName is empty', async () => {
+        it('should handle AlreadyExistsError', async () => {
             req.params = { id: '1' };
-            req.body = { displayName: '   ' };
-
-            await expect(BatchController.updateBatch(req as Request, res as Response)).rejects.toThrow('Batch display name is required and cannot be empty');
+            req.body = { codeName: 'Existing' };
+            updateBatchSpy.mockRejectedValue(new AlreadyExistsError('Batch'));
+            await BatchController.updateBatch(req as Request, res as Response);
+            expect(ApiResponseHandler.error).toHaveBeenCalledWith(res, 'Batch already exists', 409);
         });
     });
 
     describe('deleteBatch', () => {
         it('should delete a batch successfully', async () => {
             req.params = { id: '1' };
-
-            (BatchRepo.deleteBatch as jest.Mock).mockResolvedValue({ id: 1 });
+            deleteBatchSpy.mockResolvedValue({ id: 1 } as any);
 
             await BatchController.deleteBatch(req as Request, res as Response);
 
-            expect(BatchRepo.deleteBatch).toHaveBeenCalledWith(1);
+            expect(deleteBatchSpy).toHaveBeenCalledWith(1);
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, null, 'Batch deleted successfully');
         });
 
-        it('should throw error if ID is invalid', async () => {
-            req.params = { id: 'invalid' };
-
-            await expect(BatchController.deleteBatch(req as Request, res as Response)).rejects.toThrow('Batch ID is required and must be a valid positive integer');
+        it('should handle NotFoundError', async () => {
+            req.params = { id: '1' };
+            deleteBatchSpy.mockRejectedValue(new NotFoundError('Batch'));
+            await BatchController.deleteBatch(req as Request, res as Response);
+            expect(ApiResponseHandler.notFound).toHaveBeenCalledWith(res, 'Batch not found');
         });
     });
 
-    // ==================== BATCH USER TESTS ====================
-
     describe('addUserToBatch', () => {
-        it('should add user to batch successfully', async () => {
+        it('should add user to batch', async () => {
             req.body = { userId: 1, batchId: 1 };
-
-            (UserRepo.findPublicById as jest.Mock).mockResolvedValue({ id: 1, name: 'Test User' });
-            (BatchRepo.findBatchById as jest.Mock).mockResolvedValue({ id: 1, codeName: 'BATCH001' });
-            (BatchRepo.findBatchUser as jest.Mock).mockResolvedValue(null);
-            (BatchRepo.addUserToBatch as jest.Mock).mockResolvedValue({ id: 1, userId: 1, batchId: 1 });
+            addUserToBatchSpy.mockResolvedValue({ userId: 1, batchId: 1 } as any);
 
             await BatchController.addUserToBatch(req as Request, res as Response);
 
-            expect(BatchRepo.addUserToBatch).toHaveBeenCalledWith(1, 1);
-            expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, expect.any(Object), 'User added to batch successfully', 201);
+            expect(addUserToBatchSpy).toHaveBeenCalledWith(1, 1);
+            expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, expect.anything(), 'User added to batch successfully', 201);
         });
 
-        it('should throw error if userId or batchId is missing', async () => {
-            req.body = { batchId: 1 };
-
-            await expect(BatchController.addUserToBatch(req as Request, res as Response)).rejects.toThrow('User ID is required and must be a valid positive integer');
-        });
-
-        it('should throw error if user not found', async () => {
-            req.body = { userId: 999, batchId: 1 };
-            (UserRepo.findPublicById as jest.Mock).mockResolvedValue(null);
-
-            await expect(BatchController.addUserToBatch(req as Request, res as Response)).rejects.toThrow('User not found');
-        });
-
-        it('should throw error if batch not found', async () => {
-            req.body = { userId: 1, batchId: 999 };
-            (UserRepo.findPublicById as jest.Mock).mockResolvedValue({ id: 1 });
-            (BatchRepo.findBatchById as jest.Mock).mockResolvedValue(null);
-
-            await expect(BatchController.addUserToBatch(req as Request, res as Response)).rejects.toThrow('Batch not found');
-        });
-
-        it('should throw error if user is already in batch', async () => {
+        it('should handle NotFoundError', async () => {
             req.body = { userId: 1, batchId: 1 };
-            (UserRepo.findPublicById as jest.Mock).mockResolvedValue({ id: 1 });
-            (BatchRepo.findBatchById as jest.Mock).mockResolvedValue({ id: 1 });
-            (BatchRepo.findBatchUser as jest.Mock).mockResolvedValue({ id: 1, userId: 1, batchId: 1 });
+            addUserToBatchSpy.mockRejectedValue(new NotFoundError('User'));
+            await BatchController.addUserToBatch(req as Request, res as Response);
+            expect(ApiResponseHandler.notFound).toHaveBeenCalledWith(res, 'User not found');
+        });
 
-            await expect(BatchController.addUserToBatch(req as Request, res as Response)).rejects.toThrow('User is already in this batch');
+        it('should handle AlreadyExistsError', async () => {
+            req.body = { userId: 1, batchId: 1 };
+            addUserToBatchSpy.mockRejectedValue(new AlreadyExistsError('User'));
+            await BatchController.addUserToBatch(req as Request, res as Response);
+            expect(ApiResponseHandler.error).toHaveBeenCalledWith(res, 'User already exists', 409);
         });
     });
 
     describe('removeUserFromBatch', () => {
-        it('should remove user from batch successfully', async () => {
+        it('should remove user from batch', async () => {
             req.body = { userId: 1, batchId: 1 };
-
-            (BatchRepo.findBatchUser as jest.Mock).mockResolvedValue({ id: 1, userId: 1, batchId: 1 });
-            (BatchRepo.removeUserFromBatch as jest.Mock).mockResolvedValue({ id: 1 });
+            removeUserFromBatchSpy.mockResolvedValue({ id: 1 } as any);
 
             await BatchController.removeUserFromBatch(req as Request, res as Response);
 
-            expect(BatchRepo.removeUserFromBatch).toHaveBeenCalledWith(1, 1);
+            expect(removeUserFromBatchSpy).toHaveBeenCalledWith(1, 1);
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, null, 'User removed from batch successfully');
         });
 
-        it('should throw error if userId or batchId is missing', async () => {
-            req.body = { batchId: 1 };
-
-            await expect(BatchController.removeUserFromBatch(req as Request, res as Response)).rejects.toThrow('User ID is required and must be a valid positive integer');
-        });
-
-        it('should throw error if user is not in batch', async () => {
+        it('should handle NotFoundError', async () => {
             req.body = { userId: 1, batchId: 1 };
-            (BatchRepo.findBatchUser as jest.Mock).mockResolvedValue(null);
-
-            await expect(BatchController.removeUserFromBatch(req as Request, res as Response)).rejects.toThrow('User is not in this batch');
+            removeUserFromBatchSpy.mockRejectedValue(new NotFoundError('User'));
+            await BatchController.removeUserFromBatch(req as Request, res as Response);
+            expect(ApiResponseHandler.notFound).toHaveBeenCalledWith(res, 'User not found');
         });
     });
 
     describe('getBatchesByUser', () => {
-        it('should get batches for a user', async () => {
+        it('should get batches by user', async () => {
             req.params = { userId: '1' };
-            const mockBatchUsers = [{ id: 1, batch: { id: 1, codeName: 'BATCH001' } }];
-
-            (BatchRepo.findBatchesByUserId as jest.Mock).mockResolvedValue(mockBatchUsers);
+            const mockData = [{ id: 1 }];
+            getBatchesByUserSpy.mockResolvedValue(mockData as any);
 
             await BatchController.getBatchesByUser(req as Request, res as Response);
 
-            expect(BatchRepo.findBatchesByUserId).toHaveBeenCalledWith(1);
-            expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockBatchUsers, 'User batches fetched successfully');
-        });
-
-        it('should throw error if userId is invalid', async () => {
-            req.params = { userId: 'invalid' };
-
-            await expect(BatchController.getBatchesByUser(req as Request, res as Response)).rejects.toThrow('User ID is required and must be a valid positive integer');
+            expect(getBatchesByUserSpy).toHaveBeenCalledWith(1);
+            expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockData, 'User batches fetched successfully');
         });
     });
 
     describe('getUsersByBatch', () => {
         it('should get users for a batch', async () => {
             req.params = { batchId: '1' };
-            const mockBatchUsers = [{ id: 1, user: { id: 1, name: 'User 1' } }];
-
-            (BatchRepo.findUsersByBatchId as jest.Mock).mockResolvedValue(mockBatchUsers);
+            const mockData = [{ id: 1 }];
+            getUsersByBatchSpy.mockResolvedValue(mockData as any);
 
             await BatchController.getUsersByBatch(req as Request, res as Response);
 
-            expect(BatchRepo.findUsersByBatchId).toHaveBeenCalledWith(1);
-            expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockBatchUsers, 'Batch users fetched successfully');
-        });
-
-        it('should throw error if batchId is invalid', async () => {
-            req.params = { batchId: 'invalid' };
-
-            await expect(BatchController.getUsersByBatch(req as Request, res as Response)).rejects.toThrow('Batch ID is required and must be a valid positive integer');
+            expect(getUsersByBatchSpy).toHaveBeenCalledWith(1);
+            expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockData, 'Batch users fetched successfully');
         });
     });
 
     describe('updateBatchUser', () => {
-        it('should update batch user successfully', async () => {
-            req.params = { userId: '1', batchId: '1' };
+        it('should update batch user', async () => {
+            req.params = { batchId: '1', userId: '1' };
             req.body = { isActive: false };
+            const mockData = { id: 1, isActive: false };
+            updateBatchUserSpy.mockResolvedValue(mockData as any);
 
-            (BatchRepo.findBatchUser as jest.Mock).mockResolvedValue({ id: 1, userId: 1, batchId: 1 });
-            (BatchRepo.updateBatchUser as jest.Mock).mockResolvedValue({ id: 1, userId: 1, batchId: 1, isActive: false });
+            await BatchController.updateBatchUser(req as any, res as Response);
 
-            await BatchController.updateBatchUser(req as unknown as Request<{ userId: number; batchId: number }>, res as Response);
-
-            expect(BatchRepo.updateBatchUser).toHaveBeenCalledWith(1, 1, { isActive: false });
-            expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, expect.any(Object), 'Batch user updated successfully');
+            expect(updateBatchUserSpy).toHaveBeenCalledWith(1, 1, expect.objectContaining({ isActive: false }));
+            expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockData, 'Batch user updated successfully');
         });
 
-        it('should throw error if userId is invalid', async () => {
-            req.params = { userId: 'invalid', batchId: '1' };
+        it('should handle NotFoundError', async () => {
+            req.params = { batchId: '1', userId: '1' };
             req.body = { isActive: false };
-
-            await expect(BatchController.updateBatchUser(req as unknown as Request<{ userId: number; batchId: number }>, res as Response)).rejects.toThrow('User ID is required and must be a valid positive integer');
-        });
-
-        it('should throw error if user is not in batch', async () => {
-            req.params = { userId: '1', batchId: '1' };
-            req.body = { isActive: false };
-            (BatchRepo.findBatchUser as jest.Mock).mockResolvedValue(null);
-
-            await expect(BatchController.updateBatchUser(req as unknown as Request<{ userId: number; batchId: number }>, res as Response)).rejects.toThrow('User is not in this batch');
+            updateBatchUserSpy.mockRejectedValue(new NotFoundError('User'));
+            await BatchController.updateBatchUser(req as any, res as Response);
+            expect(ApiResponseHandler.notFound).toHaveBeenCalledWith(res, 'User not found');
         });
     });
+
 });

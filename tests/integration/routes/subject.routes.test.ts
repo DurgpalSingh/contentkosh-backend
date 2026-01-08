@@ -16,7 +16,6 @@ jest.mock('../../../src/middlewares/auth.middleware', () => ({
 }));
 jest.mock('../../../src/middlewares/validation.middleware', () => ({
     validateIdParam: () => (req: any, res: any, next: any) => next(),
-    validateDto: (dto: any) => (req: any, res: any, next: any) => next(),
     authorizeExamAccess: (req: any, res: any, next: any) => next(),
 }));
 jest.mock('../../../src/utils/logger');
@@ -81,6 +80,17 @@ describe('Subject Routes', () => {
             expect(res.status).toBe(200);
             expect(res.body.data).toHaveLength(2);
         });
+
+        it('should filter subjects by active status', async () => {
+            const mockSubjects = [{ id: 1, name: 'Subject 1', courseId: 1, status: SubjectStatus.ACTIVE }];
+            (SubjectRepo.findSubjectsByCourseId as jest.Mock).mockResolvedValue(mockSubjects);
+
+            const res = await request(app).get('/api/exams/1/courses/1/subjects?active=true');
+
+            expect(res.status).toBe(200);
+            expect(res.body.data).toHaveLength(1);
+            expect(SubjectRepo.findSubjectsByCourseId).toHaveBeenCalledWith(1, expect.objectContaining({ where: { status: SubjectStatus.ACTIVE } }));
+        });
     });
 
     describe('GET /api/exams/:examId/courses/:courseId/subjects/:subjectId', () => {
@@ -128,6 +138,13 @@ describe('Subject Routes', () => {
                 .send({ name: 'Updated Name' });
 
             expect(res.status).toBe(404);
+        });
+
+        it('should return 400 if validation fails', async () => {
+            const res = await request(app)
+                .put('/api/exams/1/courses/1/subjects/1')
+                .send({ name: '' });
+            expect(res.status).toBe(400);
         });
     });
 

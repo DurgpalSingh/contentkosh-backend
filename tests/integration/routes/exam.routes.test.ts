@@ -92,6 +92,19 @@ describe('Exam Routes', () => {
             expect(res.body.data).toHaveLength(1);
         });
 
+        it('should support pagination options', async () => {
+            const mockExams = [{ id: 1, name: 'Active Exam' }];
+            (BusinessRepo.findBusinessById as jest.Mock).mockResolvedValue({ id: 1 });
+            (ExamRepo.findActiveExamsByBusinessId as jest.Mock).mockResolvedValue(mockExams);
+
+            // Test pagination params which QueryBuilder DOES parse
+            const res = await request(app).get('/api/business/1/exams?page=1&limit=10');
+
+            expect(res.status).toBe(200);
+            // Verify options passed map to skip/take
+            expect(ExamRepo.findActiveExamsByBusinessId).toHaveBeenCalledWith(1, expect.objectContaining({ skip: 0, take: 10 }));
+        });
+
         // Removed "missing businessId" test because route param is required by definition in express route
     });
 
@@ -141,6 +154,14 @@ describe('Exam Routes', () => {
             const res = await request(app).put('/api/business/1/exams/1').send({ name: '' });
             expect(res.status).toBe(400);
         });
+
+        it('should return 404 if exam not found', async () => {
+            (ExamRepo.findExamById as jest.Mock).mockResolvedValue(null);
+
+            const res = await request(app).put('/api/business/1/exams/999').send({ name: 'Updated' });
+
+            expect(res.status).toBe(404);
+        });
     });
 
     describe('DELETE /api/business/:businessId/exams/:id', () => {
@@ -154,6 +175,14 @@ describe('Exam Routes', () => {
             const res = await request(app).delete('/api/business/1/exams/1');
 
             expect(res.status).toBe(200);
+        });
+
+        it('should return 404 if exam not found', async () => {
+            (ExamRepo.findExamById as jest.Mock).mockResolvedValue(null);
+
+            const res = await request(app).delete('/api/business/1/exams/999');
+
+            expect(res.status).toBe(404);
         });
     });
 });

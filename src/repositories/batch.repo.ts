@@ -1,7 +1,5 @@
-import { Prisma, PrismaClient } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
-
-// const prisma = new PrismaClient();
 
 const batchSelect = {
   id: true,
@@ -27,6 +25,15 @@ const userSelect = {
   name: true,
 };
 
+export interface BatchFindOptions {
+  where?: Prisma.BatchWhereInput;
+  orderBy?: Prisma.BatchOrderByWithRelationInput;
+  skip?: number;
+  take?: number;
+  select?: Prisma.BatchSelect;
+  include?: Prisma.BatchInclude;
+}
+
 export async function createBatch(data: Prisma.BatchCreateInput) {
   try {
     return await prisma.batch.create({
@@ -41,14 +48,21 @@ export async function createBatch(data: Prisma.BatchCreateInput) {
   }
 }
 
-export async function findBatchById(id: number) {
-  return prisma.batch.findUnique({
-    where: { id },
-    select: {
+export async function findBatchById(id: number, options: BatchFindOptions = {}) {
+  const query: any = { where: { id } };
+
+  if (options.select) {
+    query.select = options.select;
+  } else if (options.include) {
+    query.include = options.include;
+  } else {
+    query.select = {
       ...batchSelect,
       course: { select: courseSelect }
-    },
-  });
+    };
+  }
+
+  return prisma.batch.findUnique(query);
 }
 
 export async function findBatchByCodeName(codeName: string) {
@@ -61,29 +75,57 @@ export async function findBatchByCodeName(codeName: string) {
   });
 }
 
-export async function findBatchesByCourseId(courseId: number) {
-  return prisma.batch.findMany({
-    where: { courseId },
-    select: {
-      ...batchSelect,
-      course: { select: courseSelect }
-    },
-    orderBy: { createdAt: 'desc' },
-  });
-}
-
-export async function findActiveBatchesByCourseId(courseId: number) {
-  return prisma.batch.findMany({
+export async function findBatchesByCourseId(courseId: number, options: BatchFindOptions = {}) {
+  const query: Prisma.BatchFindManyArgs = {
     where: {
       courseId,
-      isActive: true
+      ...(options.where || {}),
     },
-    select: {
+    orderBy: options.orderBy || { createdAt: 'desc' },
+  };
+
+  if (options.skip !== undefined) query.skip = options.skip;
+  if (options.take !== undefined) query.take = options.take;
+
+  if (options.select) {
+    query.select = options.select;
+  } else if (options.include) {
+    query.include = options.include;
+  } else {
+    (query as any).select = {
       ...batchSelect,
       course: { select: courseSelect }
+    };
+  }
+
+  return prisma.batch.findMany(query);
+}
+
+export async function findActiveBatchesByCourseId(courseId: number, options: BatchFindOptions = {}) {
+  const query: Prisma.BatchFindManyArgs = {
+    where: {
+      courseId,
+      isActive: true,
+      ...(options.where || {}),
     },
-    orderBy: { createdAt: 'desc' },
-  });
+    orderBy: options.orderBy || { createdAt: 'desc' },
+  };
+
+  if (options.skip !== undefined) query.skip = options.skip;
+  if (options.take !== undefined) query.take = options.take;
+
+  if (options.select) {
+    query.select = options.select;
+  } else if (options.include) {
+    query.include = options.include;
+  } else {
+    (query as any).select = {
+      ...batchSelect,
+      course: { select: courseSelect }
+    };
+  }
+
+  return prisma.batch.findMany(query);
 }
 
 export async function findBatchWithUsers(id: number) {
