@@ -1,6 +1,23 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## Version [1.6.0] - Batch API & Test Coverage
+**P.R raised by**  : aaditya-singh-21
+**Date** : 2026-01-08
+### Added
+- **Batch API**: Implemented full CRUD operations for Batches linked to Courses.
+- **Service Layer**: Introduced `BatchService` for business logic separation.
+- **Swagger**: Updated `Exam` schemas to include missing fields (`code`, `startDate`, `endDate`).
+- **DTOs**: Added `CreateBatchDto`, `UpdateBatchDto` with strict validation.
+
+### Refactored
+- **Standardization**: Unified Controller-Service-Repository architecture across Exam, Course, Subject, and Batch modules.
+- **Error Handling**: Consistent use of `ApiResponseHandler` and custom error classes (404, 400).
+- **Cleanup**: Removed legacy/redundant code and updated validation middlewares.
+
+### Tests
+- **Integration**: Expanded coverage for Filters (`?active=true`) and Error Handling (404/400) across all modules.
+
 ## Version [1.5.0] - Course & Subject API Refactoring
 **P.R raised by**  : aaditya-singh-21
 **Date** : 2026-01-06

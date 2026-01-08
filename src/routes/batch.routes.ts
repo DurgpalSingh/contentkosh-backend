@@ -1,10 +1,26 @@
 import { Router } from 'express';
-import { createBatch, getBatch, getBatchWithUsers, getBatchesByCourse } from '../controllers/batch.controller';
-import {updateBatch, deleteBatch, addUserToBatch, removeUserFromBatch } from '../controllers/batch.controller';
-import {getBatchesByUser, getUsersByBatch, updateBatchUser } from '../controllers/batch.controller';
+import { UserRole } from '@prisma/client';
+import { authenticate, authorize } from '../middlewares/auth.middleware';
+import { validateIdParam, authorizeBatchAccess, authorizeCourseAccess } from '../middlewares/validation.middleware';
+import { validateDto } from '../middlewares/validation/dto.middleware';
+import { CreateBatchDto, UpdateBatchDto, AddUserToBatchDto, RemoveUserFromBatchDto, UpdateBatchUserDto } from '../dtos/batch.dto';
+import {
+    createBatch,
+    getBatch,
+    getBatchWithUsers,
+    getBatchesByCourse,
+    updateBatch,
+    deleteBatch,
+    addUserToBatch,
+    removeUserFromBatch,
+    getBatchesByUser,
+    getUsersByBatch,
+    updateBatchUser
+} from '../controllers/batch.controller';
 
 const router = Router();
 
+// ==================== BATCH CRUD ROUTES ====================
 
 /**
  * @swagger
@@ -23,41 +39,16 @@ const router = Router();
  *     responses:
  *       201:
  *         description: Batch created successfully
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       $ref: '#/components/schemas/Batch'
  *       400:
  *         description: Invalid input data
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
  *       404:
  *         description: Course not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
  *       409:
  *         description: Batch with this code name already exists
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
  *       500:
  *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post('/', createBatch);
+router.post('/', authorize(UserRole.ADMIN), validateDto(CreateBatchDto), createBatch);
 
 /**
  * @swagger
@@ -77,35 +68,14 @@ router.post('/', createBatch);
  *     responses:
  *       200:
  *         description: Batch fetched successfully
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       $ref: '#/components/schemas/Batch'
  *       400:
  *         description: Invalid batch ID
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
  *       404:
  *         description: Batch not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
  *       500:
  *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/:id', getBatch);
+router.get('/:id', validateIdParam('id'), authorizeBatchAccess, getBatch);
 
 /**
  * @swagger
@@ -125,35 +95,14 @@ router.get('/:id', getBatch);
  *     responses:
  *       200:
  *         description: Batch with users fetched successfully
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       $ref: '#/components/schemas/BatchWithUsers'
  *       400:
  *         description: Invalid batch ID
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
  *       404:
  *         description: Batch not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
  *       500:
  *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/:id/with-users', getBatchWithUsers);
+router.get('/:id/with-users', validateIdParam('id'), authorizeBatchAccess, getBatchWithUsers);
 
 /**
  * @swagger
@@ -178,31 +127,12 @@ router.get('/:id/with-users', getBatchWithUsers);
  *     responses:
  *       200:
  *         description: Batches fetched successfully
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       type: array
- *                       items:
- *                         $ref: '#/components/schemas/Batch'
  *       400:
  *         description: Invalid course ID
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
  *       500:
  *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/course/:courseId', getBatchesByCourse);
+router.get('/course/:courseId', validateIdParam('courseId'), authorizeCourseAccess, getBatchesByCourse);
 
 /**
  * @swagger
@@ -228,41 +158,16 @@ router.get('/course/:courseId', getBatchesByCourse);
  *     responses:
  *       200:
  *         description: Batch updated successfully
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       $ref: '#/components/schemas/Batch'
  *       400:
  *         description: Invalid input data
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
  *       404:
  *         description: Batch not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
  *       409:
  *         description: Batch with this code name already exists
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
  *       500:
  *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.put('/:id', updateBatch);
+router.put('/:id', authorize(UserRole.ADMIN), validateIdParam('id'), validateDto(UpdateBatchDto), authorizeBatchAccess, updateBatch);
 
 /**
  * @swagger
@@ -282,29 +187,12 @@ router.put('/:id', updateBatch);
  *     responses:
  *       200:
  *         description: Batch deleted successfully
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       type: null
  *       400:
  *         description: Invalid batch ID
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
  *       500:
  *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.delete('/:id', deleteBatch);
+router.delete('/:id', authorize(UserRole.ADMIN), validateIdParam('id'), authorizeBatchAccess, deleteBatch);
 
 // ==================== BATCH USER ROUTES ====================
 
@@ -325,41 +213,16 @@ router.delete('/:id', deleteBatch);
  *     responses:
  *       201:
  *         description: User added to batch successfully
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       $ref: '#/components/schemas/BatchUser'
  *       400:
  *         description: Invalid input data
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
  *       404:
  *         description: User or batch not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
  *       409:
  *         description: User is already in this batch
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
  *       500:
  *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post('/add-user', addUserToBatch);
+router.post('/add-user', authorize(UserRole.ADMIN), validateDto(AddUserToBatchDto), addUserToBatch);
 
 /**
  * @swagger
@@ -378,35 +241,14 @@ router.post('/add-user', addUserToBatch);
  *     responses:
  *       200:
  *         description: User removed from batch successfully
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       type: null
  *       400:
  *         description: Invalid input data
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
  *       404:
  *         description: User is not in this batch
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
  *       500:
  *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post('/remove-user', removeUserFromBatch);
+router.post('/remove-user', authorize(UserRole.ADMIN), validateDto(RemoveUserFromBatchDto), removeUserFromBatch);
 
 /**
  * @swagger
@@ -429,41 +271,15 @@ router.post('/remove-user', removeUserFromBatch);
  *         content:
  *           application/json:
  *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       type: array
- *                       items:
- *                         type: object
- *                         properties:
- *                           id:
- *                             type: integer
- *                             description: Batch User ID
- *                           isActive:
- *                             type: boolean
- *                             description: Whether the batch user is active
- *                           createdAt:
- *                             type: string
- *                             format: date-time
- *                             description: Batch user creation timestamp
- *                           batch:
- *                             $ref: '#/components/schemas/Batch'
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/BatchUser'
  *       400:
  *         description: Invalid user ID
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
  *       500:
  *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/user/:userId', getBatchesByUser);
+router.get('/user/:userId', validateIdParam('userId'), getBatchesByUser);
 
 /**
  * @swagger
@@ -486,51 +302,15 @@ router.get('/user/:userId', getBatchesByUser);
  *         content:
  *           application/json:
  *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       type: array
- *                       items:
- *                         type: object
- *                         properties:
- *                           id:
- *                             type: integer
- *                             description: Batch User ID
- *                           isActive:
- *                             type: boolean
- *                             description: Whether the batch user is active
- *                           createdAt:
- *                             type: string
- *                             format: date-time
- *                             description: Batch user creation timestamp
- *                           user:
- *                             type: object
- *                             properties:
- *                               id:
- *                                 type: integer
- *                                 description: User ID
- *                               email:
- *                                 type: string
- *                                 description: User email
- *                               name:
- *                                 type: string
- *                                 description: User name
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/BatchUser'
  *       400:
  *         description: Invalid batch ID
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
  *       500:
  *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/:batchId/users', getUsersByBatch);
+router.get('/:batchId/users', validateIdParam('batchId'), authorizeBatchAccess, getUsersByBatch);
 
 /**
  * @swagger
@@ -562,34 +342,13 @@ router.get('/:batchId/users', getUsersByBatch);
  *     responses:
  *       200:
  *         description: Batch user updated successfully
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       $ref: '#/components/schemas/BatchUser'
  *       400:
  *         description: Invalid input data
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
  *       404:
  *         description: User is not in this batch
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
  *       500:
  *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.put('/:batchId/users/:userId', updateBatchUser);
+router.put('/:batchId/users/:userId', authorize(UserRole.ADMIN), validateIdParam('batchId'), validateIdParam('userId'), validateDto(UpdateBatchUserDto), authorizeBatchAccess, updateBatchUser);
 
 export default router;
