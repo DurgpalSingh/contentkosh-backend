@@ -18,12 +18,6 @@ export class BatchService {
             throw new NotFoundError('Course not found');
         }
 
-        // Check uniqueness of codeName
-        const existingBatch = await batchRepo.findBatchByCodeName(data.codeName);
-        if (existingBatch) {
-            throw new AlreadyExistsError('Batch with this code name already exists');
-        }
-
         const createData: Prisma.BatchCreateInput = {
             codeName: data.codeName,
             displayName: data.displayName,
@@ -88,14 +82,6 @@ export class BatchService {
         const existingBatch = await batchRepo.findBatchById(id);
         if (!existingBatch) {
             throw new NotFoundError('Batch not found');
-        }
-
-        // Check uniqueness if codeName is changing
-        if (data.codeName && data.codeName !== existingBatch.codeName) {
-            const duplicate = await batchRepo.findBatchByCodeName(data.codeName);
-            if (duplicate) {
-                throw new AlreadyExistsError('Batch with this code name already exists');
-            }
         }
 
         const updateData: Prisma.BatchUpdateInput = {

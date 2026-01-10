@@ -48,7 +48,7 @@ describe('Batch Routes', () => {
 
         it('should create a batch', async () => {
             (CourseRepo.findCourseById as jest.Mock).mockResolvedValue({ id: 1, name: 'Test Course' });
-            (BatchRepo.findBatchByCodeName as jest.Mock).mockResolvedValue(null);
+            // findBatchByCodeName removed from service, so no need to mock for success case
             (BatchRepo.createBatch as jest.Mock).mockResolvedValue({ id: 1, ...validBatchData });
 
             const res = await request(app)
@@ -81,7 +81,10 @@ describe('Batch Routes', () => {
 
         it('should return 409 if codeName already exists', async () => {
             (CourseRepo.findCourseById as jest.Mock).mockResolvedValue({ id: 1 });
-            (BatchRepo.findBatchByCodeName as jest.Mock).mockResolvedValue({ id: 2, codeName: 'BATCH001' });
+            // Service now catches P2002 from createBatch
+            const error: any = new Error('Unique constraint failed');
+            error.code = 'P2002';
+            (BatchRepo.createBatch as jest.Mock).mockRejectedValue(error);
 
             const res = await request(app)
                 .post('/api/batches')
@@ -191,8 +194,7 @@ describe('Batch Routes', () => {
             (ExamRepo.findExamById as jest.Mock).mockResolvedValue({ id: 1, businessId: 1 });
             (BatchRepo.updateBatch as jest.Mock).mockResolvedValue(updatedBatch);
 
-            // Service also checks uniqueness if codeName changes. Here codeName is not changing.
-            (BatchRepo.findBatchByCodeName as jest.Mock).mockResolvedValue(null);
+            // redundant findBatchByCodeName removed from service
 
             const res = await request(app)
                 .put('/api/batches/1')
@@ -200,6 +202,22 @@ describe('Batch Routes', () => {
 
             expect(res.status).toBe(200);
             expect(res.body.data.displayName).toBe('Updated Batch');
+        });
+
+        it('should return 409 if updating to existing codeName', async () => {
+            const batch = { id: 1, codeName: 'BATCH001', course: { examId: 1 } };
+            (BatchRepo.findBatchById as jest.Mock).mockResolvedValue(batch);
+            (ExamRepo.findExamById as jest.Mock).mockResolvedValue({ id: 1, businessId: 1 });
+
+            const error: any = new Error('Unique constraint failed');
+            error.code = 'P2002';
+            (BatchRepo.updateBatch as jest.Mock).mockRejectedValue(error);
+
+            const res = await request(app)
+                .put('/api/batches/1')
+                .send({ codeName: 'BATCH002' }); // Assume BATCH002 exists
+
+            expect(res.status).toBe(409);
         });
 
         it('should return 400 if codeName is empty', async () => {
