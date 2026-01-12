@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsInt, MaxLength, IsEnum } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsInt, MaxLength, IsEnum, IsDateString } from 'class-validator';
 import { CourseStatus } from '@prisma/client';
 
 export class CreateCourseDto {
@@ -12,10 +12,13 @@ export class CreateCourseDto {
     @MaxLength(500)
     description?: string;
 
-    @IsString()
+    @IsDateString()
     @IsOptional()
-    @MaxLength(50)
-    duration?: string;
+    startDate?: string | Date;
+
+    @IsDateString()
+    @IsOptional()
+    endDate?: string | Date;
 
     @IsEnum(CourseStatus)
     @IsOptional()
@@ -38,10 +41,13 @@ export class UpdateCourseDto {
     @MaxLength(500)
     description?: string;
 
-    @IsString()
+    @IsDateString()
     @IsOptional()
-    @MaxLength(50)
-    duration?: string;
+    startDate?: string | Date;
+
+    @IsDateString()
+    @IsOptional()
+    endDate?: string | Date;
 
     @IsEnum(CourseStatus)
     @IsOptional()

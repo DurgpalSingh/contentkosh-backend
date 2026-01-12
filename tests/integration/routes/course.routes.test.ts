@@ -33,7 +33,7 @@ describe('Course Routes', () => {
 
     describe('POST /api/exams/:examId/courses', () => {
         it('should create a course', async () => {
-            const courseData = { name: 'Test Course', description: 'Test description', examId: 1, status: CourseStatus.ACTIVE };
+            const courseData = { name: 'Test Course', description: 'Test description', examId: 1, status: CourseStatus.ACTIVE, startDate: '2024-01-01', endDate: '2024-12-31' };
             (ExamRepo.findExamById as jest.Mock).mockResolvedValue({ id: 1, name: 'Test Exam' });
             (CourseRepo.createCourse as jest.Mock).mockResolvedValue({ id: 1, ...courseData });
 
@@ -87,6 +87,18 @@ describe('Course Routes', () => {
             const res = await request(app).get('/api/exams/invalid/courses');
             expect(res.status).toBe(400);
         });
+
+        it('should filter courses by active status', async () => {
+            const mockCourses = [{ id: 1, name: 'Active Course', status: 'ACTIVE' }];
+            (ExamRepo.findExamById as jest.Mock).mockResolvedValue({ id: 1 });
+            (CourseRepo.findCoursesByExamId as jest.Mock).mockResolvedValue(mockCourses);
+
+            const res = await request(app).get('/api/exams/1/courses?active=true');
+
+            expect(res.status).toBe(200);
+            expect(res.body.data).toHaveLength(1);
+            expect(CourseRepo.findCoursesByExamId).toHaveBeenCalledWith(1, expect.objectContaining({ where: { status: 'ACTIVE' } }));
+        });
     });
 
     describe('GET /api/exams/:examId/courses/:courseId', () => {
@@ -123,7 +135,7 @@ describe('Course Routes', () => {
 
             const res = await request(app)
                 .put('/api/exams/1/courses/1')
-                .send({ name: 'Updated Course', description: 'Updated description' });
+                .send({ name: 'Updated Course', description: 'Updated description', startDate: '2024-01-01' });
 
             expect(res.status).toBe(200);
             expect(res.body.data.name).toBe('Updated Course');
@@ -155,6 +167,14 @@ describe('Course Routes', () => {
         it('should return 400 if courseId is invalid', async () => {
             const res = await request(app).delete('/api/exams/1/courses/invalid');
             expect(res.status).toBe(400);
+        });
+
+        it('should return 404 if course not found', async () => {
+            (CourseRepo.findCourseById as jest.Mock).mockResolvedValue(null);
+
+            const res = await request(app).delete('/api/exams/1/courses/999');
+
+            expect(res.status).toBe(404);
         });
     });
 });

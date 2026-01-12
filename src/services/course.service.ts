@@ -14,7 +14,6 @@ export class CourseService {
         const createData: Prisma.CourseUncheckedCreateInput = {
             name: data.name,
             description: data.description ?? null,
-            duration: data.duration ?? null,
             examId: data.examId,
             ...(data.status && { status: data.status }),
         };
@@ -51,7 +50,6 @@ export class CourseService {
         const updateData: Prisma.CourseUncheckedUpdateInput = {
             ...(data.name && { name: data.name }),
             ...(data.description !== undefined && { description: data.description }),
-            ...(data.duration !== undefined && { duration: data.duration }),
             ...(data.status && { status: data.status }),
         };
 

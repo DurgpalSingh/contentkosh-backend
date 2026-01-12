@@ -180,7 +180,8 @@ model Course {
   id          Int      @id @default(autoincrement())
   name        String   // e.g., "Civil Services Course", "Medical Entrance Course"
   description String?
-  duration    String?  // e.g., "6 months", "1 year"
+  startDate   DateTime? @map("start_date")
+  endDate     DateTime? @map("end_date")
   status      CourseStatus @default(ACTIVE)
   examId      Int      @map("exam_id")
   createdAt   DateTime @default(now()) @map("created_at")

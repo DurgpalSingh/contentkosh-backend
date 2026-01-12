@@ -395,9 +395,22 @@ export const swaggerSchemas = {
         description: 'Description of the exam'
       },
       status: {
-        type: 'string',
         enum: ['ACTIVE', 'INACTIVE'],
         description: 'Status of the exam'
+      },
+      code: {
+        type: 'string',
+        description: 'Unique code for the exam'
+      },
+      startDate: {
+        type: 'string',
+        format: 'date-time',
+        description: 'Start date of the exam'
+      },
+      endDate: {
+        type: 'string',
+        format: 'date-time',
+        description: 'End date of the exam'
       },
       businessId: {
         type: 'integer',
@@ -442,8 +455,21 @@ export const swaggerSchemas = {
         description: 'Status of the exam'
       },
       businessId: {
-        type: 'integer',
         description: 'ID of the business this exam belongs to (required)'
+      },
+      code: {
+        type: 'string',
+        description: 'Unique code for the exam'
+      },
+      startDate: {
+        type: 'string',
+        format: 'date-time',
+        description: 'Start date of the exam'
+      },
+      endDate: {
+        type: 'string',
+        format: 'date-time',
+        description: 'End date of the exam'
       }
     }
   },
@@ -460,9 +486,22 @@ export const swaggerSchemas = {
         description: 'Description of the exam'
       },
       status: {
-        type: 'string',
         enum: ['ACTIVE', 'INACTIVE'],
         description: 'Status of the exam'
+      },
+      code: {
+        type: 'string',
+        description: 'Unique code for the exam'
+      },
+      startDate: {
+        type: 'string',
+        format: 'date-time',
+        description: 'Start date of the exam'
+      },
+      endDate: {
+        type: 'string',
+        format: 'date-time',
+        description: 'End date of the exam'
       }
     }
   },
@@ -482,9 +521,22 @@ export const swaggerSchemas = {
         description: 'Description of the exam'
       },
       status: {
-        type: 'string',
         enum: ['ACTIVE', 'INACTIVE'],
         description: 'Status of the exam'
+      },
+      code: {
+        type: 'string',
+        description: 'Unique code for the exam'
+      },
+      startDate: {
+        type: 'string',
+        format: 'date-time',
+        description: 'Start date of the exam'
+      },
+      endDate: {
+        type: 'string',
+        format: 'date-time',
+        description: 'End date of the exam'
       },
       businessId: {
         type: 'integer',

@@ -157,7 +157,8 @@ async function main() {
       data: {
         name: 'UPSC Prelims + Mains',
         description: 'Complete preparation for UPSC Prelims and Mains',
-        duration: '12 months',
+        startDate: new Date('2024-01-01'),
+        endDate: new Date('2024-12-31'),
         status: CourseStatus.ACTIVE,
         examId: exams[0].id,
       },
@@ -166,7 +167,8 @@ async function main() {
       data: {
         name: 'UPSC Optional Subject - Geography',
         description: 'Geography optional subject preparation',
-        duration: '8 months',
+        startDate: new Date('2024-01-01'),
+        endDate: new Date('2024-08-31'),
         status: CourseStatus.ACTIVE,
         examId: exams[0].id,
       },
@@ -176,7 +178,8 @@ async function main() {
       data: {
         name: 'NEET Complete Course',
         description: 'Complete NEET preparation with all subjects',
-        duration: '18 months',
+        startDate: new Date('2024-01-01'),
+        endDate: new Date('2025-06-30'),
         status: CourseStatus.ACTIVE,
         examId: exams[1].id,
       },
@@ -185,7 +188,8 @@ async function main() {
       data: {
         name: 'NEET Crash Course',
         description: 'Intensive NEET preparation for last 6 months',
-        duration: '6 months',
+        startDate: new Date('2024-01-01'),
+        endDate: new Date('2024-06-30'),
         status: CourseStatus.ACTIVE,
         examId: exams[1].id,
       },
@@ -195,7 +199,8 @@ async function main() {
       data: {
         name: 'JEE Main + Advanced',
         description: 'Complete JEE preparation for both Main and Advanced',
-        duration: '24 months',
+        startDate: new Date('2024-01-01'),
+        endDate: new Date('2025-12-31'),
         status: CourseStatus.ACTIVE,
         examId: exams[2].id,
       },
