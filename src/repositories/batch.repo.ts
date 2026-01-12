@@ -128,25 +128,6 @@ export async function findActiveBatchesByCourseId(courseId: number, options: Bat
   return prisma.batch.findMany(query);
 }
 
-export async function findBatchWithUsers(id: number) {
-  return prisma.batch.findUnique({
-    where: { id },
-    select: {
-      ...batchSelect,
-      course: { select: courseSelect },
-      batchUsers: {
-        where: { isActive: true },
-        select: {
-          id: true,
-          isActive: true,
-          createdAt: true,
-          user: { select: userSelect }
-        },
-        orderBy: { createdAt: 'desc' },
-      }
-    },
-  });
-}
 
 export async function updateBatch(id: number, data: Prisma.BatchUpdateInput) {
   try {

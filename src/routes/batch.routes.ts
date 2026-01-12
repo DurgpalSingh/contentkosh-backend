@@ -67,32 +67,6 @@ router.post('/', authorize(UserRole.ADMIN), validateDto(CreateBatchDto), batchCo
  */
 router.get('/:id', validateIdParam('id'), authorizeBatchAccess, batchController.getBatch);
 
-/**
- * @swagger
- * /api/batches/{id}/with-users:
- *   get:
- *     summary: Get batch with its users
- *     tags: [Batches]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *         description: Batch ID
- *     responses:
- *       200:
- *         description: Batch with users fetched successfully
- *       400:
- *         description: Invalid batch ID
- *       404:
- *         description: Batch not found
- *       500:
- *         description: Internal server error
- */
-router.get('/:id/with-users', validateIdParam('id'), authorizeBatchAccess, batchController.getBatchWithUsers);
 
 /**
  * @swagger

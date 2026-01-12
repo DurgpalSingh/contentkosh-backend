@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import * as BatchController from '../../../src/controllers/batch.controller';
+import { batchController } from '../../../src/controllers/batch.controller';
 import { BatchService } from '../../../src/services/batch.service';
 import { ApiResponseHandler } from '../../../src/utils/apiResponse';
 import { BadRequestError, NotFoundError, AlreadyExistsError } from '../../../src/errors/api.errors';
@@ -70,7 +70,7 @@ describe('Batch Controller', () => {
 
             createBatchSpy.mockResolvedValue(createdBatch as any);
 
-            await BatchController.createBatch(req as Request, res as Response);
+            await batchController.createBatch(req as Request, res as Response);
 
             expect(createBatchSpy).toHaveBeenCalledWith(expect.objectContaining({
                 codeName: 'BATCH001',
@@ -84,7 +84,7 @@ describe('Batch Controller', () => {
             const error = new BadRequestError('Invalid batch data');
             createBatchSpy.mockRejectedValue(error);
 
-            await BatchController.createBatch(req as Request, res as Response);
+            await batchController.createBatch(req as Request, res as Response);
 
             expect(ApiResponseHandler.error).toHaveBeenCalledWith(res, 'Invalid batch data', 400);
         });
@@ -92,7 +92,7 @@ describe('Batch Controller', () => {
         it('should handle AlreadyExistsError', async () => {
             req.body = validBatchData;
             createBatchSpy.mockRejectedValue(new AlreadyExistsError('Batch'));
-            await BatchController.createBatch(req as Request, res as Response);
+            await batchController.createBatch(req as Request, res as Response);
             expect(ApiResponseHandler.error).toHaveBeenCalledWith(res, 'Batch already exists', 409);
         });
 
@@ -106,7 +106,7 @@ describe('Batch Controller', () => {
 
             getBatchSpy.mockResolvedValue(mockBatch as any);
 
-            await BatchController.getBatch(req as Request, res as Response);
+            await batchController.getBatch(req as Request, res as Response);
 
             expect(getBatchSpy).toHaveBeenCalledWith(1);
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockBatch, 'Batch fetched successfully');
@@ -116,7 +116,7 @@ describe('Batch Controller', () => {
             req.params = { id: '999' };
             getBatchSpy.mockRejectedValue(new NotFoundError('Batch'));
 
-            await BatchController.getBatch(req as Request, res as Response);
+            await batchController.getBatch(req as Request, res as Response);
 
             expect(ApiResponseHandler.notFound).toHaveBeenCalledWith(res, 'Batch not found');
         });
@@ -124,7 +124,7 @@ describe('Batch Controller', () => {
         it('should throw error if ID is invalid', async () => {
             req.params = { id: 'invalid' };
 
-            await BatchController.getBatch(req as Request, res as Response);
+            await batchController.getBatch(req as Request, res as Response);
 
             expect(getBatchSpy).not.toHaveBeenCalled();
             // Validation error is generic BadRequest, controller catches generic
@@ -140,7 +140,7 @@ describe('Batch Controller', () => {
 
             getBatchesByCourseSpy.mockResolvedValue(mockBatches as any);
 
-            await BatchController.getBatchesByCourse(req as Request, res as Response);
+            await batchController.getBatchesByCourse(req as Request, res as Response);
 
             expect(getBatchesByCourseSpy).toHaveBeenCalledWith(1, expect.any(Object));
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockBatches, 'Batches fetched successfully');
@@ -150,7 +150,7 @@ describe('Batch Controller', () => {
             req.params = { courseId: '1' };
             req.query = { active: 'true' };
             getBatchesByCourseSpy.mockResolvedValue([]);
-            await BatchController.getBatchesByCourse(req as Request, res as Response);
+            await batchController.getBatchesByCourse(req as Request, res as Response);
             expect(getBatchesByCourseSpy).toHaveBeenCalledWith(1, expect.any(Object));
         });
     });
@@ -163,7 +163,7 @@ describe('Batch Controller', () => {
 
             updateBatchSpy.mockResolvedValue(updatedBatch as any);
 
-            await BatchController.updateBatch(req as Request, res as Response);
+            await batchController.updateBatch(req as Request, res as Response);
 
             expect(updateBatchSpy).toHaveBeenCalledWith(1, expect.objectContaining({ displayName: 'Updated' }));
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, updatedBatch, 'Batch updated successfully');
@@ -173,7 +173,7 @@ describe('Batch Controller', () => {
             req.params = { id: '1' };
             req.body = { displayName: 'Updated' };
             updateBatchSpy.mockRejectedValue(new NotFoundError('Batch'));
-            await BatchController.updateBatch(req as Request, res as Response);
+            await batchController.updateBatch(req as Request, res as Response);
             expect(ApiResponseHandler.notFound).toHaveBeenCalledWith(res, 'Batch not found');
         });
 
@@ -181,7 +181,7 @@ describe('Batch Controller', () => {
             req.params = { id: '1' };
             req.body = { codeName: 'Existing' };
             updateBatchSpy.mockRejectedValue(new AlreadyExistsError('Batch'));
-            await BatchController.updateBatch(req as Request, res as Response);
+            await batchController.updateBatch(req as Request, res as Response);
             expect(ApiResponseHandler.error).toHaveBeenCalledWith(res, 'Batch already exists', 409);
         });
     });
@@ -191,7 +191,7 @@ describe('Batch Controller', () => {
             req.params = { id: '1' };
             deleteBatchSpy.mockResolvedValue({ id: 1 } as any);
 
-            await BatchController.deleteBatch(req as Request, res as Response);
+            await batchController.deleteBatch(req as Request, res as Response);
 
             expect(deleteBatchSpy).toHaveBeenCalledWith(1);
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, null, 'Batch deleted successfully');
@@ -200,7 +200,7 @@ describe('Batch Controller', () => {
         it('should handle NotFoundError', async () => {
             req.params = { id: '1' };
             deleteBatchSpy.mockRejectedValue(new NotFoundError('Batch'));
-            await BatchController.deleteBatch(req as Request, res as Response);
+            await batchController.deleteBatch(req as Request, res as Response);
             expect(ApiResponseHandler.notFound).toHaveBeenCalledWith(res, 'Batch not found');
         });
     });
@@ -210,7 +210,7 @@ describe('Batch Controller', () => {
             req.body = { userId: 1, batchId: 1 };
             addUserToBatchSpy.mockResolvedValue({ userId: 1, batchId: 1 } as any);
 
-            await BatchController.addUserToBatch(req as Request, res as Response);
+            await batchController.addUserToBatch(req as Request, res as Response);
 
             expect(addUserToBatchSpy).toHaveBeenCalledWith(1, 1);
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, expect.anything(), 'User added to batch successfully', 201);
@@ -219,14 +219,14 @@ describe('Batch Controller', () => {
         it('should handle NotFoundError', async () => {
             req.body = { userId: 1, batchId: 1 };
             addUserToBatchSpy.mockRejectedValue(new NotFoundError('User'));
-            await BatchController.addUserToBatch(req as Request, res as Response);
+            await batchController.addUserToBatch(req as Request, res as Response);
             expect(ApiResponseHandler.notFound).toHaveBeenCalledWith(res, 'User not found');
         });
 
         it('should handle AlreadyExistsError', async () => {
             req.body = { userId: 1, batchId: 1 };
             addUserToBatchSpy.mockRejectedValue(new AlreadyExistsError('User'));
-            await BatchController.addUserToBatch(req as Request, res as Response);
+            await batchController.addUserToBatch(req as Request, res as Response);
             expect(ApiResponseHandler.error).toHaveBeenCalledWith(res, 'User already exists', 409);
         });
     });
@@ -236,7 +236,7 @@ describe('Batch Controller', () => {
             req.body = { userId: 1, batchId: 1 };
             removeUserFromBatchSpy.mockResolvedValue({ id: 1 } as any);
 
-            await BatchController.removeUserFromBatch(req as Request, res as Response);
+            await batchController.removeUserFromBatch(req as Request, res as Response);
 
             expect(removeUserFromBatchSpy).toHaveBeenCalledWith(1, 1);
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, null, 'User removed from batch successfully');
@@ -245,7 +245,7 @@ describe('Batch Controller', () => {
         it('should handle NotFoundError', async () => {
             req.body = { userId: 1, batchId: 1 };
             removeUserFromBatchSpy.mockRejectedValue(new NotFoundError('User'));
-            await BatchController.removeUserFromBatch(req as Request, res as Response);
+            await batchController.removeUserFromBatch(req as Request, res as Response);
             expect(ApiResponseHandler.notFound).toHaveBeenCalledWith(res, 'User not found');
         });
     });
@@ -256,7 +256,7 @@ describe('Batch Controller', () => {
             const mockData = [{ id: 1 }];
             getBatchesByUserSpy.mockResolvedValue(mockData as any);
 
-            await BatchController.getBatchesByUser(req as Request, res as Response);
+            await batchController.getBatchesByUser(req as Request, res as Response);
 
             expect(getBatchesByUserSpy).toHaveBeenCalledWith(1);
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockData, 'User batches fetched successfully');
@@ -269,7 +269,7 @@ describe('Batch Controller', () => {
             const mockData = [{ id: 1 }];
             getUsersByBatchSpy.mockResolvedValue(mockData as any);
 
-            await BatchController.getUsersByBatch(req as Request, res as Response);
+            await batchController.getUsersByBatch(req as Request, res as Response);
 
             expect(getUsersByBatchSpy).toHaveBeenCalledWith(1);
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockData, 'Batch users fetched successfully');
@@ -283,7 +283,7 @@ describe('Batch Controller', () => {
             const mockData = { id: 1, isActive: false };
             updateBatchUserSpy.mockResolvedValue(mockData as any);
 
-            await BatchController.updateBatchUser(req as any, res as Response);
+            await batchController.updateBatchUser(req as any, res as Response);
 
             expect(updateBatchUserSpy).toHaveBeenCalledWith(1, 1, expect.objectContaining({ isActive: false }));
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockData, 'Batch user updated successfully');
@@ -293,7 +293,7 @@ describe('Batch Controller', () => {
             req.params = { batchId: '1', userId: '1' };
             req.body = { isActive: false };
             updateBatchUserSpy.mockRejectedValue(new NotFoundError('User'));
-            await BatchController.updateBatchUser(req as any, res as Response);
+            await batchController.updateBatchUser(req as any, res as Response);
             expect(ApiResponseHandler.notFound).toHaveBeenCalledWith(res, 'User not found');
         });
     });

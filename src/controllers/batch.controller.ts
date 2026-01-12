@@ -99,6 +99,7 @@ export class BatchController {
       const result = await this.batchService.addUserToBatch(userId, batchId);
       ApiResponseHandler.success(res, result, 'User added to batch successfully', 201);
     } catch (error: any) {
+      if (error instanceof BadRequestError || error.name === 'BadRequestError') return ApiResponseHandler.error(res, error.message, 400);
       if (error instanceof NotFoundError || error.name === 'NotFoundError') return ApiResponseHandler.notFound(res, error.message);
       if (error instanceof AlreadyExistsError || error.name === 'AlreadyExistsError') return ApiResponseHandler.error(res, error.message, 409);
       logger.error(`Error adding user to batch: ${error.message}`);
@@ -121,17 +122,6 @@ export class BatchController {
     }
   };
 
-  public getBatchWithUsers = async (req: Request, res: Response) => {
-    try {
-      const id = ValidationUtils.validateId(req.params.id, 'Batch ID');
-      const batch = await this.batchService.getBatchWithUsers(id);
-      ApiResponseHandler.success(res, batch, 'Batch with users fetched successfully');
-    } catch (error: any) {
-      if (error instanceof NotFoundError || error.name === 'NotFoundError') return ApiResponseHandler.notFound(res, error.message);
-      logger.error(`Error fetching batch with users: ${error.message}`);
-      ApiResponseHandler.error(res, 'Failed to fetch batch with users');
-    }
-  };
 
   public getBatchesByUser = async (req: Request, res: Response) => {
     try {

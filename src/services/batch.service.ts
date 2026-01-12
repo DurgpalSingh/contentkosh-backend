@@ -49,14 +49,6 @@ export class BatchService {
         return BatchMapper.toDomain(batch);
     }
 
-    async getBatchWithUsers(id: number) {
-        logger.info('BatchService: Fetching batch with users', { batchId: id });
-        const batch = await batchRepo.findBatchWithUsers(id);
-        if (!batch) {
-            throw new NotFoundError('Batch not found');
-        }
-        return batch;
-    }
 
     async getBatchesByCourse(courseId: number, options?: any): Promise<Batch[]> {
         logger.info('BatchService: Fetching batches for course', { courseId });
@@ -119,11 +111,39 @@ export class BatchService {
     async addUserToBatch(userId: number, batchId: number) {
         logger.info('BatchService: Adding user to batch', { userId, batchId });
 
+        // 1. Fetch Batch with Business Context
+        const batch = await batchRepo.findBatchById(batchId, {
+            select: {
+                id: true,
+                course: {
+                    select: {
+                        exam: {
+                            select: { businessId: true }
+                        }
+                    }
+                }
+            }
+        }) as any; // Cast to any because custom select changes return type structure
+
+        if (!batch) throw new NotFoundError('Batch not found');
+
+        const businessId = batch.course?.exam?.businessId;
+        if (!businessId) throw new BadRequestError('Batch is not associated with a valid business');
+
+        // 2. Fetch User with Business Roles
         const user = await userRepo.findPublicById(userId);
         if (!user) throw new NotFoundError('User not found');
 
-        const batch = await batchRepo.findBatchById(batchId);
-        if (!batch) throw new NotFoundError('Batch not found');
+        // 3. Validate Role
+        const businessUser = user.businessUsers?.find(bu => bu.business.id === businessId);
+
+        if (!businessUser) {
+            throw new BadRequestError('User is not part of this business');
+        }
+
+        if (businessUser.role !== 'TEACHER' && businessUser.role !== 'STUDENT') {
+            throw new BadRequestError('Only Teachers and Students can be added to a batch');
+        }
 
         const existing = await batchRepo.findBatchUser(userId, batchId);
         if (existing) throw new AlreadyExistsError('User is already in this batch');
