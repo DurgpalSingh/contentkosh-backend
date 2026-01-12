@@ -5,17 +5,7 @@ import { validateIdParam, authorizeBatchAccess, authorizeCourseAccess } from '..
 import { validateDto } from '../middlewares/validation/dto.middleware';
 import { CreateBatchDto, UpdateBatchDto, AddUserToBatchDto, RemoveUserFromBatchDto, UpdateBatchUserDto } from '../dtos/batch.dto';
 import {
-    createBatch,
-    getBatch,
-    getBatchWithUsers,
-    getBatchesByCourse,
-    updateBatch,
-    deleteBatch,
-    addUserToBatch,
-    removeUserFromBatch,
-    getBatchesByUser,
-    getUsersByBatch,
-    updateBatchUser
+    batchController
 } from '../controllers/batch.controller';
 
 const router = Router();
@@ -48,7 +38,7 @@ const router = Router();
  *       500:
  *         description: Internal server error
  */
-router.post('/', authorize(UserRole.ADMIN), validateDto(CreateBatchDto), createBatch);
+router.post('/', authorize(UserRole.ADMIN), validateDto(CreateBatchDto), batchController.createBatch);
 
 /**
  * @swagger
@@ -75,7 +65,7 @@ router.post('/', authorize(UserRole.ADMIN), validateDto(CreateBatchDto), createB
  *       500:
  *         description: Internal server error
  */
-router.get('/:id', validateIdParam('id'), authorizeBatchAccess, getBatch);
+router.get('/:id', validateIdParam('id'), authorizeBatchAccess, batchController.getBatch);
 
 /**
  * @swagger
@@ -102,7 +92,7 @@ router.get('/:id', validateIdParam('id'), authorizeBatchAccess, getBatch);
  *       500:
  *         description: Internal server error
  */
-router.get('/:id/with-users', validateIdParam('id'), authorizeBatchAccess, getBatchWithUsers);
+router.get('/:id/with-users', validateIdParam('id'), authorizeBatchAccess, batchController.getBatchWithUsers);
 
 /**
  * @swagger
@@ -132,7 +122,7 @@ router.get('/:id/with-users', validateIdParam('id'), authorizeBatchAccess, getBa
  *       500:
  *         description: Internal server error
  */
-router.get('/course/:courseId', validateIdParam('courseId'), authorizeCourseAccess, getBatchesByCourse);
+router.get('/course/:courseId', validateIdParam('courseId'), authorizeCourseAccess, batchController.getBatchesByCourse);
 
 /**
  * @swagger
@@ -167,7 +157,7 @@ router.get('/course/:courseId', validateIdParam('courseId'), authorizeCourseAcce
  *       500:
  *         description: Internal server error
  */
-router.put('/:id', authorize(UserRole.ADMIN), validateIdParam('id'), validateDto(UpdateBatchDto), authorizeBatchAccess, updateBatch);
+router.put('/:id', authorize(UserRole.ADMIN), validateIdParam('id'), validateDto(UpdateBatchDto), authorizeBatchAccess, batchController.updateBatch);
 
 /**
  * @swagger
@@ -192,7 +182,7 @@ router.put('/:id', authorize(UserRole.ADMIN), validateIdParam('id'), validateDto
  *       500:
  *         description: Internal server error
  */
-router.delete('/:id', authorize(UserRole.ADMIN), validateIdParam('id'), authorizeBatchAccess, deleteBatch);
+router.delete('/:id', authorize(UserRole.ADMIN), validateIdParam('id'), authorizeBatchAccess, batchController.deleteBatch);
 
 // ==================== BATCH USER ROUTES ====================
 
@@ -222,7 +212,7 @@ router.delete('/:id', authorize(UserRole.ADMIN), validateIdParam('id'), authoriz
  *       500:
  *         description: Internal server error
  */
-router.post('/add-user', authorize(UserRole.ADMIN), validateDto(AddUserToBatchDto), addUserToBatch);
+router.post('/add-user', authorize(UserRole.ADMIN), validateDto(AddUserToBatchDto), batchController.addUserToBatch);
 
 /**
  * @swagger
@@ -248,7 +238,7 @@ router.post('/add-user', authorize(UserRole.ADMIN), validateDto(AddUserToBatchDt
  *       500:
  *         description: Internal server error
  */
-router.post('/remove-user', authorize(UserRole.ADMIN), validateDto(RemoveUserFromBatchDto), removeUserFromBatch);
+router.post('/remove-user', authorize(UserRole.ADMIN), validateDto(RemoveUserFromBatchDto), batchController.removeUserFromBatch);
 
 /**
  * @swagger
@@ -279,7 +269,7 @@ router.post('/remove-user', authorize(UserRole.ADMIN), validateDto(RemoveUserFro
  *       500:
  *         description: Internal server error
  */
-router.get('/user/:userId', validateIdParam('userId'), getBatchesByUser);
+router.get('/user/:userId', validateIdParam('userId'), batchController.getBatchesByUser);
 
 /**
  * @swagger
@@ -310,7 +300,7 @@ router.get('/user/:userId', validateIdParam('userId'), getBatchesByUser);
  *       500:
  *         description: Internal server error
  */
-router.get('/:batchId/users', validateIdParam('batchId'), authorizeBatchAccess, getUsersByBatch);
+router.get('/:batchId/users', validateIdParam('batchId'), authorizeBatchAccess, batchController.getUsersByBatch);
 
 /**
  * @swagger
@@ -349,6 +339,6 @@ router.get('/:batchId/users', validateIdParam('batchId'), authorizeBatchAccess, 
  *       500:
  *         description: Internal server error
  */
-router.put('/:batchId/users/:userId', authorize(UserRole.ADMIN), validateIdParam('batchId'), validateIdParam('userId'), validateDto(UpdateBatchUserDto), authorizeBatchAccess, updateBatchUser);
+router.put('/:batchId/users/:userId', authorize(UserRole.ADMIN), validateIdParam('batchId'), validateIdParam('userId'), validateDto(UpdateBatchUserDto), authorizeBatchAccess, batchController.updateBatchUser);
 
 export default router;
