@@ -15,6 +15,8 @@ export class CourseService {
             name: data.name,
             description: data.description ?? null,
             examId: data.examId,
+            startDate: data.startDate ?? null,
+            endDate: data.endDate ?? null,
             ...(data.status && { status: data.status }),
         };
 
@@ -50,6 +52,8 @@ export class CourseService {
         const updateData: Prisma.CourseUncheckedUpdateInput = {
             ...(data.name && { name: data.name }),
             ...(data.description !== undefined && { description: data.description }),
+            ...(data.startDate !== undefined && { startDate: data.startDate }),
+            ...(data.endDate !== undefined && { endDate: data.endDate }),
             ...(data.status && { status: data.status }),
         };
 

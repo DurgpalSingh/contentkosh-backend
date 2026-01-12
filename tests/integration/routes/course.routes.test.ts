@@ -44,6 +44,11 @@ describe('Course Routes', () => {
             expect(res.status).toBe(201);
             expect(res.body.data).toHaveProperty('id', 1);
             expect(res.body.data.name).toBe('Test Course');
+            expect(CourseRepo.createCourse).toHaveBeenCalledWith(expect.objectContaining({
+                name: 'Test Course',
+                startDate: '2024-01-01',
+                endDate: '2024-12-31'
+            }));
         });
 
         it('should return 400 if course name is missing', async () => {
@@ -139,6 +144,10 @@ describe('Course Routes', () => {
 
             expect(res.status).toBe(200);
             expect(res.body.data.name).toBe('Updated Course');
+            expect(CourseRepo.updateCourse).toHaveBeenCalledWith(1, expect.objectContaining({
+                name: 'Updated Course',
+                startDate: '2024-01-01'
+            }));
         });
 
         it('should return 400 if name is empty', async () => {
