@@ -1,240 +1,58 @@
 import { Router } from 'express';
-import { register, login, getProfile, assignUserToBusiness, getUserBusinesses, getBusinessUsers, getBusinessUser, updateBusinessUser, removeUserFromBusiness } from '../controllers/user.controller';
+import { getUsersByBusiness, createUserForBusiness, updateUser, deleteUser } from '../controllers/user.controller';
 import { authenticate, authorize } from '../middlewares/auth.middleware';
+import { validateDto } from '../middlewares/validation/dto.middleware';
+import { validateIdParam, authorizeUserAccess, authorizeBusinessAccess } from '../middlewares/validation.middleware';
+import { CreateUserDto, UpdateUserDto } from '../dtos/user.dto';
 import { UserRole } from '@prisma/client';
 
 const router = Router();
 
-
 /**
  * @swagger
- * /api/users/register:
+ * /api/business/{businessId}/users:
  *   post:
- *     summary: Register a new user
+ *     summary: Create user for a business (Admin only)
  *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: businessId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Business ID
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/RegisterRequest'
+ *             $ref: '#/components/schemas/CreateUserRequest'
  *     responses:
  *       201:
- *         description: User registered successfully
+ *         description: User created successfully
  *         content:
  *           application/json:
  *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       $ref: '#/components/schemas/AuthResponse'
+ *               $ref: '#/components/schemas/ApiResponse'
  *       400:
- *         description: Invalid input data
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       409:
- *         description: User with this email already exists
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
-router.post('/register', register);
-
-/**
- * @swagger
- * /api/users/login:
- *   post:
- *     summary: Login user
- *     tags: [Users]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/LoginRequest'
- *     responses:
- *       200:
- *         description: Login successful
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       $ref: '#/components/schemas/AuthResponse'
- *       400:
- *         description: Invalid input data
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       401:
- *         description: Invalid email or password
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
-router.post('/login', login);
-
-/**
- * @swagger
- * /api/users/profile:
- *   get:
- *     summary: Get user profile
- *     tags: [Users]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Profile fetched successfully
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       $ref: '#/components/schemas/User'
- *       401:
- *         description: User not authenticated
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
+ *         description: Validation error
+ *       403:
+ *         description: Forbidden - No access to this business
  *       404:
- *         description: User not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
-router.get('/profile', authenticate, getProfile);
-
-// ==================== BUSINESS USER ROUTES ====================
-
-/**
- * @swagger
- * /api/users/assign-to-business:
- *   post:
- *     summary: Assign user to a business with a specific role
- *     tags: [Business Users]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/AssignUserToBusinessRequest'
- *     responses:
- *       201:
- *         description: User assigned to business successfully
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       $ref: '#/components/schemas/BusinessUser'
- *       400:
- *         description: Invalid input data
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       404:
- *         description: User or business not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
+ *         description: Business not found
  *       409:
- *         description: User is already assigned to this business
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
+ *         description: User with email/mobile already exists
  */
-router.post('/assign-to-business', authenticate, authorize(UserRole.ADMIN), assignUserToBusiness);
+router.post('/business/:businessId/users', authenticate, authorize(UserRole.ADMIN), validateIdParam('businessId'), authorizeBusinessAccess, validateDto(CreateUserDto), createUserForBusiness);
 
 /**
  * @swagger
- * /api/users/my-businesses:
- *   get:
- *     summary: Get current user's business associations
- *     tags: [Business Users]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: User business associations fetched successfully
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       type: array
- *                       items:
- *                         $ref: '#/components/schemas/BusinessUser'
- *       401:
- *         description: User not authenticated
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
-router.get('/my-businesses', authenticate, getUserBusinesses);
-
-/**
- * @swagger
- * /api/users/business/{businessId}/users:
+ * /api/business/{businessId}/users:
  *   get:
  *     summary: Get all users for a specific business
- *     tags: [Business Users]
+ *     tags: [Users]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -248,179 +66,92 @@ router.get('/my-businesses', authenticate, getUserBusinesses);
  *         name: role
  *         schema:
  *           type: string
- *           enum: [STUDENT, TEACHER, ADMIN, SUPERADMIN]
- *         description: Filter by role
+ *           enum: [ADMIN, TEACHER, STUDENT, USER]
+ *         description: Filter users by role
  *     responses:
  *       200:
- *         description: Business users fetched successfully
+ *         description: Users fetched successfully
  *         content:
  *           application/json:
  *             schema:
  *               allOf:
  *                 - $ref: '#/components/schemas/ApiResponse'
- *                 - type: object
- *                   properties:
+ *                 - properties:
  *                     data:
  *                       type: array
  *                       items:
- *                         $ref: '#/components/schemas/BusinessUser'
- *       400:
- *         description: Invalid business ID
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
-router.get('/business/:businessId/users', authenticate, getBusinessUsers);
-
-/**
- * @swagger
- * /api/users/business-users/{id}:
- *   get:
- *     summary: Get specific business user by ID
- *     tags: [Business Users]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *         description: Business User ID
- *     responses:
- *       200:
- *         description: Business user fetched successfully
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       $ref: '#/components/schemas/BusinessUser'
- *       400:
- *         description: Invalid business user ID
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
+ *                         $ref: '#/components/schemas/User'
+ *       403:
+ *         description: Forbidden - No access to this business
  *       404:
- *         description: Business user not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
+ *         description: Business not found
  */
-router.get('/business-users/:id', authenticate, getBusinessUser);
+router.get('/business/:businessId/users', authenticate, validateIdParam('businessId'), authorizeBusinessAccess, getUsersByBusiness);
 
 /**
  * @swagger
- * /api/users/business-users/{id}:
+ * /api/users/{userId}:
  *   put:
- *     summary: Update business user role or status
- *     tags: [Business Users]
+ *     summary: Update user
+ *     tags: [Users]
  *     security:
  *       - bearerAuth: []
  *     parameters:
  *       - in: path
- *         name: id
+ *         name: userId
  *         required: true
  *         schema:
  *           type: integer
- *         description: Business User ID
+ *         description: User ID
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/UpdateBusinessUserRequest'
+ *             $ref: '#/components/schemas/UpdateUserRequest'
  *     responses:
  *       200:
- *         description: Business user updated successfully
+ *         description: User updated successfully
  *         content:
  *           application/json:
  *             schema:
  *               allOf:
  *                 - $ref: '#/components/schemas/ApiResponse'
- *                 - type: object
- *                   properties:
+ *                 - properties:
  *                     data:
- *                       $ref: '#/components/schemas/BusinessUser'
+ *                       $ref: '#/components/schemas/User'
  *       400:
- *         description: Invalid input data
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
+ *         description: Validation error
+ *       403:
+ *         description: Forbidden - No access to this user
  *       404:
- *         description: Business user not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
+ *         description: User not found
  */
-router.put('/business-users/:id', authenticate, authorize(UserRole.ADMIN), updateBusinessUser);
+router.put('/users/:userId', authenticate, authorize(UserRole.ADMIN), validateIdParam('userId'), authorizeUserAccess, validateDto(UpdateUserDto), updateUser);
 
 /**
  * @swagger
- * /api/users/business-users/{id}:
+ * /api/users/{userId}:
  *   delete:
- *     summary: Remove user from business
- *     tags: [Business Users]
+ *     summary: Soft delete user
+ *     tags: [Users]
  *     security:
  *       - bearerAuth: []
  *     parameters:
  *       - in: path
- *         name: id
+ *         name: userId
  *         required: true
  *         schema:
  *           type: integer
- *         description: Business User ID
+ *         description: User ID
  *     responses:
  *       200:
- *         description: User removed from business successfully
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       type: null
- *       400:
- *         description: Invalid business user ID
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
+ *         description: User deleted successfully
+ *       403:
+ *         description: Forbidden - No access to this user
+ *       404:
+ *         description: User not found
  */
-router.delete('/business-users/:id', authenticate, authorize(UserRole.ADMIN), removeUserFromBusiness);
+router.delete('/users/:userId', authenticate, authorize(UserRole.ADMIN), validateIdParam('userId'), authorizeUserAccess, deleteUser);
 
-export default router; 
+export default router;

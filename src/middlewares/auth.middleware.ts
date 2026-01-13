@@ -3,14 +3,13 @@ import logger from '../utils/logger';
 import { requestContext } from '../contexts/request-context';
 import { ApiResponseHandler } from '../utils/apiResponse';
 import { AuthService } from '../services/auth.service';
-import * as userRepo from '../repositories/user.repo';
 import { AuthRequest, IUser } from '../dtos/auth.dto';
 import { UserRole } from '@prisma/client';
 
 export const authenticate = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
         const authHeader = req.headers.authorization;
-        
+
         if (!authHeader || !authHeader.startsWith('Bearer ')) {
             res.status(401).json({
                 success: false,
@@ -27,22 +26,15 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
             });
             return;
         }
-        
-        // Validate token
-        const iuser = AuthService.verifyToken(token);
+
+        // Validate access token - no DB call needed
+        // JWT is short-lived (15 min) so we trust it
+        // User status is verified on token refresh
+        const iuser = AuthService.verifyAccessToken(token);
         if (!iuser) {
             res.status(401).json({
                 success: false,
                 message: 'Invalid or expired token'
-            });
-            return;
-        }
-
-        // Get user from database
-        if (! (await userRepo.exists(iuser.id))) {
-            res.status(401).json({
-                success: false,
-                message: 'User not found'
             });
             return;
         }
@@ -55,12 +47,12 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
             req.user = userContext;
             next();
         });
-        
+
     } catch (error) {
         logger.error('Authentication error:', error);
         ApiResponseHandler.error(res, 'Authentication error', 401);
     }
-}; 
+};
 
 export const authorize = (...roles: UserRole[]) => {
     return (req: AuthRequest, res: Response, next: NextFunction) => {

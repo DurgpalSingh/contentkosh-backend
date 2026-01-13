@@ -1,4 +1,4 @@
-import { PrismaClient, UserRole, CourseStatus, SubjectStatus } from '@prisma/client';
+import { PrismaClient, UserRole, UserStatus, CourseStatus, SubjectStatus } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -25,7 +25,7 @@ async function main() {
   // Hash password for all users
   const hashedPassword = await bcrypt.hash('Password#123', 10);
 
-  // Create users of all types
+  // Create users with direct business and role assignment
   const users = await Promise.all([
     // SUPERADMIN
     prisma.user.create({
@@ -33,6 +33,9 @@ async function main() {
         email: 'superadmin@contentkosh.com',
         password: hashedPassword,
         name: 'Super Admin',
+        businessId: business.id,
+        role: UserRole.SUPERADMIN,
+        status: UserStatus.ACTIVE,
       },
     }),
     // ADMIN
@@ -41,6 +44,9 @@ async function main() {
         email: 'admin@contentkosh.com',
         password: hashedPassword,
         name: 'Admin User',
+        businessId: business.id,
+        role: UserRole.ADMIN,
+        status: UserStatus.ACTIVE,
       },
     }),
     // TEACHER
@@ -49,6 +55,9 @@ async function main() {
         email: 'teacher@contentkosh.com',
         password: hashedPassword,
         name: 'John Teacher',
+        businessId: business.id,
+        role: UserRole.TEACHER,
+        status: UserStatus.ACTIVE,
       },
     }),
     // STUDENT
@@ -57,65 +66,25 @@ async function main() {
         email: 'student@contentkosh.com',
         password: hashedPassword,
         name: 'Jane Student',
-      },
-    }),
-    // GUEST
-    prisma.user.create({
-      data: {
-        email: 'guest@contentkosh.com',
-        password: hashedPassword,
-        name: 'Guest User',
-      },
-    }),
-  ]);
-
-  console.log('✅ Created users:', users.map(u => `${u.name} (${u.email})`));
-
-  // Assign users to business with appropriate roles
-  const businessUsers = await Promise.all([
-    prisma.businessUser.create({
-      data: {
-        userId: users[0].id, // SUPERADMIN
-        businessId: business.id,
-        role: UserRole.SUPERADMIN,
-        isActive: true,
-      },
-    }),
-    prisma.businessUser.create({
-      data: {
-        userId: users[1].id, // ADMIN
-        businessId: business.id,
-        role: UserRole.ADMIN,
-        isActive: true,
-      },
-    }),
-    prisma.businessUser.create({
-      data: {
-        userId: users[2].id, // TEACHER
-        businessId: business.id,
-        role: UserRole.TEACHER,
-        isActive: true,
-      },
-    }),
-    prisma.businessUser.create({
-      data: {
-        userId: users[3].id, // STUDENT
         businessId: business.id,
         role: UserRole.STUDENT,
-        isActive: true,
+        status: UserStatus.ACTIVE,
       },
     }),
-    prisma.businessUser.create({
+    // USER (general user role)
+    prisma.user.create({
       data: {
-        userId: users[4].id, // GUEST
+        email: 'user@contentkosh.com',
+        password: hashedPassword,
+        name: 'Regular User',
         businessId: business.id,
-        role: UserRole.GUEST,
-        isActive: true,
+        role: UserRole.USER,
+        status: UserStatus.ACTIVE,
       },
     }),
   ]);
 
-  console.log('✅ Created business user assignments');
+  console.log('✅ Created users:', users.map(u => `${u.name} (${u.email}) - ${u.role}`));
 
   // Create exams
   const exams = await Promise.all([
@@ -126,6 +95,7 @@ async function main() {
         description: 'Union Public Service Commission Civil Services Examination',
         status: 'ACTIVE',
         businessId: business.id,
+        createdBy: users[0].id,
       },
     }),
     prisma.exam.create({
@@ -135,6 +105,7 @@ async function main() {
         description: 'National Eligibility cum Entrance Test for Medical Courses',
         status: 'ACTIVE',
         businessId: business.id,
+        createdBy: users[0].id,
       },
     }),
     prisma.exam.create({
@@ -144,6 +115,7 @@ async function main() {
         description: 'Joint Entrance Examination for Engineering',
         status: 'ACTIVE',
         businessId: business.id,
+        createdBy: users[0].id,
       },
     }),
   ]);
@@ -334,8 +306,17 @@ async function main() {
 
   console.log('✅ Created batches:', batches.map(b => b.displayName));
 
-  // Assign students to batches
+  // Assign teacher and student to batches
   const batchUsers = await Promise.all([
+    // Teacher assigned to UPSC batch
+    prisma.batchUser.create({
+      data: {
+        userId: users[2].id, // TEACHER
+        batchId: batches[0].id, // UPSC batch
+        isActive: true,
+      },
+    }),
+    // Student assigned to UPSC batch
     prisma.batchUser.create({
       data: {
         userId: users[3].id, // STUDENT
@@ -395,8 +376,7 @@ async function main() {
   console.log('🎉 Database seeding completed successfully!');
   console.log('\n📊 Summary:');
   console.log(`- 1 Business: ${business.instituteName}`);
-  console.log(`- ${users.length} Users (all roles)`);
-  console.log(`- ${businessUsers.length} Business User Assignments`);
+  console.log(`- ${users.length} Users (SUPERADMIN, ADMIN, TEACHER, STUDENT, USER)`);
   console.log(`- ${exams.length} Exams`);
   console.log(`- ${courses.length} Courses`);
   console.log(`- ${subjects.length} Subjects`);
@@ -404,12 +384,12 @@ async function main() {
   console.log(`- ${batchUsers.length} Batch User Assignments`);
   console.log(`- ${announcements.length} Announcements`);
 
-  console.log('\n🔑 Test Credentials:');
+  console.log('\n🔑 Test Credentials (Password: Password#123):');
   console.log('- Super Admin: superadmin@contentkosh.com');
   console.log('- Admin: admin@contentkosh.com');
   console.log('- Teacher: teacher@contentkosh.com');
   console.log('- Student: student@contentkosh.com');
-  console.log('- Guest: guest@contentkosh.com');
+  console.log('- User: user@contentkosh.com');
 }
 
 main()

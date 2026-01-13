@@ -260,6 +260,12 @@ router.get('/user/:userId', validateIdParam('userId'), batchController.getBatche
  *         schema:
  *           type: integer
  *         description: Batch ID
+ *       - in: query
+ *         name: role
+ *         schema:
+ *           type: string
+ *           enum: [STUDENT, TEACHER, ADMIN, USER]
+ *         description: Filter users by role
  *     responses:
  *       200:
  *         description: Batch users fetched successfully

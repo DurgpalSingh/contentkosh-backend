@@ -1,4 +1,4 @@
-import { Prisma, Batch } from '@prisma/client';
+import { Prisma, Batch, UserRole } from '@prisma/client';
 import * as batchRepo from '../repositories/batch.repo';
 import * as courseRepo from '../repositories/course.repo';
 import * as userRepo from '../repositories/user.repo';
@@ -130,18 +130,17 @@ export class BatchService {
         const businessId = batch.course?.exam?.businessId;
         if (!businessId) throw new BadRequestError('Batch is not associated with a valid business');
 
-        // 2. Fetch User with Business Roles
+        // 2. Fetch User
         const user = await userRepo.findPublicById(userId);
         if (!user) throw new NotFoundError('User not found');
 
-        // 3. Validate Role
-        const businessUser = user.businessUsers?.find(bu => bu.business.id === businessId);
-
-        if (!businessUser) {
+        // 3. Validate User belongs to this business
+        if (user.businessId !== businessId) {
             throw new BadRequestError('User is not part of this business');
         }
 
-        if (businessUser.role !== 'TEACHER' && businessUser.role !== 'STUDENT') {
+        // 4. Validate Role - only Teachers and Students can be added to a batch
+        if (user.role !== 'TEACHER' && user.role !== 'STUDENT') {
             throw new BadRequestError('Only Teachers and Students can be added to a batch');
         }
 
@@ -166,9 +165,9 @@ export class BatchService {
         return await batchRepo.findBatchesByUserId(userId);
     }
 
-    async getUsersByBatch(batchId: number, options?: any) {
-        logger.info('BatchService: Fetching users for batch', { batchId });
-        return await batchRepo.findUsersByBatchId(batchId);
+    async getUsersByBatch(batchId: number, role?: UserRole) {
+        logger.info('BatchService: Fetching users for batch', { batchId, role });
+        return await batchRepo.findUsersByBatchId(batchId, role);
     }
 
     async updateBatchUser(batchId: number, userId: number, data: any) {

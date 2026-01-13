@@ -1,31 +1,59 @@
 // src/repositories/user.repo.ts
-import { PrismaClient, Prisma } from '@prisma/client';
+import { PrismaClient, Prisma, UserRole, UserStatus } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../config/database';
 
-// const prisma = new PrismaClient();
-
-export async function createUser(data: Pick<Prisma.UserCreateInput, 'email' | 'password' | 'name'>) {
-  const hash = await bcrypt.hash(data.password, 12);
+export async function createUser(data: {
+  email: string;
+  password?: string | undefined;
+  name: string;
+  mobile?: string | undefined;
+  role?: UserRole | undefined;
+  businessId?: number | undefined;
+  status?: UserStatus | undefined;
+}) {
+  const hash = data.password ? await bcrypt.hash(data.password, 12) : 'TEMP'; // specific logic if password optional? Payload has password.
   try {
     return await prisma.user.create({
       data: {
         email: data.email.toLowerCase().trim(),
         password: hash,
         name: data.name?.trim() ?? '',
+        ...(data.mobile !== undefined && { mobile: data.mobile }),
+        ...(data.role !== undefined && { role: data.role }),
+        ...(data.businessId !== undefined && { businessId: data.businessId }),
+        ...(data.status !== undefined && { status: data.status }),
       },
-      select: { id: true, email: true, name: true, createdAt: true, updatedAt: true },
+      select: { id: true, email: true, name: true, role: true, businessId: true, mobile: true, createdAt: true, updatedAt: true },
     });
   } catch (e: any) {
-    if (e.code === 'P2002' && e.meta?.target?.includes('email')) {
-      throw new Error('EMAIL_ALREADY_EXISTS');
+    if (e.code === 'P2002') {
+      if (e.meta?.target?.includes('email')) throw new Error('EMAIL_ALREADY_EXISTS');
+      if (e.meta?.target?.includes('mobile')) throw new Error('MOBILE_ALREADY_EXISTS');
     }
     throw e;
   }
 }
 
 export function findByEmail(email: string) {
-  return prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
+  // Email is unique per business. without businessId, this is ambiguous.
+  // We return the first one found.
+  return prisma.user.findFirst({ where: { email: email.toLowerCase().trim() } });
+}
+
+export function findByBusinessAndEmail(businessId: number, email: string) {
+  return prisma.user.findUnique({
+    where: {
+      businessId_email: {
+        businessId,
+        email: email.toLowerCase().trim()
+      }
+    }
+  });
+}
+
+export function findByMobile(mobile: string) {
+  return prisma.user.findFirst({ where: { mobile } });
 }
 
 export async function exists(id: number): Promise<boolean> {
@@ -42,38 +70,63 @@ export function findPublicById(id: number) {
       email: true,
       name: true,
       password: true,
+      mobile: true,
+      role: true,
+      businessId: true,
       createdAt: true,
       updatedAt: true,
-      businessUsers: {
-        select: {
-          id: true,
-          business: { select: { id: true, instituteName: true } },
-          role: true,
-          isActive: true,
-        }
-      }
+      business: { select: { id: true, instituteName: true } }
     }
   });
 }
 
+export function findByBusinessId(businessId: number, role?: UserRole) {
+  return prisma.user.findMany({
+    where: {
+      businessId,
+      ...(role && { role })
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      mobile: true,
+      role: true,
+      status: true,
+      createdAt: true
+    }
+  });
+}
+
+export function updateUser(id: number, data: { name?: string; mobile?: string; role?: UserRole; status?: UserStatus; password?: string }) {
+  return prisma.user.update({
+    where: { id },
+    data,
+    select: { id: true, name: true, email: true, mobile: true, role: true, businessId: true, status: true, updatedAt: true }
+  });
+}
+
+export function softDeleteUser(id: number) {
+  return prisma.user.update({
+    where: { id },
+    data: { status: UserStatus.INACTIVE }
+  });
+}
+
 export function findByEmailWithBusinesses(email: string) {
-  return prisma.user.findUnique({
+  return prisma.user.findFirst({
     where: { email: email.toLowerCase().trim() },
     select: {
       id: true,
       email: true,
       name: true,
       password: true,
+      role: true,
+      status: true,
+      businessId: true,
       createdAt: true,
       updatedAt: true,
-      businessUsers: {
-        select: {
-          id: true,
-          business: { select: { id: true, instituteName: true } },
-          role: true,
-          isActive: true,
-        }
-      }
+      business: { select: { id: true, instituteName: true } }
     }
   });
 }

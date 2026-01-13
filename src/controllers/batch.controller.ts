@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { UserRole } from '@prisma/client';
 import { ApiResponseHandler } from '../utils/apiResponse';
 import logger from '../utils/logger';
 import { BadRequestError, NotFoundError, AlreadyExistsError } from '../errors/api.errors';
@@ -137,7 +138,13 @@ export class BatchController {
   public getUsersByBatch = async (req: Request, res: Response) => {
     try {
       const batchId = ValidationUtils.validateId(req.params.batchId, 'Batch ID');
-      const users = await this.batchService.getUsersByBatch(batchId);
+      const role = req.query.role as UserRole | undefined;
+
+      if (role && !Object.values(UserRole).includes(role)) {
+        return ApiResponseHandler.error(res, `Invalid role: ${role}`, 400);
+      }
+
+      const users = await this.batchService.getUsersByBatch(batchId, role);
       ApiResponseHandler.success(res, users, 'Batch users fetched successfully');
     } catch (error: any) {
       logger.error(`Error fetching batch users: ${error.message}`);
