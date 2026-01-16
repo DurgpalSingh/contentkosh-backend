@@ -18,6 +18,11 @@ jest.mock('../../../src/middlewares/auth.middleware', () => ({
     authenticate: (req: any, res: any, next: any) => next(),
     authorize: () => (req: any, res: any, next: any) => next(),
 }));
+jest.mock('../../../src/middlewares/validation.middleware', () => ({
+    validateIdParam: () => (req: any, res: any, next: any) => next(),
+    authorizeBatchAccess: (req: any, res: any, next: any) => next(),
+    authorizeCourseAccess: (req: any, res: any, next: any) => next(),
+}));
 jest.mock('../../../src/utils/logger');
 
 const app = express();
@@ -141,6 +146,50 @@ describe('Batch Routes', () => {
 
             expect(res.status).toBe(200);
             expect(res.body.data).toHaveLength(2);
+        });
+
+        it('should map include=students to batchUsers with student role', async () => {
+            const mockBatches = [
+                {
+                    id: 1,
+                    codeName: 'BATCH001',
+                    batchUsers: [
+                        { user: { id: 1, name: 'Student 1', role: 'STUDENT' } }
+                    ]
+                }
+            ];
+            (BatchRepo.findBatchesByCourseId as jest.Mock).mockResolvedValue(mockBatches);
+            (CourseRepo.findCourseById as jest.Mock).mockResolvedValue({ id: 1, examId: 1 });
+            (ExamRepo.findExamById as jest.Mock).mockResolvedValue({ id: 1, businessId: 1 });
+
+            const res = await request(app).get('/api/batches/course/1?include=students');
+
+            expect(res.status).toBe(200);
+
+            // Verify the service transformed the options
+            const expectedOptions = {
+                include: {
+                    batchUsers: {
+                        where: {
+                            user: { role: 'STUDENT' }
+                        },
+                        include: {
+                            user: {
+                                select: {
+                                    id: true,
+                                    name: true,
+                                    email: true,
+                                    mobile: true,
+                                    role: true
+                                }
+                            }
+                        }
+                    }
+                }
+            };
+
+            // Check the second argument of the call (options)
+            expect(BatchRepo.findBatchesByCourseId).toHaveBeenCalledWith(1, expect.objectContaining(expectedOptions));
         });
 
         it('should return 400 if courseId is invalid', async () => {

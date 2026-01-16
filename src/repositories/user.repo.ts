@@ -1,6 +1,5 @@
 // src/repositories/user.repo.ts
 import { PrismaClient, Prisma, UserRole, UserStatus } from '@prisma/client';
-import bcrypt from 'bcryptjs';
 import { prisma } from '../config/database';
 
 export async function createUser(data: {
@@ -12,12 +11,12 @@ export async function createUser(data: {
   businessId?: number | undefined;
   status?: UserStatus | undefined;
 }) {
-  const hash = data.password ? await bcrypt.hash(data.password, 12) : 'TEMP'; // specific logic if password optional? Payload has password.
   try {
     return await prisma.user.create({
       data: {
         email: data.email.toLowerCase().trim(),
-        password: hash,
+        password: data.password!,
+
         name: data.name?.trim() ?? '',
         ...(data.mobile !== undefined && { mobile: data.mobile }),
         ...(data.role !== undefined && { role: data.role }),

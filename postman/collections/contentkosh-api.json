@@ -1,5 +1,6 @@
 {
   "info": {
+    "_postman_id": "3326668c-834c-4a12-bf23-e36a32c8c68a",
     "name": "Contentkosh API",
     "description": "Backend API for Contentkosh application",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
@@ -10,6 +11,7 @@
       "item": [
         {
           "name": "Create a new announcement",
+          "id": "0e4047d4-ff16-4595-9576-6385654314f4",
           "request": {
             "method": "POST",
             "header": [
@@ -19,19 +21,6 @@
                 "type": "text"
               }
             ],
-            "url": {
-              "raw": "{{baseUrl}}/api/announcements",
-              "protocol": "http",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "announcements"
-              ],
-              "query": [],
-              "variable": []
-            },
             "body": {
               "mode": "raw",
               "raw": "{}",
@@ -40,11 +29,24 @@
                   "language": "json"
                 }
               }
+            },
+            "url": {
+              "raw": "http://{{baseUrl}}/api/announcements",
+              "protocol": "http",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "announcements"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Get announcement by ID",
+          "id": "301a84aa-d118-454b-8076-416660fb6864",
           "request": {
             "method": "GET",
             "header": [
@@ -55,7 +57,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/announcements/:id",
+              "raw": "http://{{baseUrl}}/api/announcements/:id",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -65,13 +67,18 @@
                 "announcements",
                 ":id"
               ],
-              "query": [],
-              "variable": []
+              "variable": [
+                {
+                  "key": "id"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Update announcement",
+          "id": "f0252b00-2a83-47cb-baa3-eda4758f8485",
           "request": {
             "method": "PUT",
             "header": [
@@ -81,8 +88,17 @@
                 "type": "text"
               }
             ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
             "url": {
-              "raw": "{{baseUrl}}/api/announcements/:id",
+              "raw": "http://{{baseUrl}}/api/announcements/:id",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -92,22 +108,18 @@
                 "announcements",
                 ":id"
               ],
-              "query": [],
-              "variable": []
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{}",
-              "options": {
-                "raw": {
-                  "language": "json"
+              "variable": [
+                {
+                  "key": "id"
                 }
-              }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Delete announcement",
+          "id": "fa7ba46c-2f73-4c96-a5cf-d2d98db4236c",
           "request": {
             "method": "DELETE",
             "header": [
@@ -118,7 +130,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/announcements/:id",
+              "raw": "http://{{baseUrl}}/api/announcements/:id",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -128,13 +140,18 @@
                 "announcements",
                 ":id"
               ],
-              "query": [],
-              "variable": []
+              "variable": [
+                {
+                  "key": "id"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Get all announcements for a business",
+          "id": "a5210ec7-aa2c-4bbc-b02f-3a36618839cc",
           "request": {
             "method": "GET",
             "header": [
@@ -145,7 +162,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/announcements/business/:businessId",
+              "raw": "http://{{baseUrl}}/api/announcements/business/:businessId",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -164,12 +181,18 @@
                   "disabled": true
                 }
               ],
-              "variable": []
+              "variable": [
+                {
+                  "key": "businessId"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Get announcements for a business filtered by role",
+          "id": "b9f59eee-3937-4fe8-8016-8abb6cb3287a",
           "request": {
             "method": "GET",
             "header": [
@@ -180,7 +203,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/announcements/business/:businessId/role",
+              "raw": "http://{{baseUrl}}/api/announcements/business/:businessId/role",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -200,12 +223,18 @@
                   "disabled": true
                 }
               ],
-              "variable": []
+              "variable": [
+                {
+                  "key": "businessId"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Get announcements for a business within a date range",
+          "id": "bd287869-aee7-4400-bece-1562e32efacf",
           "request": {
             "method": "GET",
             "header": [
@@ -216,7 +245,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/announcements/business/:businessId/date-range",
+              "raw": "http://{{baseUrl}}/api/announcements/business/:businessId/date-range",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -242,22 +271,38 @@
                   "disabled": true
                 }
               ],
-              "variable": []
+              "variable": [
+                {
+                  "key": "businessId"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         }
-      ]
+      ],
+      "id": "3f1d1dbe-e6cd-4ea1-b110-d793cce24b37"
     },
     {
       "name": "Auth",
       "item": [
         {
           "name": "Register a new user",
+          "id": "ae3d4436-fb77-44bd-87a8-0a67c1343ba1",
           "request": {
             "method": "POST",
             "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
             "url": {
-              "raw": "{{baseUrl}}/auth/signup",
+              "raw": "http://{{baseUrl}}/auth/signup",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -265,39 +310,47 @@
               "path": [
                 "auth",
                 "signup"
-              ],
-              "query": [],
-              "variable": []
-            },
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login user",
+          "id": "aab61ce8-4bb7-4072-902e-9a8181f45da5",
+          "request": {
+            "method": "POST",
+            "header": [],
             "body": {
               "mode": "raw",
-              "raw": "{}",
+              "raw": "{\r\n    \"email\" : \"admin@contentkosh.com\",\r\n    \"password\" : \"Password#123\"\r\n}",
               "options": {
                 "raw": {
                   "language": "json"
                 }
               }
-            }
-          }
-        },
-        {
-          "name": "Login user",
-          "request": {
-            "method": "POST",
-            "header": [],
+            },
             "url": {
-              "raw": "{{baseUrl}}/auth/login",
+              "raw": "http://{{baseUrl}}/api/auth/login",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
+                "api",
                 "auth",
                 "login"
-              ],
-              "query": [],
-              "variable": []
-            },
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Refresh access token using refresh token",
+          "id": "dbd15b3d-1ef3-4a8d-9428-3fe3395c61ed",
+          "request": {
+            "method": "POST",
+            "header": [],
             "body": {
               "mode": "raw",
               "raw": "{}",
@@ -306,16 +359,9 @@
                   "language": "json"
                 }
               }
-            }
-          }
-        },
-        {
-          "name": "Refresh access token using refresh token",
-          "request": {
-            "method": "POST",
-            "header": [],
+            },
             "url": {
-              "raw": "{{baseUrl}}/auth/refresh",
+              "raw": "http://{{baseUrl}}/auth/refresh",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -323,10 +369,17 @@
               "path": [
                 "auth",
                 "refresh"
-              ],
-              "query": [],
-              "variable": []
-            },
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Logout user (revokes refresh token)",
+          "id": "ff0587ad-f787-42c5-9e2a-27b33c8d3bcd",
+          "request": {
+            "method": "POST",
+            "header": [],
             "body": {
               "mode": "raw",
               "raw": "{}",
@@ -335,16 +388,9 @@
                   "language": "json"
                 }
               }
-            }
-          }
-        },
-        {
-          "name": "Logout user (revokes refresh token)",
-          "request": {
-            "method": "POST",
-            "header": [],
+            },
             "url": {
-              "raw": "{{baseUrl}}/auth/logout",
+              "raw": "http://{{baseUrl}}/auth/logout",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -352,23 +398,14 @@
               "path": [
                 "auth",
                 "logout"
-              ],
-              "query": [],
-              "variable": []
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Get logged-in user profile",
+          "id": "8ea8384e-a966-4bef-b6e6-9ab2265590a1",
           "request": {
             "method": "GET",
             "header": [
@@ -379,7 +416,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/auth/me",
+              "raw": "http://{{baseUrl}}/auth/me",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -387,19 +424,20 @@
               "path": [
                 "auth",
                 "me"
-              ],
-              "query": [],
-              "variable": []
+              ]
             }
-          }
+          },
+          "response": []
         }
-      ]
+      ],
+      "id": "d370c621-80ce-4c39-a655-2aa9af7ab9bc"
     },
     {
       "name": "Batch Users",
       "item": [
         {
           "name": "Add user to batch",
+          "id": "e19df0ee-c5fb-4199-9542-5ec42c76390b",
           "request": {
             "method": "POST",
             "header": [
@@ -409,8 +447,17 @@
                 "type": "text"
               }
             ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
             "url": {
-              "raw": "{{baseUrl}}/api/batches/add-user",
+              "raw": "http://{{baseUrl}}/api/batches/add-user",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -419,23 +466,14 @@
                 "api",
                 "batches",
                 "add-user"
-              ],
-              "query": [],
-              "variable": []
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Remove user from batch",
+          "id": "0f88119b-66c6-4df6-b32b-1e9993dc15d3",
           "request": {
             "method": "POST",
             "header": [
@@ -445,20 +483,6 @@
                 "type": "text"
               }
             ],
-            "url": {
-              "raw": "{{baseUrl}}/api/batches/remove-user",
-              "protocol": "http",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "batches",
-                "remove-user"
-              ],
-              "query": [],
-              "variable": []
-            },
             "body": {
               "mode": "raw",
               "raw": "{}",
@@ -467,11 +491,25 @@
                   "language": "json"
                 }
               }
+            },
+            "url": {
+              "raw": "http://{{baseUrl}}/api/batches/remove-user",
+              "protocol": "http",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "batches",
+                "remove-user"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Get all batches for a user",
+          "id": "fd639c37-b43a-4f29-ae43-45e96c075953",
           "request": {
             "method": "GET",
             "header": [
@@ -482,7 +520,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/batches/user/:userId",
+              "raw": "http://{{baseUrl}}/api/batches/user/:userId",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -493,13 +531,18 @@
                 "user",
                 ":userId"
               ],
-              "query": [],
-              "variable": []
+              "variable": [
+                {
+                  "key": "userId"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Get all batches for a user (with Course)",
+          "id": "cc05d106-c737-47ce-965a-25d2e5642cec",
           "request": {
             "method": "GET",
             "header": [
@@ -510,7 +553,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/batches/user/:userId",
+              "raw": "http://{{baseUrl}}/api/batches/user/:userId?include=course",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -525,16 +568,21 @@
                 {
                   "key": "include",
                   "value": "course",
-                  "description": "Inserted variant parameter",
-                  "disabled": false
+                  "description": "Inserted variant parameter"
                 }
               ],
-              "variable": []
+              "variable": [
+                {
+                  "key": "userId"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Get all batches for a user (with Students)",
+          "id": "b7f1ca73-a946-4c82-8a9e-ba5aa302aa0f",
           "request": {
             "method": "GET",
             "header": [
@@ -545,7 +593,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/batches/user/:userId",
+              "raw": "http://{{baseUrl}}/api/batches/user/:userId?include=students",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -560,16 +608,21 @@
                 {
                   "key": "include",
                   "value": "students",
-                  "description": "Inserted variant parameter",
-                  "disabled": false
+                  "description": "Inserted variant parameter"
                 }
               ],
-              "variable": []
+              "variable": [
+                {
+                  "key": "userId"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Get all users for a batch",
+          "id": "016bc49d-0687-4364-b8f8-ad3c2cb218ed",
           "request": {
             "method": "GET",
             "header": [
@@ -580,7 +633,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/batches/:batchId/users",
+              "raw": "http://{{baseUrl}}/api/batches/:batchId/users",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -599,12 +652,18 @@
                   "disabled": true
                 }
               ],
-              "variable": []
+              "variable": [
+                {
+                  "key": "batchId"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Get all users for a batch (with Course)",
+          "id": "82743106-60f3-4179-821e-9d1aeb051ab8",
           "request": {
             "method": "GET",
             "header": [
@@ -615,7 +674,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/batches/:batchId/users",
+              "raw": "http://{{baseUrl}}/api/batches/:batchId/users?include=course",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -636,16 +695,21 @@
                 {
                   "key": "include",
                   "value": "course",
-                  "description": "Inserted variant parameter",
-                  "disabled": false
+                  "description": "Inserted variant parameter"
                 }
               ],
-              "variable": []
+              "variable": [
+                {
+                  "key": "batchId"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Get all users for a batch (with Students)",
+          "id": "45dae0f4-82a1-4274-8728-cfa170758160",
           "request": {
             "method": "GET",
             "header": [
@@ -656,7 +720,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/batches/:batchId/users",
+              "raw": "http://{{baseUrl}}/api/batches/:batchId/users?include=students",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -677,16 +741,21 @@
                 {
                   "key": "include",
                   "value": "students",
-                  "description": "Inserted variant parameter",
-                  "disabled": false
+                  "description": "Inserted variant parameter"
                 }
               ],
-              "variable": []
+              "variable": [
+                {
+                  "key": "batchId"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Update batch user status",
+          "id": "6de448bb-32f7-4d84-828d-6eddb451b6c0",
           "request": {
             "method": "PUT",
             "header": [
@@ -696,8 +765,17 @@
                 "type": "text"
               }
             ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"codeName\": \"BATCH-01\",\n  \"displayName\": \"Morning Batch\",\n  \"courseId\": 1,\n  \"startDate\": \"2024-01-01\",\n  \"endDate\": \"2024-12-31\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
             "url": {
-              "raw": "{{baseUrl}}/api/batches/:batchId/users/:userId",
+              "raw": "http://{{baseUrl}}/api/batches/:batchId/users/:userId",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -709,27 +787,27 @@
                 "users",
                 ":userId"
               ],
-              "query": [],
-              "variable": []
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"codeName\": \"BATCH-01\",\n  \"displayName\": \"Morning Batch\",\n  \"courseId\": 1,\n  \"startDate\": \"2024-01-01\",\n  \"endDate\": \"2024-12-31\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
+              "variable": [
+                {
+                  "key": "batchId"
+                },
+                {
+                  "key": "userId"
                 }
-              }
+              ]
             }
-          }
+          },
+          "response": []
         }
-      ]
+      ],
+      "id": "2d072899-911e-436a-8f1a-53ee9cb8de65"
     },
     {
       "name": "Batches",
       "item": [
         {
           "name": "Create a new batch",
+          "id": "8fd17f9e-545a-4d59-984d-a8c93eb8bdfa",
           "request": {
             "method": "POST",
             "header": [
@@ -739,19 +817,6 @@
                 "type": "text"
               }
             ],
-            "url": {
-              "raw": "{{baseUrl}}/api/batches",
-              "protocol": "http",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "batches"
-              ],
-              "query": [],
-              "variable": []
-            },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"codeName\": \"BATCH-01\",\n  \"displayName\": \"Morning Batch\",\n  \"courseId\": 1,\n  \"startDate\": \"2024-01-01\",\n  \"endDate\": \"2024-12-31\"\n}",
@@ -760,11 +825,24 @@
                   "language": "json"
                 }
               }
+            },
+            "url": {
+              "raw": "http://{{baseUrl}}/api/batches",
+              "protocol": "http",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "batches"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Get batch by ID",
+          "id": "357049fc-4ac5-4ca6-8aa2-4f45f7728669",
           "request": {
             "method": "GET",
             "header": [
@@ -775,7 +853,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/batches/:id",
+              "raw": "http://{{baseUrl}}/api/batches/:id",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -785,13 +863,18 @@
                 "batches",
                 ":id"
               ],
-              "query": [],
-              "variable": []
+              "variable": [
+                {
+                  "key": "id"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Get batch by ID (with Course)",
+          "id": "832dc498-5aa3-4ea1-8884-bedcd87a5a7e",
           "request": {
             "method": "GET",
             "header": [
@@ -802,7 +885,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/batches/:id",
+              "raw": "http://{{baseUrl}}/api/batches/:id?include=course",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -816,16 +899,21 @@
                 {
                   "key": "include",
                   "value": "course",
-                  "description": "Inserted variant parameter",
-                  "disabled": false
+                  "description": "Inserted variant parameter"
                 }
               ],
-              "variable": []
+              "variable": [
+                {
+                  "key": "id"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Get batch by ID (with Students)",
+          "id": "84c9c3eb-8d5f-444b-aff5-57062af27079",
           "request": {
             "method": "GET",
             "header": [
@@ -836,7 +924,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/batches/:id",
+              "raw": "http://{{baseUrl}}/api/batches/:id?include=students",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -850,16 +938,21 @@
                 {
                   "key": "include",
                   "value": "students",
-                  "description": "Inserted variant parameter",
-                  "disabled": false
+                  "description": "Inserted variant parameter"
                 }
               ],
-              "variable": []
+              "variable": [
+                {
+                  "key": "id"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Update batch",
+          "id": "bb9f5b5d-d867-4ccf-a66f-df19b3a41eda",
           "request": {
             "method": "PUT",
             "header": [
@@ -869,8 +962,17 @@
                 "type": "text"
               }
             ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"codeName\": \"BATCH-01\",\n  \"displayName\": \"Morning Batch\",\n  \"courseId\": 1,\n  \"startDate\": \"2024-01-01\",\n  \"endDate\": \"2024-12-31\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
             "url": {
-              "raw": "{{baseUrl}}/api/batches/:id",
+              "raw": "http://{{baseUrl}}/api/batches/:id",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -880,22 +982,18 @@
                 "batches",
                 ":id"
               ],
-              "query": [],
-              "variable": []
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"codeName\": \"BATCH-01\",\n  \"displayName\": \"Morning Batch\",\n  \"courseId\": 1,\n  \"startDate\": \"2024-01-01\",\n  \"endDate\": \"2024-12-31\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
+              "variable": [
+                {
+                  "key": "id"
                 }
-              }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Delete batch",
+          "id": "a2aa9af8-4fa6-4131-bf39-485cef55d008",
           "request": {
             "method": "DELETE",
             "header": [
@@ -906,7 +1004,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/batches/:id",
+              "raw": "http://{{baseUrl}}/api/batches/:id",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -916,13 +1014,18 @@
                 "batches",
                 ":id"
               ],
-              "query": [],
-              "variable": []
+              "variable": [
+                {
+                  "key": "id"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Get all batches for a course",
+          "id": "c36811df-49aa-4809-ab4b-e50b4e053f10",
           "request": {
             "method": "GET",
             "header": [
@@ -933,7 +1036,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/batches/course/:courseId",
+              "raw": "http://{{baseUrl}}/api/batches/course/:courseId",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -952,12 +1055,18 @@
                   "disabled": true
                 }
               ],
-              "variable": []
+              "variable": [
+                {
+                  "key": "courseId"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Get all batches for a course (with Course)",
+          "id": "596a73b1-851c-474d-bc63-05e7a1db6d5f",
           "request": {
             "method": "GET",
             "header": [
@@ -968,7 +1077,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/batches/course/:courseId",
+              "raw": "http://{{baseUrl}}/api/batches/course/:courseId?include=course",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -989,16 +1098,21 @@
                 {
                   "key": "include",
                   "value": "course",
-                  "description": "Inserted variant parameter",
-                  "disabled": false
+                  "description": "Inserted variant parameter"
                 }
               ],
-              "variable": []
+              "variable": [
+                {
+                  "key": "courseId"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Get all batches for a course (with Students)",
+          "id": "88d365b2-2741-49f7-9eaa-7f72a7381419",
           "request": {
             "method": "GET",
             "header": [
@@ -1009,7 +1123,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/batches/course/:courseId",
+              "raw": "http://{{baseUrl}}/api/batches/course/:courseId?include=students",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -1031,20 +1145,29 @@
                   "key": "include",
                   "value": "students",
                   "description": "Inserted variant parameter",
-                  "disabled": false
+                  "uuid": "4b50a0be-4e36-4603-ad23-256ef1b036d7"
                 }
               ],
-              "variable": []
+              "variable": [
+                {
+                  "key": "courseId",
+                  "value": "1",
+                  "uuid": "c809061f-5cf3-45e8-b478-aa17de7556a3"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         }
-      ]
+      ],
+      "id": "ff1ed689-43a4-47e2-afe3-2af73e17e2ac"
     },
     {
       "name": "Business",
       "item": [
         {
           "name": "Create exam under business",
+          "id": "e96fb488-8a13-457d-a545-47ee7b479941",
           "request": {
             "method": "POST",
             "header": [
@@ -1054,21 +1177,6 @@
                 "type": "text"
               }
             ],
-            "url": {
-              "raw": "{{baseUrl}}/api/business/:businessId/exams",
-              "protocol": "http",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "business",
-                ":businessId",
-                "exams"
-              ],
-              "query": [],
-              "variable": []
-            },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"Sample Exam\",\n  \"businessId\": 1,\n  \"isActive\": true\n}",
@@ -1077,22 +1185,9 @@
                   "language": "json"
                 }
               }
-            }
-          }
-        },
-        {
-          "name": "List exams for a business",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
-            ],
+            },
             "url": {
-              "raw": "{{baseUrl}}/api/business/:businessId/exams",
+              "raw": "http://{{baseUrl}}/api/business/:businessId/exams",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -1103,13 +1198,18 @@
                 ":businessId",
                 "exams"
               ],
-              "query": [],
-              "variable": []
+              "variable": [
+                {
+                  "key": "businessId"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
-          "name": "Get exam by ID under a business",
+          "name": "List exams for a business",
+          "id": "c512a28c-1058-4fa3-abd4-10449b3481ac",
           "request": {
             "method": "GET",
             "header": [
@@ -1120,7 +1220,40 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/business/:businessId/exams/:id",
+              "raw": "http://{{baseUrl}}/api/business/:businessId/exams",
+              "protocol": "http",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "business",
+                ":businessId",
+                "exams"
+              ],
+              "variable": [
+                {
+                  "key": "businessId"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get exam by ID under a business",
+          "id": "0be8e11c-6250-4a4d-907d-857cf3e441c5",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://{{baseUrl}}/api/business/:businessId/exams/:id",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -1146,12 +1279,21 @@
                   "disabled": true
                 }
               ],
-              "variable": []
+              "variable": [
+                {
+                  "key": "businessId"
+                },
+                {
+                  "key": "id"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Update exam under a business",
+          "id": "bdc0ed88-deb2-4cbc-b003-315c234098bd",
           "request": {
             "method": "PUT",
             "header": [
@@ -1161,22 +1303,6 @@
                 "type": "text"
               }
             ],
-            "url": {
-              "raw": "{{baseUrl}}/api/business/:businessId/exams/:id",
-              "protocol": "http",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "business",
-                ":businessId",
-                "exams",
-                ":id"
-              ],
-              "query": [],
-              "variable": []
-            },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"Sample Exam\",\n  \"businessId\": 1,\n  \"isActive\": true\n}",
@@ -1185,22 +1311,9 @@
                   "language": "json"
                 }
               }
-            }
-          }
-        },
-        {
-          "name": "Delete exam under a business",
-          "request": {
-            "method": "DELETE",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
-            ],
+            },
             "url": {
-              "raw": "{{baseUrl}}/api/business/:businessId/exams/:id",
+              "raw": "http://{{baseUrl}}/api/business/:businessId/exams/:id",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -1212,137 +1325,21 @@
                 "exams",
                 ":id"
               ],
-              "query": [],
-              "variable": []
-            }
-          }
-        },
-        {
-          "name": "Create business configuration",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/business",
-              "protocol": "http",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "business"
-              ],
-              "query": [],
-              "variable": []
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{}",
-              "options": {
-                "raw": {
-                  "language": "json"
+              "variable": [
+                {
+                  "key": "businessId"
+                },
+                {
+                  "key": "id"
                 }
-              }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
-          "name": "Get business configuration",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/business",
-              "protocol": "http",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "business"
-              ],
-              "query": [],
-              "variable": []
-            }
-          }
-        },
-        {
-          "name": "Get business configuration by ID",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/business/:id",
-              "protocol": "http",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "business",
-                ":id"
-              ],
-              "query": [],
-              "variable": []
-            }
-          }
-        },
-        {
-          "name": "Update business configuration",
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/business/:id",
-              "protocol": "http",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "business",
-                ":id"
-              ],
-              "query": [],
-              "variable": []
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
-          }
-        },
-        {
-          "name": "Delete business configuration",
+          "name": "Delete exam under a business",
+          "id": "297ca75a-38d9-47ae-a4e8-30da581257a3",
           "request": {
             "method": "DELETE",
             "header": [
@@ -1353,7 +1350,105 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/business/:id",
+              "raw": "http://{{baseUrl}}/api/business/:businessId/exams/:id",
+              "protocol": "http",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "business",
+                ":businessId",
+                "exams",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "businessId"
+                },
+                {
+                  "key": "id"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create business configuration",
+          "id": "db382dcf-ad3c-4f79-aed4-d761501ae1b9",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://{{baseUrl}}/api/business",
+              "protocol": "http",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "business"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get business configuration",
+          "id": "75fd8719-8a9a-4cb5-9a0f-96f6f4f801b0",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://{{baseUrl}}/api/business",
+              "protocol": "http",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "business"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get business configuration by ID",
+          "id": "7d84524b-763e-49f7-aa72-3e23e9b3b9a4",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://{{baseUrl}}/api/business/:id",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -1363,18 +1458,97 @@
                 "business",
                 ":id"
               ],
-              "query": [],
-              "variable": []
+              "variable": [
+                {
+                  "key": "id"
+                }
+              ]
             }
-          }
+          },
+          "response": []
+        },
+        {
+          "name": "Update business configuration",
+          "id": "caa18300-a4d7-4490-bb63-8aa4546a29d5",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://{{baseUrl}}/api/business/:id",
+              "protocol": "http",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "business",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete business configuration",
+          "id": "3ea9a606-fadf-426d-8a2a-e8e8754f21bb",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://{{baseUrl}}/api/business/:id",
+              "protocol": "http",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "business",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id"
+                }
+              ]
+            }
+          },
+          "response": []
         }
-      ]
+      ],
+      "id": "cce9c020-c8fd-46fb-b4c2-bfd9d1a9f740"
     },
     {
       "name": "Courses",
       "item": [
         {
           "name": "Create a new course under an exam",
+          "id": "ee5cc868-3890-4ecf-a952-636db21dc70c",
           "request": {
             "method": "POST",
             "header": [
@@ -1384,21 +1558,6 @@
                 "type": "text"
               }
             ],
-            "url": {
-              "raw": "{{baseUrl}}/api/exams/:examId/courses",
-              "protocol": "http",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "exams",
-                ":examId",
-                "courses"
-              ],
-              "query": [],
-              "variable": []
-            },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"Sample Course\",\n  \"examId\": 1,\n  \"duration\": \"6 months\"\n}",
@@ -1407,11 +1566,31 @@
                   "language": "json"
                 }
               }
+            },
+            "url": {
+              "raw": "http://{{baseUrl}}/api/exams/:examId/courses",
+              "protocol": "http",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "exams",
+                ":examId",
+                "courses"
+              ],
+              "variable": [
+                {
+                  "key": "examId"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Get all courses for an exam",
+          "id": "1ba3cc50-1dc6-471d-b4b1-a9cc41882c2b",
           "request": {
             "method": "GET",
             "header": [
@@ -1422,7 +1601,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/exams/:examId/courses",
+              "raw": "http://{{baseUrl}}/api/exams/:examId/courses",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -1453,12 +1632,18 @@
                   "disabled": true
                 }
               ],
-              "variable": []
+              "variable": [
+                {
+                  "key": "examId"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Get all courses for an exam (with Courses)",
+          "id": "98ea5868-bfcb-4a69-aea1-07fddb52ff00",
           "request": {
             "method": "GET",
             "header": [
@@ -1469,7 +1654,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/exams/:examId/courses",
+              "raw": "http://{{baseUrl}}/api/exams/:examId/courses?include=courses",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -1496,16 +1681,21 @@
                 {
                   "key": "include",
                   "value": "courses",
-                  "description": "Inserted variant parameter",
-                  "disabled": false
+                  "description": "Inserted variant parameter"
                 }
               ],
-              "variable": []
+              "variable": [
+                {
+                  "key": "examId"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Get all courses for an exam (with Subjects)",
+          "id": "c05151d4-1c72-4979-a8c9-a3e381720c50",
           "request": {
             "method": "GET",
             "header": [
@@ -1516,7 +1706,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/exams/:examId/courses",
+              "raw": "http://{{baseUrl}}/api/exams/:examId/courses?include=subjects",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -1543,16 +1733,21 @@
                 {
                   "key": "include",
                   "value": "subjects",
-                  "description": "Inserted variant parameter",
-                  "disabled": false
+                  "description": "Inserted variant parameter"
                 }
               ],
-              "variable": []
+              "variable": [
+                {
+                  "key": "examId"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Get all courses for an exam (with Exam)",
+          "id": "c3aa71ed-be17-458a-83c2-5f8349280927",
           "request": {
             "method": "GET",
             "header": [
@@ -1563,7 +1758,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/exams/:examId/courses",
+              "raw": "http://{{baseUrl}}/api/exams/:examId/courses?include=exam",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -1590,16 +1785,21 @@
                 {
                   "key": "include",
                   "value": "exam",
-                  "description": "Inserted variant parameter",
-                  "disabled": false
+                  "description": "Inserted variant parameter"
                 }
               ],
-              "variable": []
+              "variable": [
+                {
+                  "key": "examId"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Get course by ID under an exam",
+          "id": "069db77c-b1e7-478c-8a6d-51dcfe20a3f2",
           "request": {
             "method": "GET",
             "header": [
@@ -1610,7 +1810,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/exams/:examId/courses/:courseId",
+              "raw": "http://{{baseUrl}}/api/exams/:examId/courses/:courseId",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -1636,12 +1836,21 @@
                   "disabled": true
                 }
               ],
-              "variable": []
+              "variable": [
+                {
+                  "key": "examId"
+                },
+                {
+                  "key": "courseId"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Get course by ID under an exam (with Courses)",
+          "id": "db34c357-0902-4b9e-abce-971f76ee2ea6",
           "request": {
             "method": "GET",
             "header": [
@@ -1652,7 +1861,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/exams/:examId/courses/:courseId",
+              "raw": "http://{{baseUrl}}/api/exams/:examId/courses/:courseId?include=courses",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -1674,16 +1883,24 @@
                 {
                   "key": "include",
                   "value": "courses",
-                  "description": "Inserted variant parameter",
-                  "disabled": false
+                  "description": "Inserted variant parameter"
                 }
               ],
-              "variable": []
+              "variable": [
+                {
+                  "key": "examId"
+                },
+                {
+                  "key": "courseId"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Get course by ID under an exam (with Subjects)",
+          "id": "a310a072-a01c-4485-8e18-1509285a286f",
           "request": {
             "method": "GET",
             "header": [
@@ -1694,7 +1911,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/exams/:examId/courses/:courseId",
+              "raw": "http://{{baseUrl}}/api/exams/:examId/courses/:courseId?include=subjects",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -1716,16 +1933,24 @@
                 {
                   "key": "include",
                   "value": "subjects",
-                  "description": "Inserted variant parameter",
-                  "disabled": false
+                  "description": "Inserted variant parameter"
                 }
               ],
-              "variable": []
+              "variable": [
+                {
+                  "key": "examId"
+                },
+                {
+                  "key": "courseId"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Get course by ID under an exam (with Exam)",
+          "id": "b5984b5d-96b4-4078-8afb-b69d5f754384",
           "request": {
             "method": "GET",
             "header": [
@@ -1736,7 +1961,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/exams/:examId/courses/:courseId",
+              "raw": "http://{{baseUrl}}/api/exams/:examId/courses/:courseId?include=exam",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -1758,16 +1983,24 @@
                 {
                   "key": "include",
                   "value": "exam",
-                  "description": "Inserted variant parameter",
-                  "disabled": false
+                  "description": "Inserted variant parameter"
                 }
               ],
-              "variable": []
+              "variable": [
+                {
+                  "key": "examId"
+                },
+                {
+                  "key": "courseId"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Update course under an exam",
+          "id": "9113a710-45f9-4dd3-af4f-df952eafe822",
           "request": {
             "method": "PUT",
             "header": [
@@ -1777,8 +2010,17 @@
                 "type": "text"
               }
             ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Sample Course\",\n  \"examId\": 1,\n  \"duration\": \"6 months\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
             "url": {
-              "raw": "{{baseUrl}}/api/exams/:examId/courses/:courseId",
+              "raw": "http://{{baseUrl}}/api/exams/:examId/courses/:courseId",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -1790,22 +2032,21 @@
                 "courses",
                 ":courseId"
               ],
-              "query": [],
-              "variable": []
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Sample Course\",\n  \"examId\": 1,\n  \"duration\": \"6 months\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
+              "variable": [
+                {
+                  "key": "examId"
+                },
+                {
+                  "key": "courseId"
                 }
-              }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Delete course under an exam",
+          "id": "b8e98111-a80a-4d5a-8f55-07fb5800209c",
           "request": {
             "method": "DELETE",
             "header": [
@@ -1816,7 +2057,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/exams/:examId/courses/:courseId",
+              "raw": "http://{{baseUrl}}/api/exams/:examId/courses/:courseId",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -1828,43 +2069,53 @@
                 "courses",
                 ":courseId"
               ],
-              "query": [],
-              "variable": []
+              "variable": [
+                {
+                  "key": "examId"
+                },
+                {
+                  "key": "courseId"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         }
-      ]
+      ],
+      "id": "0211e8bb-7628-46aa-95f0-61677f22bbf4"
     },
     {
       "name": "Health",
       "item": [
         {
           "name": "Health check endpoint",
+          "id": "7b00adf7-2055-43c8-ad52-724900e37544",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/health",
+              "raw": "http://{{baseUrl}}/health",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "health"
-              ],
-              "query": [],
-              "variable": []
+              ]
             },
             "description": "Check if the API is running"
-          }
+          },
+          "response": []
         }
-      ]
+      ],
+      "id": "419bb4e7-cccd-481b-8559-69f462dafc38"
     },
     {
       "name": "Subjects",
       "item": [
         {
           "name": "Create a new subject under a course",
+          "id": "d8eee2ac-bef6-4cdc-af2c-d557ce5bcdcb",
           "request": {
             "method": "POST",
             "header": [
@@ -1874,23 +2125,6 @@
                 "type": "text"
               }
             ],
-            "url": {
-              "raw": "{{baseUrl}}/api/exams/:examId/courses/:courseId/subjects",
-              "protocol": "http",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "exams",
-                ":examId",
-                "courses",
-                ":courseId",
-                "subjects"
-              ],
-              "query": [],
-              "variable": []
-            },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"Sample Subject\",\n  \"courseId\": 1\n}",
@@ -1899,11 +2133,36 @@
                   "language": "json"
                 }
               }
+            },
+            "url": {
+              "raw": "http://{{baseUrl}}/api/exams/:examId/courses/:courseId/subjects",
+              "protocol": "http",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "exams",
+                ":examId",
+                "courses",
+                ":courseId",
+                "subjects"
+              ],
+              "variable": [
+                {
+                  "key": "examId"
+                },
+                {
+                  "key": "courseId"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Get all subjects for a course",
+          "id": "dc1c2df0-62f9-4368-a39b-c1e8f3e9f99a",
           "request": {
             "method": "GET",
             "header": [
@@ -1914,7 +2173,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/exams/:examId/courses/:courseId/subjects",
+              "raw": "http://{{baseUrl}}/api/exams/:examId/courses/:courseId/subjects",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -1935,12 +2194,21 @@
                   "disabled": true
                 }
               ],
-              "variable": []
+              "variable": [
+                {
+                  "key": "examId"
+                },
+                {
+                  "key": "courseId"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Get all subjects for a course (with Courses)",
+          "id": "609a48af-a3ee-4cf2-8956-5f31ad29e64b",
           "request": {
             "method": "GET",
             "header": [
@@ -1951,7 +2219,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/exams/:examId/courses/:courseId/subjects",
+              "raw": "http://{{baseUrl}}/api/exams/:examId/courses/:courseId/subjects?include=courses",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -1974,16 +2242,24 @@
                 {
                   "key": "include",
                   "value": "courses",
-                  "description": "Inserted variant parameter",
-                  "disabled": false
+                  "description": "Inserted variant parameter"
                 }
               ],
-              "variable": []
+              "variable": [
+                {
+                  "key": "examId"
+                },
+                {
+                  "key": "courseId"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Get all subjects for a course (with Course)",
+          "id": "48350579-fd25-4842-8dc7-a215bf8ea8d4",
           "request": {
             "method": "GET",
             "header": [
@@ -1994,7 +2270,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/exams/:examId/courses/:courseId/subjects",
+              "raw": "http://{{baseUrl}}/api/exams/:examId/courses/:courseId/subjects?include=course",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -2017,16 +2293,24 @@
                 {
                   "key": "include",
                   "value": "course",
-                  "description": "Inserted variant parameter",
-                  "disabled": false
+                  "description": "Inserted variant parameter"
                 }
               ],
-              "variable": []
+              "variable": [
+                {
+                  "key": "examId"
+                },
+                {
+                  "key": "courseId"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Get subject by ID under a course",
+          "id": "a38d7da8-959b-4151-bfb6-ba082d6a62b2",
           "request": {
             "method": "GET",
             "header": [
@@ -2037,7 +2321,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/exams/:examId/courses/:courseId/subjects/:subjectId",
+              "raw": "http://{{baseUrl}}/api/exams/:examId/courses/:courseId/subjects/:subjectId",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -2051,13 +2335,24 @@
                 "subjects",
                 ":subjectId"
               ],
-              "query": [],
-              "variable": []
+              "variable": [
+                {
+                  "key": "examId"
+                },
+                {
+                  "key": "courseId"
+                },
+                {
+                  "key": "subjectId"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Get subject by ID under a course (with Courses)",
+          "id": "d0e5b75d-f14a-4092-b8a5-9637c4c3592c",
           "request": {
             "method": "GET",
             "header": [
@@ -2068,7 +2363,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/exams/:examId/courses/:courseId/subjects/:subjectId",
+              "raw": "http://{{baseUrl}}/api/exams/:examId/courses/:courseId/subjects/:subjectId?include=courses",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -2086,16 +2381,27 @@
                 {
                   "key": "include",
                   "value": "courses",
-                  "description": "Inserted variant parameter",
-                  "disabled": false
+                  "description": "Inserted variant parameter"
                 }
               ],
-              "variable": []
+              "variable": [
+                {
+                  "key": "examId"
+                },
+                {
+                  "key": "courseId"
+                },
+                {
+                  "key": "subjectId"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Get subject by ID under a course (with Course)",
+          "id": "cab52a92-5c54-43ec-94cc-5240e590943d",
           "request": {
             "method": "GET",
             "header": [
@@ -2106,7 +2412,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/exams/:examId/courses/:courseId/subjects/:subjectId",
+              "raw": "http://{{baseUrl}}/api/exams/:examId/courses/:courseId/subjects/:subjectId?include=course",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -2124,16 +2430,27 @@
                 {
                   "key": "include",
                   "value": "course",
-                  "description": "Inserted variant parameter",
-                  "disabled": false
+                  "description": "Inserted variant parameter"
                 }
               ],
-              "variable": []
+              "variable": [
+                {
+                  "key": "examId"
+                },
+                {
+                  "key": "courseId"
+                },
+                {
+                  "key": "subjectId"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Update subject under a course",
+          "id": "0e40d2f5-f3a1-42bf-ab31-154cdba5a96d",
           "request": {
             "method": "PUT",
             "header": [
@@ -2143,8 +2460,17 @@
                 "type": "text"
               }
             ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Sample Subject\",\n  \"courseId\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
             "url": {
-              "raw": "{{baseUrl}}/api/exams/:examId/courses/:courseId/subjects/:subjectId",
+              "raw": "http://{{baseUrl}}/api/exams/:examId/courses/:courseId/subjects/:subjectId",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -2158,22 +2484,24 @@
                 "subjects",
                 ":subjectId"
               ],
-              "query": [],
-              "variable": []
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Sample Subject\",\n  \"courseId\": 1\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
+              "variable": [
+                {
+                  "key": "examId"
+                },
+                {
+                  "key": "courseId"
+                },
+                {
+                  "key": "subjectId"
                 }
-              }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Delete subject under a course",
+          "id": "21cdd502-2261-4165-b31e-031e4f78289d",
           "request": {
             "method": "DELETE",
             "header": [
@@ -2184,7 +2512,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/exams/:examId/courses/:courseId/subjects/:subjectId",
+              "raw": "http://{{baseUrl}}/api/exams/:examId/courses/:courseId/subjects/:subjectId",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -2198,18 +2526,30 @@
                 "subjects",
                 ":subjectId"
               ],
-              "query": [],
-              "variable": []
+              "variable": [
+                {
+                  "key": "examId"
+                },
+                {
+                  "key": "courseId"
+                },
+                {
+                  "key": "subjectId"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         }
-      ]
+      ],
+      "id": "5f9505e8-ec40-4e1f-9ea0-460f548f29a9"
     },
     {
       "name": "Users",
       "item": [
         {
           "name": "Create user for a business (Admin only)",
+          "id": "11e9e3f7-92bb-4bbe-a6df-5faa854881e0",
           "request": {
             "method": "POST",
             "header": [
@@ -2219,8 +2559,17 @@
                 "type": "text"
               }
             ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
             "url": {
-              "raw": "{{baseUrl}}/api/business/:businessId/users",
+              "raw": "http://{{baseUrl}}/api/business/:businessId/users",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -2231,22 +2580,18 @@
                 ":businessId",
                 "users"
               ],
-              "query": [],
-              "variable": []
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{}",
-              "options": {
-                "raw": {
-                  "language": "json"
+              "variable": [
+                {
+                  "key": "businessId"
                 }
-              }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Get all users for a specific business",
+          "id": "29348d6c-bd46-4ae3-83b4-b8066fbffa80",
           "request": {
             "method": "GET",
             "header": [
@@ -2257,7 +2602,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/business/:businessId/users",
+              "raw": "http://{{baseUrl}}/api/business/:businessId/users",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -2276,12 +2621,18 @@
                   "disabled": true
                 }
               ],
-              "variable": []
+              "variable": [
+                {
+                  "key": "businessId"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Update user",
+          "id": "fd077b6d-8b54-4506-8ea4-7bc1d821e352",
           "request": {
             "method": "PUT",
             "header": [
@@ -2291,8 +2642,17 @@
                 "type": "text"
               }
             ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
             "url": {
-              "raw": "{{baseUrl}}/api/users/:userId",
+              "raw": "http://{{baseUrl}}/api/users/:userId",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -2302,22 +2662,18 @@
                 "users",
                 ":userId"
               ],
-              "query": [],
-              "variable": []
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{}",
-              "options": {
-                "raw": {
-                  "language": "json"
+              "variable": [
+                {
+                  "key": "userId"
                 }
-              }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Soft delete user",
+          "id": "9919779f-9c13-4b92-a8dc-07c1e1e563e1",
           "request": {
             "method": "DELETE",
             "header": [
@@ -2328,7 +2684,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/users/:userId",
+              "raw": "http://{{baseUrl}}/api/users/:userId",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -2338,21 +2694,28 @@
                 "users",
                 ":userId"
               ],
-              "query": [],
-              "variable": []
+              "variable": [
+                {
+                  "key": "userId"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         }
-      ]
+      ],
+      "id": "740031db-af77-438e-b524-efc5e0610bc8"
     }
   ],
   "variable": [
     {
+      "id": "4a4a421d-b411-4b52-938d-aac36be7ac8f",
       "key": "baseUrl",
       "value": "http://localhost:8080",
       "type": "string"
     },
     {
+      "id": "4687881a-d86d-40c3-b56f-d264b5270d4d",
       "key": "token",
       "value": "",
       "type": "string"

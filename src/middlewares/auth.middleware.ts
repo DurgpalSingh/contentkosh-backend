@@ -11,19 +11,13 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
         const authHeader = req.headers.authorization;
 
         if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            res.status(401).json({
-                success: false,
-                message: 'No token provided'
-            });
+            ApiResponseHandler.unauthorized(res, 'No token provided');
             return;
         }
 
         const token = authHeader.split(' ')[1];
         if (!token) {
-            res.status(401).json({
-                success: false,
-                message: 'No token provided'
-            });
+            ApiResponseHandler.unauthorized(res, 'No token provided');
             return;
         }
 
@@ -32,10 +26,7 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
         // User status is verified on token refresh
         const iuser = AuthService.verifyAccessToken(token);
         if (!iuser) {
-            res.status(401).json({
-                success: false,
-                message: 'Invalid or expired token'
-            });
+            ApiResponseHandler.unauthorized(res, 'Invalid or expired token');
             return;
         }
 

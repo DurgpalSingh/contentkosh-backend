@@ -3,7 +3,8 @@ import * as batchRepo from '../repositories/batch.repo';
 import * as courseRepo from '../repositories/course.repo';
 import * as userRepo from '../repositories/user.repo';
 import { CreateBatchDto, UpdateBatchDto } from '../dtos/batch.dto';
-import { NotFoundError, BadRequestError, AlreadyExistsError } from '../errors/api.errors';
+import { NotFoundError, BadRequestError, AlreadyExistsError, ForbiddenError } from '../errors/api.errors';
+import { IUser } from '../dtos/auth.dto';
 import logger from '../utils/logger';
 import { BatchMapper } from '../mappers/batch.mapper';
 
@@ -53,11 +54,29 @@ export class BatchService {
     async getBatchesByCourse(courseId: number, options?: any): Promise<Batch[]> {
         logger.info('BatchService: Fetching batches for course', { courseId });
 
-        let batches;
-        // Check if options has explicit active filter (from query params usually handled in controller)
-        // But here we rely on repository options.
-        // If options.where.isActive is true, we could use findActiveBatchesByCourseId or just pass it to generic find.
+        if (options?.include?.students) {
+            delete options.include.students;
+            options.include.batchUsers = {
+                where: {
+                    user: {
+                        role: UserRole.STUDENT
+                    }
+                },
+                include: {
+                    user: {
+                        select: {
+                            id: true,
+                            name: true,
+                            email: true,
+                            mobile: true,
+                            role: true
+                        }
+                    }
+                }
+            };
+        }
 
+        let batches;
         if (options?.where?.isActive === true) {
             batches = await batchRepo.findActiveBatchesByCourseId(courseId, options);
         } else {
@@ -177,5 +196,52 @@ export class BatchService {
         if (!existing) throw new NotFoundError('User is not in this batch');
 
         return await batchRepo.updateBatchUser(userId, batchId, data);
+    }
+
+    async validateBatchAccess(batchId: number, user: IUser): Promise<void> {
+        // Batch -> Course -> Exam -> Business
+        const batch = await batchRepo.findBatchById(batchId, {
+            include: {
+                course: {
+                    include: {
+                        exam: true
+                    }
+                }
+            }
+        });
+
+        if (!batch) {
+            throw new NotFoundError('Batch not found');
+        }
+
+        // Using safe navigation, though with our schema and repo, structure should be intact
+        // We cast to any or define a type because standard Batch return type might not show the deep includes unless typed
+        // However, Prisma client types usually handle includes if we use the generic correctly, but here we used `findBatchById` which returns `Batch | null`.
+        // Let's re-fetch or use a specific query if `findBatchById` doesn't support generic inclusion well in the repo signature.
+        // Actually the repo method `findBatchById` implementation might just return `prisma.batch.findUnique`.
+        // If the repo doesn't support custom includes via arguments easily, we might need a specific repo method or rely on what we can get.
+        // The middleware gathered it manually. Let's do it cleanly.
+
+        // Re-fetch using repo if possible, or assume the repo method allows options.
+        // The repo signature seen in previous turn: findBatchById(id, options?)
+        // So we can pass include.
+
+        const batchWithRelations = await batchRepo.findBatchById(batchId, {
+            include: { course: { include: { exam: true } } }
+        }) as any; // Cast for simplified access
+
+        if (!batchWithRelations) throw new NotFoundError('Batch not found');
+
+        const exam = batchWithRelations.course?.exam;
+        if (!exam) {
+            throw new ForbiddenError('Batch is not correctly associated with an exam');
+        }
+
+        const isSuperAdmin = user.role === UserRole.SUPERADMIN;
+        const hasBusinessAccess = exam.businessId === user.businessId;
+
+        if (!isSuperAdmin && !hasBusinessAccess) {
+            throw new ForbiddenError('You do not have access to this batch');
+        }
     }
 }

@@ -8,6 +8,7 @@ import logger from '../utils/logger';
 import * as userRepo from '../repositories/user.repo';
 import * as refreshTokenRepo from '../repositories/refreshToken.repo';
 import { UserStatus, UserRole } from '@prisma/client';
+import { AuthError } from '../errors/api.errors';
 
 export class AuthService {
   static async hashPassword(password: string): Promise<string> {
@@ -111,10 +112,12 @@ export class AuthService {
   }
 
   static async register(data: RegisterRequest): Promise<AuthResponse> {
+    const hashedPassword = await this.hashPassword(data.password);
+
     const newUser = await userRepo.createUser({
       name: data.name,
       email: data.email,
-      password: data.password,
+      password: hashedPassword,
       mobile: data.mobile,
       role: data.role || UserRole.USER,
       status: UserStatus.ACTIVE
@@ -146,12 +149,12 @@ export class AuthService {
     const user = await userRepo.findByEmailWithBusinesses(data.email);
 
     if (!user) {
-      throw new Error('INVALID_CREDENTIALS');
+      throw new AuthError('INVALID_CREDENTIALS');
     }
 
     const isMatch = await this.verifyPassword(data.password, user.password);
     if (!isMatch) {
-      throw new Error('INVALID_CREDENTIALS');
+      throw new AuthError('INVALID_CREDENTIALS');
     }
 
     if (user.status !== UserStatus.ACTIVE) {
@@ -185,23 +188,23 @@ export class AuthService {
     const storedToken = await refreshTokenRepo.findByToken(refreshToken);
 
     if (!storedToken) {
-      throw new Error('INVALID_REFRESH_TOKEN');
+      throw new AuthError('INVALID_REFRESH_TOKEN');
     }
 
     // Check if token is revoked
     if (storedToken.isRevoked) {
-      throw new Error('REFRESH_TOKEN_REVOKED');
+      throw new AuthError('REFRESH_TOKEN_REVOKED');
     }
 
     // Check if token is expired
     if (new Date() > storedToken.expiresAt) {
-      throw new Error('REFRESH_TOKEN_EXPIRED');
+      throw new AuthError('REFRESH_TOKEN_EXPIRED');
     }
 
     // Check if user is still active
     const user = storedToken.user;
     if (user.status !== UserStatus.ACTIVE) {
-      throw new Error('USER_INACTIVE');
+      throw new AuthError('USER_INACTIVE');
     }
 
     // Revoke the old refresh token (rotation for security)

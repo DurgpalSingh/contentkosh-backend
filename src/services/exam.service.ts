@@ -1,7 +1,8 @@
-import { Prisma, Exam } from '@prisma/client';
+import { Prisma, Exam, UserRole } from '@prisma/client';
 import * as examRepo from '../repositories/exam.repo';
 import { CreateExamDto, UpdateExamDto } from '../dtos/exam.dto';
-import { NotFoundError, BadRequestError } from '../errors/api.errors';
+import { NotFoundError, BadRequestError, ForbiddenError } from '../errors/api.errors';
+import { IUser } from '../dtos/auth.dto';
 import logger from '../utils/logger';
 import { ExamMapper } from '../mappers/exam.mapper';
 
@@ -90,6 +91,20 @@ export class ExamService {
                 throw new NotFoundError('Exam not found');
             }
             throw error;
+        }
+    }
+
+    async validateExamAccess(examId: number, user: IUser): Promise<void> {
+        const exam = await examRepo.findExamById(examId);
+        if (!exam) {
+            throw new NotFoundError('Exam not found');
+        }
+
+        const isSuperAdmin = user.role === UserRole.SUPERADMIN;
+        const hasBusinessAccess = exam.businessId === user.businessId;
+
+        if (!isSuperAdmin && !hasBusinessAccess) {
+            throw new ForbiddenError('You do not have access to this exam');
         }
     }
 }
