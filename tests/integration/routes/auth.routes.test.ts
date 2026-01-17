@@ -5,6 +5,7 @@ import authRoutes from '../../../src/routes/auth.routes';
 import { AuthService } from '../../../src/services/auth.service';
 import * as UserRepo from '../../../src/repositories/user.repo';
 import { errorHandler } from '../../../src/middlewares/error.middleware';
+import { AuthError, ForbiddenError, AlreadyExistsError } from '../../../src/errors/api.errors';
 import logger from '../../../src/utils/logger';
 
 // Mock dependencies
@@ -100,25 +101,25 @@ describe('Auth Routes', () => {
         });
 
         it('should return 409 if email already exists', async () => {
-            (AuthService.register as jest.Mock).mockRejectedValue(new Error('EMAIL_ALREADY_EXISTS'));
+            (AuthService.register as jest.Mock).mockRejectedValue(new AlreadyExistsError('User with this email already exists'));
 
             const res = await request(app)
                 .post('/auth/signup')
                 .send(validSignupData);
 
             expect(res.status).toBe(409);
-            expect(res.body.message).toContain('Email already exists');
+            expect(res.body.message).toContain('User with this email already exists');
         });
 
         it('should return 409 if mobile already exists', async () => {
-            (AuthService.register as jest.Mock).mockRejectedValue(new Error('MOBILE_ALREADY_EXISTS'));
+            (AuthService.register as jest.Mock).mockRejectedValue(new AlreadyExistsError('User with this mobile already exists'));
 
             const res = await request(app)
                 .post('/auth/signup')
                 .send(validSignupData);
 
             expect(res.status).toBe(409);
-            expect(res.body.message).toContain('Mobile already exists');
+            expect(res.body.message).toContain('User with this mobile already exists');
         });
     });
 
@@ -172,7 +173,7 @@ describe('Auth Routes', () => {
         });
 
         it('should return 401 if credentials are invalid', async () => {
-            (AuthService.login as jest.Mock).mockRejectedValue(new Error('INVALID_CREDENTIALS'));
+            (AuthService.login as jest.Mock).mockRejectedValue(new AuthError('Invalid email or password'));
 
             const res = await request(app)
                 .post('/auth/login')
@@ -183,7 +184,7 @@ describe('Auth Routes', () => {
         });
 
         it('should return 403 if user is inactive', async () => {
-            (AuthService.login as jest.Mock).mockRejectedValue(new Error('USER_INACTIVE'));
+            (AuthService.login as jest.Mock).mockRejectedValue(new ForbiddenError('User account is inactive'));
 
             const res = await request(app)
                 .post('/auth/login')
@@ -233,7 +234,7 @@ describe('Auth Routes', () => {
         });
 
         it('should return 401 if refreshToken is invalid', async () => {
-            (AuthService.refreshTokens as jest.Mock).mockRejectedValue(new Error('INVALID_REFRESH_TOKEN'));
+            (AuthService.refreshTokens as jest.Mock).mockRejectedValue(new AuthError('Invalid refresh token'));
 
             const res = await request(app)
                 .post('/auth/refresh')
@@ -244,7 +245,7 @@ describe('Auth Routes', () => {
         });
 
         it('should return 401 if refreshToken is revoked', async () => {
-            (AuthService.refreshTokens as jest.Mock).mockRejectedValue(new Error('REFRESH_TOKEN_REVOKED'));
+            (AuthService.refreshTokens as jest.Mock).mockRejectedValue(new AuthError('Refresh token has been revoked'));
 
             const res = await request(app)
                 .post('/auth/refresh')
@@ -255,7 +256,7 @@ describe('Auth Routes', () => {
         });
 
         it('should return 401 if refreshToken is expired', async () => {
-            (AuthService.refreshTokens as jest.Mock).mockRejectedValue(new Error('REFRESH_TOKEN_EXPIRED'));
+            (AuthService.refreshTokens as jest.Mock).mockRejectedValue(new AuthError('Refresh token has expired'));
 
             const res = await request(app)
                 .post('/auth/refresh')

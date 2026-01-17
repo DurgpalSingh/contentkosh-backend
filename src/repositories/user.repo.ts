@@ -1,7 +1,6 @@
-// src/repositories/user.repo.ts
 import { PrismaClient, Prisma, UserRole, UserStatus } from '@prisma/client';
-import bcrypt from 'bcryptjs';
 import { prisma } from '../config/database';
+import { AlreadyExistsError } from '../errors/api.errors';
 
 export async function createUser(data: {
   email: string;
@@ -12,12 +11,12 @@ export async function createUser(data: {
   businessId?: number | undefined;
   status?: UserStatus | undefined;
 }) {
-  const hash = data.password ? await bcrypt.hash(data.password, 12) : 'TEMP'; // specific logic if password optional? Payload has password.
   try {
     return await prisma.user.create({
       data: {
         email: data.email.toLowerCase().trim(),
-        password: hash,
+        password: data.password!,
+
         name: data.name?.trim() ?? '',
         ...(data.mobile !== undefined && { mobile: data.mobile }),
         ...(data.role !== undefined && { role: data.role }),
@@ -28,8 +27,8 @@ export async function createUser(data: {
     });
   } catch (e: any) {
     if (e.code === 'P2002') {
-      if (e.meta?.target?.includes('email')) throw new Error('EMAIL_ALREADY_EXISTS');
-      if (e.meta?.target?.includes('mobile')) throw new Error('MOBILE_ALREADY_EXISTS');
+      if (e.meta?.target?.includes('email')) throw new AlreadyExistsError('User with this email already exists');
+      if (e.meta?.target?.includes('mobile')) throw new AlreadyExistsError('User with this mobile already exists');
     }
     throw e;
   }

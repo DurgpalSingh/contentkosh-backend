@@ -5,6 +5,7 @@ import userRoutes from '../../../src/routes/user.routes';
 import * as UserRepo from '../../../src/repositories/user.repo';
 import * as BusinessRepo from '../../../src/repositories/business.repo';
 import { errorHandler } from '../../../src/middlewares/error.middleware';
+import { AlreadyExistsError } from '../../../src/errors/api.errors';
 import logger from '../../../src/utils/logger';
 import { UserRole, UserStatus } from '@prisma/client';
 
@@ -118,7 +119,7 @@ describe('User Routes', () => {
 
         it('should return 409 if email already exists', async () => {
             (BusinessRepo.findBusinessById as jest.Mock).mockResolvedValue({ id: 1 });
-            (UserRepo.createUser as jest.Mock).mockRejectedValue(new Error('EMAIL_ALREADY_EXISTS'));
+            (UserRepo.createUser as jest.Mock).mockRejectedValue(new AlreadyExistsError('User with this email already exists'));
 
             const res = await request(app)
                 .post('/api/business/1/users')
@@ -130,7 +131,7 @@ describe('User Routes', () => {
 
         it('should return 409 if mobile already exists', async () => {
             (BusinessRepo.findBusinessById as jest.Mock).mockResolvedValue({ id: 1 });
-            (UserRepo.createUser as jest.Mock).mockRejectedValue(new Error('MOBILE_ALREADY_EXISTS'));
+            (UserRepo.createUser as jest.Mock).mockRejectedValue(new AlreadyExistsError('User with this mobile already exists'));
 
             const res = await request(app)
                 .post('/api/business/1/users')

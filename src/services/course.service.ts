@@ -1,7 +1,8 @@
-import { Prisma, Course } from '@prisma/client';
+import { Prisma, Course, UserRole } from '@prisma/client';
 import * as courseRepo from '../repositories/course.repo';
 import { CreateCourseDto, UpdateCourseDto } from '../dtos/course.dto';
-import { NotFoundError, BadRequestError } from '../errors/api.errors';
+import { NotFoundError, BadRequestError, ForbiddenError } from '../errors/api.errors';
+import { IUser } from '../dtos/auth.dto';
 import logger from '../utils/logger';
 import { CourseMapper } from '../mappers/course.mapper';
 
@@ -88,6 +89,28 @@ export class CourseService {
                 throw new NotFoundError('Course not found');
             }
             throw error;
+        }
+    }
+
+    async validateCourseAccess(courseId: number, user: IUser): Promise<void> {
+        const course = await courseRepo.findCourseById(courseId);
+
+        if (!course) {
+            throw new NotFoundError('Course not found');
+        }
+
+        const { findExamById } = await import('../repositories/exam.repo');
+        const exam = await findExamById(course.examId);
+
+        if (!exam) {
+            throw new ForbiddenError('Course is not linked to a valid exam');
+        }
+
+        const isSuperAdmin = user.role === UserRole.SUPERADMIN;
+        const hasBusinessAccess = exam.businessId === user.businessId;
+
+        if (!isSuperAdmin && !hasBusinessAccess) {
+            throw new ForbiddenError('You do not have access to this course');
         }
     }
 }

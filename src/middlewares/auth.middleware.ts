@@ -5,25 +5,20 @@ import { ApiResponseHandler } from '../utils/apiResponse';
 import { AuthService } from '../services/auth.service';
 import { AuthRequest, IUser } from '../dtos/auth.dto';
 import { UserRole } from '@prisma/client';
+import { ApiError } from '../errors/api.errors';
 
 export const authenticate = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
         const authHeader = req.headers.authorization;
 
         if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            res.status(401).json({
-                success: false,
-                message: 'No token provided'
-            });
+            ApiResponseHandler.unauthorized(res, 'No token provided');
             return;
         }
 
         const token = authHeader.split(' ')[1];
         if (!token) {
-            res.status(401).json({
-                success: false,
-                message: 'No token provided'
-            });
+            ApiResponseHandler.unauthorized(res, 'No token provided');
             return;
         }
 
@@ -32,10 +27,7 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
         // User status is verified on token refresh
         const iuser = AuthService.verifyAccessToken(token);
         if (!iuser) {
-            res.status(401).json({
-                success: false,
-                message: 'Invalid or expired token'
-            });
+            ApiResponseHandler.unauthorized(res, 'Invalid or expired token');
             return;
         }
 
@@ -49,8 +41,12 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
         });
 
     } catch (error) {
-        logger.error('Authentication error:', error);
-        ApiResponseHandler.error(res, 'Authentication error', 401);
+        if (error instanceof ApiError) {
+            ApiResponseHandler.error(res, error.message, error.statusCode);
+        } else {
+            logger.error('Authentication error:', error);
+            ApiResponseHandler.error(res, 'Authentication error', 401);
+        }
     }
 };
 

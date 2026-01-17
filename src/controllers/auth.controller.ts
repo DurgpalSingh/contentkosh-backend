@@ -4,6 +4,7 @@ import { AuthService } from '../services/auth.service';
 import { ApiResponseHandler } from '../utils/apiResponse';
 import { RegisterRequest, LoginRequest, AuthRequest, RefreshTokenRequest } from '../dtos/auth.dto';
 import { plainToInstance } from 'class-transformer';
+import { ApiError } from '../errors/api.errors';
 
 export const register = async (req: Request, res: Response) => {
     try {
@@ -11,10 +12,8 @@ export const register = async (req: Request, res: Response) => {
         const result = await AuthService.register(data);
         ApiResponseHandler.success(res, result, 'User registered successfully', 201);
     } catch (error: any) {
-        if (error.message === 'EMAIL_ALREADY_EXISTS') {
-            ApiResponseHandler.error(res, 'Email already exists', 409);
-        } else if (error.message === 'MOBILE_ALREADY_EXISTS') {
-            ApiResponseHandler.error(res, 'Mobile already exists', 409);
+        if (error instanceof ApiError) {
+            ApiResponseHandler.error(res, error.message, error.statusCode);
         } else {
             ApiResponseHandler.error(res, error.message || 'Error registering user', 500);
         }
@@ -27,10 +26,8 @@ export const login = async (req: Request, res: Response) => {
         const result = await AuthService.login(data);
         ApiResponseHandler.success(res, result, 'Login successful');
     } catch (error: any) {
-        if (error.message === 'INVALID_CREDENTIALS') {
-            ApiResponseHandler.error(res, 'Invalid email or password', 401);
-        } else if (error.message === 'USER_INACTIVE') {
-            ApiResponseHandler.error(res, 'User account is inactive', 403);
+        if (error instanceof ApiError) {
+            ApiResponseHandler.error(res, error.message, error.statusCode);
         } else {
             ApiResponseHandler.error(res, error.message || 'Error logging in', 500);
         }
@@ -43,14 +40,8 @@ export const refreshToken = async (req: Request, res: Response) => {
         const result = await AuthService.refreshTokens(data.refreshToken);
         ApiResponseHandler.success(res, result, 'Tokens refreshed successfully');
     } catch (error: any) {
-        if (error.message === 'INVALID_REFRESH_TOKEN') {
-            ApiResponseHandler.error(res, 'Invalid refresh token', 401);
-        } else if (error.message === 'REFRESH_TOKEN_REVOKED') {
-            ApiResponseHandler.error(res, 'Refresh token has been revoked', 401);
-        } else if (error.message === 'REFRESH_TOKEN_EXPIRED') {
-            ApiResponseHandler.error(res, 'Refresh token has expired', 401);
-        } else if (error.message === 'USER_INACTIVE') {
-            ApiResponseHandler.error(res, 'User account is inactive', 403);
+        if (error instanceof ApiError) {
+            ApiResponseHandler.error(res, error.message, error.statusCode);
         } else {
             ApiResponseHandler.error(res, error.message || 'Error refreshing tokens', 500);
         }
