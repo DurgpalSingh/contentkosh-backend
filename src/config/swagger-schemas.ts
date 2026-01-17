@@ -45,6 +45,60 @@ export const swaggerSchemas = {
   },
 
   // User Schemas
+  CreateUserRequest: {
+    type: 'object',
+    required: ['name', 'email', 'password', 'role'],
+    properties: {
+      name: {
+        type: 'string',
+        minLength: 1,
+        description: 'User full name'
+      },
+      email: {
+        type: 'string',
+        format: 'email',
+        description: 'Valid email address'
+      },
+      mobile: {
+        type: 'string',
+        description: 'Mobile number'
+      },
+      password: {
+        type: 'string',
+        minLength: 6,
+        description: 'Password (min 6 chars)'
+      },
+      role: {
+        type: 'string',
+        enum: ['ADMIN', 'TEACHER', 'STUDENT', 'USER'],
+        description: 'User role'
+      }
+    }
+  },
+  UpdateUserRequest: {
+    type: 'object',
+    properties: {
+      name: {
+        type: 'string',
+        minLength: 1,
+        description: 'User full name'
+      },
+      mobile: {
+        type: 'string',
+        description: 'Mobile number'
+      },
+      role: {
+        type: 'string',
+        enum: ['ADMIN', 'TEACHER', 'STUDENT', 'USER'],
+        description: 'User role'
+      },
+      status: {
+        type: 'string',
+        enum: ['ACTIVE', 'INACTIVE'],
+        description: 'User status'
+      }
+    }
+  },
   User: {
     type: 'object',
     properties: {
@@ -60,6 +114,20 @@ export const swaggerSchemas = {
       name: {
         type: 'string',
         description: 'User full name'
+      },
+      mobile: {
+        type: 'string',
+        description: 'Mobile number'
+      },
+      role: {
+        type: 'string',
+        enum: ['ADMIN', 'TEACHER', 'STUDENT', 'USER'],
+        description: 'User role'
+      },
+      status: {
+        type: 'string',
+        enum: ['ACTIVE', 'INACTIVE'],
+        description: 'User status'
       },
       createdAt: {
         type: 'string',

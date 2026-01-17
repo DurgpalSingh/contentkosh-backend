@@ -1,6 +1,6 @@
 {
   "info": {
-    "_postman_id": "0d840d2a-6721-416c-adbc-c353dbadb6af",
+    "_postman_id": "3326668c-834c-4a12-bf23-e36a32c8c68a",
     "name": "Contentkosh API",
     "description": "Backend API for Contentkosh application",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
@@ -11,7 +11,7 @@
       "item": [
         {
           "name": "Create a new announcement",
-          "id": "f6dd5242-c572-42d5-a1df-dc49e7ed93bf",
+          "id": "0e4047d4-ff16-4595-9576-6385654314f4",
           "request": {
             "method": "POST",
             "header": [
@@ -46,7 +46,7 @@
         },
         {
           "name": "Get announcement by ID",
-          "id": "e51e0b41-ca31-4bbe-bcb1-d10e426c4ca7",
+          "id": "301a84aa-d118-454b-8076-416660fb6864",
           "request": {
             "method": "GET",
             "header": [
@@ -78,7 +78,7 @@
         },
         {
           "name": "Update announcement",
-          "id": "15869fae-404a-4adb-9e1e-9f4aea23d87d",
+          "id": "f0252b00-2a83-47cb-baa3-eda4758f8485",
           "request": {
             "method": "PUT",
             "header": [
@@ -119,7 +119,7 @@
         },
         {
           "name": "Delete announcement",
-          "id": "5085c02b-8248-45a2-96f1-63699fedfd91",
+          "id": "fa7ba46c-2f73-4c96-a5cf-d2d98db4236c",
           "request": {
             "method": "DELETE",
             "header": [
@@ -151,7 +151,7 @@
         },
         {
           "name": "Get all announcements for a business",
-          "id": "56fb2406-2f4b-470e-b7b4-a4fe5d680282",
+          "id": "a5210ec7-aa2c-4bbc-b02f-3a36618839cc",
           "request": {
             "method": "GET",
             "header": [
@@ -192,7 +192,7 @@
         },
         {
           "name": "Get announcements for a business filtered by role",
-          "id": "11ee1535-9e67-4424-be90-845abb060f11",
+          "id": "b9f59eee-3937-4fe8-8016-8abb6cb3287a",
           "request": {
             "method": "GET",
             "header": [
@@ -234,7 +234,7 @@
         },
         {
           "name": "Get announcements for a business within a date range",
-          "id": "0cd80f69-f183-4585-b2d5-f186d0ae5e04",
+          "id": "bd287869-aee7-4400-bece-1562e32efacf",
           "request": {
             "method": "GET",
             "header": [
@@ -281,14 +281,163 @@
           "response": []
         }
       ],
-      "id": "4cc60930-3dbe-4a14-b876-844184eb3a6a"
+      "id": "3f1d1dbe-e6cd-4ea1-b110-d793cce24b37"
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register a new user",
+          "id": "ae3d4436-fb77-44bd-87a8-0a67c1343ba1",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://{{baseUrl}}/auth/signup",
+              "protocol": "http",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "signup"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login user",
+          "id": "aab61ce8-4bb7-4072-902e-9a8181f45da5",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"email\" : \"admin@contentkosh.com\",\r\n    \"password\" : \"Password#123\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://{{baseUrl}}/api/auth/login",
+              "protocol": "http",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Refresh access token using refresh token",
+          "id": "dbd15b3d-1ef3-4a8d-9428-3fe3395c61ed",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://{{baseUrl}}/auth/refresh",
+              "protocol": "http",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "refresh"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Logout user (revokes refresh token)",
+          "id": "ff0587ad-f787-42c5-9e2a-27b33c8d3bcd",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://{{baseUrl}}/auth/logout",
+              "protocol": "http",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "logout"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get logged-in user profile",
+          "id": "8ea8384e-a966-4bef-b6e6-9ab2265590a1",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://{{baseUrl}}/auth/me",
+              "protocol": "http",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "d370c621-80ce-4c39-a655-2aa9af7ab9bc"
     },
     {
       "name": "Batch Users",
       "item": [
         {
           "name": "Add user to batch",
-          "id": "8014552b-8801-4df3-8d7b-4bf4ef710aa0",
+          "id": "e19df0ee-c5fb-4199-9542-5ec42c76390b",
           "request": {
             "method": "POST",
             "header": [
@@ -324,7 +473,7 @@
         },
         {
           "name": "Remove user from batch",
-          "id": "45ee17c0-2cae-47b2-a8bb-faa1ed457d35",
+          "id": "0f88119b-66c6-4df6-b32b-1e9993dc15d3",
           "request": {
             "method": "POST",
             "header": [
@@ -360,7 +509,7 @@
         },
         {
           "name": "Get all batches for a user",
-          "id": "cad14d4e-135e-4957-b17f-8f7e4408047b",
+          "id": "fd639c37-b43a-4f29-ae43-45e96c075953",
           "request": {
             "method": "GET",
             "header": [
@@ -392,8 +541,88 @@
           "response": []
         },
         {
+          "name": "Get all batches for a user (with Course)",
+          "id": "cc05d106-c737-47ce-965a-25d2e5642cec",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://{{baseUrl}}/api/batches/user/:userId?include=course",
+              "protocol": "http",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "batches",
+                "user",
+                ":userId"
+              ],
+              "query": [
+                {
+                  "key": "include",
+                  "value": "course",
+                  "description": "Inserted variant parameter"
+                }
+              ],
+              "variable": [
+                {
+                  "key": "userId"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get all batches for a user (with Students)",
+          "id": "b7f1ca73-a946-4c82-8a9e-ba5aa302aa0f",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://{{baseUrl}}/api/batches/user/:userId?include=students",
+              "protocol": "http",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "batches",
+                "user",
+                ":userId"
+              ],
+              "query": [
+                {
+                  "key": "include",
+                  "value": "students",
+                  "description": "Inserted variant parameter"
+                }
+              ],
+              "variable": [
+                {
+                  "key": "userId"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
           "name": "Get all users for a batch",
-          "id": "51075f82-4828-4b00-90ef-54537f491b23",
+          "id": "016bc49d-0687-4364-b8f8-ad3c2cb218ed",
           "request": {
             "method": "GET",
             "header": [
@@ -415,6 +644,106 @@
                 ":batchId",
                 "users"
               ],
+              "query": [
+                {
+                  "key": "role",
+                  "value": "",
+                  "description": "Filter users by role",
+                  "disabled": true
+                }
+              ],
+              "variable": [
+                {
+                  "key": "batchId"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get all users for a batch (with Course)",
+          "id": "82743106-60f3-4179-821e-9d1aeb051ab8",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://{{baseUrl}}/api/batches/:batchId/users?include=course",
+              "protocol": "http",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "batches",
+                ":batchId",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "role",
+                  "value": "",
+                  "description": "Filter users by role",
+                  "disabled": true
+                },
+                {
+                  "key": "include",
+                  "value": "course",
+                  "description": "Inserted variant parameter"
+                }
+              ],
+              "variable": [
+                {
+                  "key": "batchId"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get all users for a batch (with Students)",
+          "id": "45dae0f4-82a1-4274-8728-cfa170758160",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://{{baseUrl}}/api/batches/:batchId/users?include=students",
+              "protocol": "http",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "batches",
+                ":batchId",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "role",
+                  "value": "",
+                  "description": "Filter users by role",
+                  "disabled": true
+                },
+                {
+                  "key": "include",
+                  "value": "students",
+                  "description": "Inserted variant parameter"
+                }
+              ],
               "variable": [
                 {
                   "key": "batchId"
@@ -426,7 +755,7 @@
         },
         {
           "name": "Update batch user status",
-          "id": "022f2275-b58d-4c7f-a550-7b19d484b205",
+          "id": "6de448bb-32f7-4d84-828d-6eddb451b6c0",
           "request": {
             "method": "PUT",
             "header": [
@@ -471,14 +800,14 @@
           "response": []
         }
       ],
-      "id": "e14c3c31-23d3-49f9-849d-aa912fae43c1"
+      "id": "2d072899-911e-436a-8f1a-53ee9cb8de65"
     },
     {
       "name": "Batches",
       "item": [
         {
           "name": "Create a new batch",
-          "id": "063476a2-1310-47b4-a432-6397c158cd31",
+          "id": "8fd17f9e-545a-4d59-984d-a8c93eb8bdfa",
           "request": {
             "method": "POST",
             "header": [
@@ -513,7 +842,7 @@
         },
         {
           "name": "Get batch by ID",
-          "id": "ecab7068-0d92-41a5-8d2d-33c4d256cdd4",
+          "id": "357049fc-4ac5-4ca6-8aa2-4f45f7728669",
           "request": {
             "method": "GET",
             "header": [
@@ -544,8 +873,86 @@
           "response": []
         },
         {
+          "name": "Get batch by ID (with Course)",
+          "id": "832dc498-5aa3-4ea1-8884-bedcd87a5a7e",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://{{baseUrl}}/api/batches/:id?include=course",
+              "protocol": "http",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "batches",
+                ":id"
+              ],
+              "query": [
+                {
+                  "key": "include",
+                  "value": "course",
+                  "description": "Inserted variant parameter"
+                }
+              ],
+              "variable": [
+                {
+                  "key": "id"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get batch by ID (with Students)",
+          "id": "84c9c3eb-8d5f-444b-aff5-57062af27079",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://{{baseUrl}}/api/batches/:id?include=students",
+              "protocol": "http",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "batches",
+                ":id"
+              ],
+              "query": [
+                {
+                  "key": "include",
+                  "value": "students",
+                  "description": "Inserted variant parameter"
+                }
+              ],
+              "variable": [
+                {
+                  "key": "id"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
           "name": "Update batch",
-          "id": "f562bdec-a46a-472c-9ffe-199f05e516ed",
+          "id": "bb9f5b5d-d867-4ccf-a66f-df19b3a41eda",
           "request": {
             "method": "PUT",
             "header": [
@@ -586,7 +993,7 @@
         },
         {
           "name": "Delete batch",
-          "id": "2152cb74-eea0-47ae-9c59-06a10897c63d",
+          "id": "a2aa9af8-4fa6-4131-bf39-485cef55d008",
           "request": {
             "method": "DELETE",
             "header": [
@@ -617,41 +1024,8 @@
           "response": []
         },
         {
-          "name": "Get batch with its users",
-          "id": "0ad71b0f-befd-4e52-bc33-9680feb50c7b",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "http://{{baseUrl}}/api/batches/:id/with-users",
-              "protocol": "http",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "batches",
-                ":id",
-                "with-users"
-              ],
-              "variable": [
-                {
-                  "key": "id"
-                }
-              ]
-            }
-          },
-          "response": []
-        },
-        {
           "name": "Get all batches for a course",
-          "id": "24005139-1f3d-4e26-b46d-219752df5ccf",
+          "id": "c36811df-49aa-4809-ab4b-e50b4e053f10",
           "request": {
             "method": "GET",
             "header": [
@@ -689,16 +1063,111 @@
             }
           },
           "response": []
+        },
+        {
+          "name": "Get all batches for a course (with Course)",
+          "id": "596a73b1-851c-474d-bc63-05e7a1db6d5f",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://{{baseUrl}}/api/batches/course/:courseId?include=course",
+              "protocol": "http",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "batches",
+                "course",
+                ":courseId"
+              ],
+              "query": [
+                {
+                  "key": "active",
+                  "value": "",
+                  "description": "Filter by active status (true for active only, false for all)",
+                  "disabled": true
+                },
+                {
+                  "key": "include",
+                  "value": "course",
+                  "description": "Inserted variant parameter"
+                }
+              ],
+              "variable": [
+                {
+                  "key": "courseId"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get all batches for a course (with Students)",
+          "id": "88d365b2-2741-49f7-9eaa-7f72a7381419",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://{{baseUrl}}/api/batches/course/:courseId?include=students",
+              "protocol": "http",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "batches",
+                "course",
+                ":courseId"
+              ],
+              "query": [
+                {
+                  "key": "active",
+                  "value": "",
+                  "description": "Filter by active status (true for active only, false for all)",
+                  "disabled": true
+                },
+                {
+                  "key": "include",
+                  "value": "students",
+                  "description": "Inserted variant parameter",
+                  "uuid": "4b50a0be-4e36-4603-ad23-256ef1b036d7"
+                }
+              ],
+              "variable": [
+                {
+                  "key": "courseId",
+                  "value": "1",
+                  "uuid": "c809061f-5cf3-45e8-b478-aa17de7556a3"
+                }
+              ]
+            }
+          },
+          "response": []
         }
       ],
-      "id": "56792bd0-7f4d-493d-92d9-86ef167fdca3"
+      "id": "ff1ed689-43a4-47e2-afe3-2af73e17e2ac"
     },
     {
       "name": "Business",
       "item": [
         {
           "name": "Create exam under business",
-          "id": "f4f9f09f-2048-4e31-aacd-278c16209407",
+          "id": "e96fb488-8a13-457d-a545-47ee7b479941",
           "request": {
             "method": "POST",
             "header": [
@@ -740,7 +1209,7 @@
         },
         {
           "name": "List exams for a business",
-          "id": "ec6486b7-a343-41d6-9c2c-6cf5d38adc2e",
+          "id": "c512a28c-1058-4fa3-abd4-10449b3481ac",
           "request": {
             "method": "GET",
             "header": [
@@ -773,7 +1242,7 @@
         },
         {
           "name": "Get exam by ID under a business",
-          "id": "8cbd1685-320f-4047-99c4-1a32206f1a24",
+          "id": "0be8e11c-6250-4a4d-907d-857cf3e441c5",
           "request": {
             "method": "GET",
             "header": [
@@ -824,7 +1293,7 @@
         },
         {
           "name": "Update exam under a business",
-          "id": "8037ce18-2f59-4446-a9c9-612a2f4bc7cf",
+          "id": "bdc0ed88-deb2-4cbc-b003-315c234098bd",
           "request": {
             "method": "PUT",
             "header": [
@@ -870,7 +1339,7 @@
         },
         {
           "name": "Delete exam under a business",
-          "id": "ea6c3a88-f145-4cfd-84fb-62bdca6878ad",
+          "id": "297ca75a-38d9-47ae-a4e8-30da581257a3",
           "request": {
             "method": "DELETE",
             "header": [
@@ -907,7 +1376,7 @@
         },
         {
           "name": "Create business configuration",
-          "id": "30cf6005-15e9-4344-8b4f-c51a1f049fbc",
+          "id": "db382dcf-ad3c-4f79-aed4-d761501ae1b9",
           "request": {
             "method": "POST",
             "header": [
@@ -942,7 +1411,7 @@
         },
         {
           "name": "Get business configuration",
-          "id": "3f34056a-6e14-4b7b-b5b3-b2e4b0457331",
+          "id": "75fd8719-8a9a-4cb5-9a0f-96f6f4f801b0",
           "request": {
             "method": "GET",
             "header": [
@@ -968,7 +1437,7 @@
         },
         {
           "name": "Get business configuration by ID",
-          "id": "8f7e9155-9d26-4377-a06d-47df2357b1c5",
+          "id": "7d84524b-763e-49f7-aa72-3e23e9b3b9a4",
           "request": {
             "method": "GET",
             "header": [
@@ -1000,7 +1469,7 @@
         },
         {
           "name": "Update business configuration",
-          "id": "ff360a9c-6d2e-4690-9f69-9bd4a723c004",
+          "id": "caa18300-a4d7-4490-bb63-8aa4546a29d5",
           "request": {
             "method": "PUT",
             "header": [
@@ -1041,7 +1510,7 @@
         },
         {
           "name": "Delete business configuration",
-          "id": "219b1da4-248d-479c-9a64-809a6261f80f",
+          "id": "3ea9a606-fadf-426d-8a2a-e8e8754f21bb",
           "request": {
             "method": "DELETE",
             "header": [
@@ -1072,233 +1541,14 @@
           "response": []
         }
       ],
-      "id": "cc582038-142f-4e90-95e9-8d629d0d5dad"
-    },
-    {
-      "name": "Business Users",
-      "item": [
-        {
-          "name": "Assign user to a business with a specific role",
-          "id": "8d2bccc6-206d-48e8-b3e8-9424092cf0d7",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "http://{{baseUrl}}/api/users/assign-to-business",
-              "protocol": "http",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "users",
-                "assign-to-business"
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Get current user's business associations",
-          "id": "b1b82598-9294-4982-8715-d22c2560856d",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "http://{{baseUrl}}/api/users/my-businesses",
-              "protocol": "http",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "users",
-                "my-businesses"
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Get all users for a specific business",
-          "id": "64f51c42-3b00-4fe6-b9d4-663d09e3bded",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "http://{{baseUrl}}/api/users/business/:businessId/users",
-              "protocol": "http",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "users",
-                "business",
-                ":businessId",
-                "users"
-              ],
-              "query": [
-                {
-                  "key": "role",
-                  "value": "",
-                  "description": "Filter by role",
-                  "disabled": true
-                }
-              ],
-              "variable": [
-                {
-                  "key": "businessId"
-                }
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Get specific business user by ID",
-          "id": "3176cd0f-0217-48c6-b97f-763783e5145f",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "http://{{baseUrl}}/api/users/business-users/:id",
-              "protocol": "http",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "users",
-                "business-users",
-                ":id"
-              ],
-              "variable": [
-                {
-                  "key": "id"
-                }
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Update business user role or status",
-          "id": "9d5172c7-375c-4acc-b472-967ed73b96c0",
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "http://{{baseUrl}}/api/users/business-users/:id",
-              "protocol": "http",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "users",
-                "business-users",
-                ":id"
-              ],
-              "variable": [
-                {
-                  "key": "id"
-                }
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Remove user from business",
-          "id": "376429cd-e3ba-4c04-90dd-f1243c5c896e",
-          "request": {
-            "method": "DELETE",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "http://{{baseUrl}}/api/users/business-users/:id",
-              "protocol": "http",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "users",
-                "business-users",
-                ":id"
-              ],
-              "variable": [
-                {
-                  "key": "id"
-                }
-              ]
-            }
-          },
-          "response": []
-        }
-      ],
-      "id": "d6141bec-6092-4af9-bcb1-850d1f443e95"
+      "id": "cce9c020-c8fd-46fb-b4c2-bfd9d1a9f740"
     },
     {
       "name": "Courses",
       "item": [
         {
           "name": "Create a new course under an exam",
-          "id": "39758e72-2fef-4981-8663-1b0da76ff5da",
+          "id": "ee5cc868-3890-4ecf-a952-636db21dc70c",
           "request": {
             "method": "POST",
             "header": [
@@ -1340,7 +1590,7 @@
         },
         {
           "name": "Get all courses for an exam",
-          "id": "ad4b1fb9-83fb-4c9c-adf3-15e05a5cfd0b",
+          "id": "1ba3cc50-1dc6-471d-b4b1-a9cc41882c2b",
           "request": {
             "method": "GET",
             "header": [
@@ -1384,9 +1634,7 @@
               ],
               "variable": [
                 {
-                  "key": "examId",
-                  "value": "1",
-                  "uuid": "c137849a-5304-42b4-bff4-a767e4293f50"
+                  "key": "examId"
                 }
               ]
             }
@@ -1395,7 +1643,7 @@
         },
         {
           "name": "Get all courses for an exam (with Courses)",
-          "id": "ad0dfe78-b181-4d5f-8801-f0bf61616a81",
+          "id": "98ea5868-bfcb-4a69-aea1-07fddb52ff00",
           "request": {
             "method": "GET",
             "header": [
@@ -1447,7 +1695,7 @@
         },
         {
           "name": "Get all courses for an exam (with Subjects)",
-          "id": "649318bd-4768-4765-bc45-c3e9a5c8eb94",
+          "id": "c05151d4-1c72-4979-a8c9-a3e381720c50",
           "request": {
             "method": "GET",
             "header": [
@@ -1485,15 +1733,12 @@
                 {
                   "key": "include",
                   "value": "subjects",
-                  "description": "Inserted variant parameter",
-                  "uuid": "1cac8c51-895a-4512-8189-0776bb144c41"
+                  "description": "Inserted variant parameter"
                 }
               ],
               "variable": [
                 {
-                  "key": "examId",
-                  "value": "1",
-                  "uuid": "6d417851-b209-41e7-b0b3-2c456951b9ec"
+                  "key": "examId"
                 }
               ]
             }
@@ -1502,7 +1747,7 @@
         },
         {
           "name": "Get all courses for an exam (with Exam)",
-          "id": "1886cf79-1c74-4990-a4eb-4e7e3f466392",
+          "id": "c3aa71ed-be17-458a-83c2-5f8349280927",
           "request": {
             "method": "GET",
             "header": [
@@ -1554,7 +1799,7 @@
         },
         {
           "name": "Get course by ID under an exam",
-          "id": "8e9b48bd-7c32-4b26-8e54-3c4b344f7891",
+          "id": "069db77c-b1e7-478c-8a6d-51dcfe20a3f2",
           "request": {
             "method": "GET",
             "header": [
@@ -1605,7 +1850,7 @@
         },
         {
           "name": "Get course by ID under an exam (with Courses)",
-          "id": "d27129df-7668-40fb-b078-f138a6ff050a",
+          "id": "db34c357-0902-4b9e-abce-971f76ee2ea6",
           "request": {
             "method": "GET",
             "header": [
@@ -1655,7 +1900,7 @@
         },
         {
           "name": "Get course by ID under an exam (with Subjects)",
-          "id": "7f0c370a-ca64-4f03-992e-3e72380f79d7",
+          "id": "a310a072-a01c-4485-8e18-1509285a286f",
           "request": {
             "method": "GET",
             "header": [
@@ -1705,7 +1950,7 @@
         },
         {
           "name": "Get course by ID under an exam (with Exam)",
-          "id": "f2aa372a-84da-45aa-a0a1-5314ead7ab4b",
+          "id": "b5984b5d-96b4-4078-8afb-b69d5f754384",
           "request": {
             "method": "GET",
             "header": [
@@ -1755,7 +2000,7 @@
         },
         {
           "name": "Update course under an exam",
-          "id": "0e7c9112-e446-487d-aeb9-9365d617066f",
+          "id": "9113a710-45f9-4dd3-af4f-df952eafe822",
           "request": {
             "method": "PUT",
             "header": [
@@ -1801,7 +2046,7 @@
         },
         {
           "name": "Delete course under an exam",
-          "id": "16a58663-5ad0-4a0d-b120-50fbe144150d",
+          "id": "b8e98111-a80a-4d5a-8f55-07fb5800209c",
           "request": {
             "method": "DELETE",
             "header": [
@@ -1837,14 +2082,14 @@
           "response": []
         }
       ],
-      "id": "51ef97eb-8e80-48a3-be53-d74a21371fc9"
+      "id": "0211e8bb-7628-46aa-95f0-61677f22bbf4"
     },
     {
       "name": "Health",
       "item": [
         {
           "name": "Health check endpoint",
-          "id": "90424f19-366e-410b-b084-9864905e6a31",
+          "id": "7b00adf7-2055-43c8-ad52-724900e37544",
           "request": {
             "method": "GET",
             "header": [],
@@ -1863,14 +2108,14 @@
           "response": []
         }
       ],
-      "id": "0503aa0c-dc72-45da-8ce5-53a8a94dd433"
+      "id": "419bb4e7-cccd-481b-8559-69f462dafc38"
     },
     {
       "name": "Subjects",
       "item": [
         {
           "name": "Create a new subject under a course",
-          "id": "d8d18fa5-1ad1-439f-a17c-c9343a658ff3",
+          "id": "d8eee2ac-bef6-4cdc-af2c-d557ce5bcdcb",
           "request": {
             "method": "POST",
             "header": [
@@ -1917,7 +2162,7 @@
         },
         {
           "name": "Get all subjects for a course",
-          "id": "c6f03529-c07a-4339-b092-406d1c322f84",
+          "id": "dc1c2df0-62f9-4368-a39b-c1e8f3e9f99a",
           "request": {
             "method": "GET",
             "header": [
@@ -1963,7 +2208,7 @@
         },
         {
           "name": "Get all subjects for a course (with Courses)",
-          "id": "9969cf59-81b3-4572-8faa-fbd52de3d90e",
+          "id": "609a48af-a3ee-4cf2-8956-5f31ad29e64b",
           "request": {
             "method": "GET",
             "header": [
@@ -2014,7 +2259,7 @@
         },
         {
           "name": "Get all subjects for a course (with Course)",
-          "id": "62b24c8d-94cd-4896-b3e3-f2ac2ddbae18",
+          "id": "48350579-fd25-4842-8dc7-a215bf8ea8d4",
           "request": {
             "method": "GET",
             "header": [
@@ -2065,7 +2310,7 @@
         },
         {
           "name": "Get subject by ID under a course",
-          "id": "8e90239f-6570-4479-b2c9-e59da506c3e5",
+          "id": "a38d7da8-959b-4151-bfb6-ba082d6a62b2",
           "request": {
             "method": "GET",
             "header": [
@@ -2107,7 +2352,7 @@
         },
         {
           "name": "Get subject by ID under a course (with Courses)",
-          "id": "8d03f373-0d31-49dc-8d56-f4bcc1e79b4f",
+          "id": "d0e5b75d-f14a-4092-b8a5-9637c4c3592c",
           "request": {
             "method": "GET",
             "header": [
@@ -2156,7 +2401,7 @@
         },
         {
           "name": "Get subject by ID under a course (with Course)",
-          "id": "3874b905-18dd-446c-8b62-49fabfd0eeac",
+          "id": "cab52a92-5c54-43ec-94cc-5240e590943d",
           "request": {
             "method": "GET",
             "header": [
@@ -2205,7 +2450,7 @@
         },
         {
           "name": "Update subject under a course",
-          "id": "df63d2d2-f3d7-4db4-b65d-8fbd27e9a00a",
+          "id": "0e40d2f5-f3a1-42bf-ab31-154cdba5a96d",
           "request": {
             "method": "PUT",
             "header": [
@@ -2256,7 +2501,7 @@
         },
         {
           "name": "Delete subject under a course",
-          "id": "a72755ca-8fdd-46ae-a56f-d26245a8b566",
+          "id": "21cdd502-2261-4165-b31e-031e4f78289d",
           "request": {
             "method": "DELETE",
             "header": [
@@ -2297,17 +2542,23 @@
           "response": []
         }
       ],
-      "id": "25523309-0727-43e6-a4c5-99d754af9c71"
+      "id": "5f9505e8-ec40-4e1f-9ea0-460f548f29a9"
     },
     {
       "name": "Users",
       "item": [
         {
-          "name": "Register a new user",
-          "id": "9169d285-a3eb-4cfd-bc2c-d0b7e0389ad0",
+          "name": "Create user for a business (Admin only)",
+          "id": "11e9e3f7-92bb-4bbe-a6df-5faa854881e0",
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{}",
@@ -2318,53 +2569,29 @@
               }
             },
             "url": {
-              "raw": "http://{{baseUrl}}/api/users/register",
+              "raw": "http://{{baseUrl}}/api/business/:businessId/users",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "users",
-                "register"
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Login user",
-          "id": "016625ea-20de-4053-8587-9a723afe8fec",
-          "request": {
-            "method": "POST",
-            "header": [],
-            "body": {
-              "mode": "raw",
-              "raw": "{}",
-              "options": {
-                "raw": {
-                  "language": "json"
+                "business",
+                ":businessId",
+                "users"
+              ],
+              "variable": [
+                {
+                  "key": "businessId"
                 }
-              }
-            },
-            "url": {
-              "raw": "http://{{baseUrl}}/api/users/login",
-              "protocol": "http",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "users",
-                "login"
               ]
             }
           },
           "response": []
         },
         {
-          "name": "Get user profile",
-          "id": "05fe08cd-d089-4f8c-92d7-4935870d07f0",
+          "name": "Get all users for a specific business",
+          "id": "29348d6c-bd46-4ae3-83b4-b8066fbffa80",
           "request": {
             "method": "GET",
             "header": [
@@ -2375,7 +2602,57 @@
               }
             ],
             "url": {
-              "raw": "http://{{baseUrl}}/api/users/profile",
+              "raw": "http://{{baseUrl}}/api/business/:businessId/users",
+              "protocol": "http",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "business",
+                ":businessId",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "role",
+                  "value": "",
+                  "description": "Filter users by role",
+                  "disabled": true
+                }
+              ],
+              "variable": [
+                {
+                  "key": "businessId"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update user",
+          "id": "fd077b6d-8b54-4506-8ea4-7bc1d821e352",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://{{baseUrl}}/api/users/:userId",
               "protocol": "http",
               "host": [
                 "{{baseUrl}}"
@@ -2383,25 +2660,62 @@
               "path": [
                 "api",
                 "users",
-                "profile"
+                ":userId"
+              ],
+              "variable": [
+                {
+                  "key": "userId"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Soft delete user",
+          "id": "9919779f-9c13-4b92-a8dc-07c1e1e563e1",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://{{baseUrl}}/api/users/:userId",
+              "protocol": "http",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                ":userId"
+              ],
+              "variable": [
+                {
+                  "key": "userId"
+                }
               ]
             }
           },
           "response": []
         }
       ],
-      "id": "c4ac4a3d-32f2-40aa-bc1e-027d62581dc7"
+      "id": "740031db-af77-438e-b524-efc5e0610bc8"
     }
   ],
   "variable": [
     {
-      "id": "118d5750-043b-4595-b459-3b065c81901b",
+      "id": "4a4a421d-b411-4b52-938d-aac36be7ac8f",
       "key": "baseUrl",
       "value": "http://localhost:8080",
       "type": "string"
     },
     {
-      "id": "bf92b1f2-eea6-425f-905c-17792ca983c2",
+      "id": "4687881a-d86d-40c3-b56f-d264b5270d4d",
       "key": "token",
       "value": "",
       "type": "string"

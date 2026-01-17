@@ -266,12 +266,13 @@ describe('Batch Controller', () => {
     describe('getUsersByBatch', () => {
         it('should get users for a batch', async () => {
             req.params = { batchId: '1' };
+            req.query = {};
             const mockData = [{ id: 1 }];
             getUsersByBatchSpy.mockResolvedValue(mockData as any);
 
             await batchController.getUsersByBatch(req as Request, res as Response);
 
-            expect(getUsersByBatchSpy).toHaveBeenCalledWith(1);
+            expect(getUsersByBatchSpy).toHaveBeenCalledWith(1, undefined);
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockData, 'Batch users fetched successfully');
         });
     });
