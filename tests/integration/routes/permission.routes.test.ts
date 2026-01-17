@@ -2,181 +2,135 @@
 import 'reflect-metadata';
 import request from 'supertest';
 import express from 'express';
-
-// Define mock functions outside
-const mockGetUserPermissions = jest.fn();
-const mockAssignPermissions = jest.fn();
-const mockUpdatePermissions = jest.fn();
-const mockDeletePermissions = jest.fn();
-const mockDeleteSpecificPermissions = jest.fn();
-
-// Mock PermissionService BEFORE importing routes
-jest.mock('../../../src/services/permission.service', () => {
-    return {
-        PermissionService: jest.fn().mockImplementation(() => {
-            return {
-                getUserPermissions: mockGetUserPermissions,
-                assignPermissions: mockAssignPermissions,
-                updatePermissions: mockUpdatePermissions,
-                deletePermissions: mockDeletePermissions,
-                deleteSpecificPermissions: mockDeleteSpecificPermissions,
-            };
-        }),
-    };
-});
-
-jest.mock('../../../src/middlewares/auth.middleware', () => ({
-    authenticate: (req: any, res: any, next: any) => {
-        req.user = { id: 1, role: 'ADMIN' };
-        next();
-    },
-    authorize: () => (req: any, res: any, next: any) => next(),
-}));
-jest.mock('../../../src/middlewares/validation.middleware', () => ({
-    validateIdParam: () => (req: any, res: any, next: any) => next(),
-}));
-
-// Import routes AFTER mocking
 import permissionRoutes from '../../../src/routes/permission.routes';
-import { errorHandler } from '../../../src/middlewares/error.middleware';
-import { authenticate } from '../../../src/middlewares/auth.middleware';
+import { PermissionService } from '../../../src/services/permission.service';
+import { ApiError, BadRequestError, NotFoundError } from '../../../src/errors/api.errors';
+
+// Mock dependency
+jest.mock('../../../src/services/permission.service');
 
 const app = express();
 app.use(express.json());
-app.use(authenticate);
-app.use('/api/permission', permissionRoutes);
-app.use(errorHandler);
+app.use('/permission', permissionRoutes);
 
 describe('Permission Routes', () => {
     beforeEach(() => {
         jest.clearAllMocks();
     });
 
+    const mockPermissions = ['CONTENT_CREATE', 'CONTENT_VIEW'];
+    const mockUserPermissions = {
+        user: { id: 1, role: 'USER' },
+        permissions: mockPermissions
+    };
+
     // ==================== GET PERMISSIONS ====================
-    describe('GET /api/permission', () => {
+    describe('GET /permission', () => {
         it('should return user permissions when user_id is provided', async () => {
-            const mockResult = {
-                user: { id: 1, role: 'ADMIN' },
-                permissions: ['CONTENT_CREATE', 'CONTENT_VIEW']
-            };
-            mockGetUserPermissions.mockResolvedValue(mockResult);
+            (PermissionService.prototype.getUserPermissions as jest.Mock).mockResolvedValue(mockUserPermissions);
 
-            const res = await request(app).get('/api/permission?user_id=1');
+            const res = await request(app).get('/permission').query({ user_id: 1 });
 
             expect(res.status).toBe(200);
-            expect(res.body).toEqual(mockResult);
-            expect(mockGetUserPermissions).toHaveBeenCalledWith(1);
+            expect(res.body.data.permissions).toEqual(mockPermissions);
+            expect(PermissionService.prototype.getUserPermissions).toHaveBeenCalledWith(1);
         });
 
-        it('should return permissions for logged in user if user_id missing', async () => {
-            const mockResult = {
-                user: { id: 1, role: 'ADMIN' },
-                permissions: ['CONTENT_CREATE']
-            };
-            mockGetUserPermissions.mockResolvedValue(mockResult);
-
-            const res = await request(app).get('/api/permission');
-
-            expect(res.status).toBe(200);
-            expect(res.body).toEqual(mockResult);
-            expect(mockGetUserPermissions).toHaveBeenCalledWith(1);
+        it('should return 400 if user_id is missing', async () => {
+            const res = await request(app).get('/permission');
+            expect(res.status).toBe(400);
+            expect(res.body.message).toContain('User ID is required');
         });
 
-        it('should return 500 if service throws error', async () => {
-            mockGetUserPermissions.mockRejectedValue(new Error('Database error'));
+        it('should return 404 if user not found', async () => {
+            (PermissionService.prototype.getUserPermissions as jest.Mock).mockRejectedValue(new NotFoundError('User not found'));
 
-            const res = await request(app).get('/api/permission?user_id=1');
+            const res = await request(app).get('/permission').query({ user_id: 999 });
 
-            expect(res.status).toBe(500);
-            expect(res.body.message).toBe('Database error');
+            expect(res.status).toBe(404);
+            expect(res.body.message).toContain('User not found');
         });
     });
 
-    // ==================== POST / Assign Permissions ====================
-    describe('POST /api/permission', () => {
+    // ==================== ASSIGN PERMISSIONS ====================
+    describe('POST /permission', () => {
         const validPayload = {
-            userId: 2,
-            permissions: ['CONTENT_CREATE', 'CONTENT_EDIT']
+            userId: 1,
+            permissions: ['CONTENT_CREATE']
         };
 
         it('should assign permissions successfully', async () => {
-            const mockResult = {
-                user: { id: 2, role: 'USER' },
-                permissions: ['CONTENT_CREATE', 'CONTENT_EDIT']
-            };
-            mockAssignPermissions.mockResolvedValue(mockResult);
+            (PermissionService.prototype.assignPermissions as jest.Mock).mockResolvedValue(mockUserPermissions);
 
-            const res = await request(app)
-                .post('/api/permission')
-                .send(validPayload);
+            const res = await request(app).post('/permission').send(validPayload);
 
             expect(res.status).toBe(200);
-            expect(res.body).toEqual(mockResult);
-            expect(mockAssignPermissions).toHaveBeenCalled();
+            expect(res.body.data).toEqual(mockUserPermissions);
         });
 
-        it('should return 400 for invalid payload', async () => {
-            const res = await request(app)
-                .post('/api/permission')
-                .send({ userId: 'string', permissions: 'not-array' }); // Invalid types
-
+        it('should return 400 if permissions list is empty', async () => {
+            const res = await request(app).post('/permission').send({ userId: 1, permissions: [] });
             expect(res.status).toBe(400);
-            expect(res.body).toHaveProperty('errors');
+            expect(res.body.message).toContain('Permissions are required');
+        });
+
+        it('should return 400 if user not found', async () => {
+            (PermissionService.prototype.assignPermissions as jest.Mock).mockRejectedValue(new NotFoundError('User not found'));
+
+            const res = await request(app).post('/permission').send(validPayload);
+            expect(res.status).toBe(404);
         });
     });
 
-    // ==================== PUT / Update Permissions ====================
-    describe('PUT /api/permission', () => {
+    // ==================== UPDATE PERMISSIONS ====================
+    describe('PUT /permission', () => {
         const validPayload = {
-            userId: 2,
-            permissions: ['CONTENT_VIEW']
+            userId: 1,
+            permissions: ['CONTENT_EDIT']
         };
 
         it('should update permissions successfully', async () => {
-            const mockResult = {
-                user: { id: 2, role: 'USER' },
-                permissions: ['CONTENT_VIEW']
+            const updatedPermissions = {
+                user: { id: 1, role: 'USER' },
+                permissions: ['CONTENT_EDIT']
             };
-            mockUpdatePermissions.mockResolvedValue(mockResult);
+            (PermissionService.prototype.updatePermissions as jest.Mock).mockResolvedValue(updatedPermissions);
 
-            const res = await request(app)
-                .put('/api/permission')
-                .send(validPayload);
+            const res = await request(app).put('/permission').send(validPayload);
 
             expect(res.status).toBe(200);
-            expect(res.body).toEqual(mockResult);
-            expect(mockUpdatePermissions).toHaveBeenCalled();
+            expect(res.body.data).toEqual(updatedPermissions);
         });
     });
 
-    // ==================== DELETE / Permissions ====================
-    describe('DELETE /api/permission', () => {
-        it('should delete specific permissions when permissions array is provided', async () => {
-            const mockResult = {
-                user: { id: 2, role: 'USER' },
-                permissions: [] // assume empty after delete
-            };
-            mockDeleteSpecificPermissions.mockResolvedValue(mockResult);
+    // ==================== DELETE PERMISSIONS ====================
+    describe('DELETE /permission', () => {
+        it('should delete all permissions if permissions list is empty', async () => {
+            (PermissionService.prototype.deletePermissions as jest.Mock).mockResolvedValue({ count: 5 });
 
-            const res = await request(app)
-                .delete('/api/permission')
-                .send({ userId: 2, permissions: ['CONTENT_CREATE'] });
+            const res = await request(app).delete('/permission').send({ userId: 1 });
 
             expect(res.status).toBe(200);
-            // Note: controller calls deleteSpecificPermissions if perm array > 0
-            expect(mockDeleteSpecificPermissions).toHaveBeenCalled();
+            expect(res.body.data.message).toBe('All permissions removed');
+            expect(PermissionService.prototype.deletePermissions).toHaveBeenCalledWith(1);
         });
 
-        it('should delete all permissions when permissions array is not provided', async () => {
-            mockDeletePermissions.mockResolvedValue({ count: 5 });
+        it('should delete specific permissions if provided', async () => {
+            const remainingPermissions = {
+                user: { id: 1, role: 'USER' },
+                permissions: ['CONTENT_VIEW']
+            };
+            (PermissionService.prototype.deleteSpecificPermissions as jest.Mock).mockResolvedValue(remainingPermissions);
 
-            const res = await request(app)
-                .delete('/api/permission')
-                .send({ userId: 2 });
+            const res = await request(app).delete('/permission').send({ userId: 1, permissions: ['CONTENT_CREATE'] });
 
             expect(res.status).toBe(200);
-            expect(res.body.message).toContain('All permissions removed');
-            expect(mockDeletePermissions).toHaveBeenCalledWith(2);
+            expect(res.body.data).toEqual(remainingPermissions);
+        });
+
+        it('should return 400 if userId is missing', async () => {
+            const res = await request(app).delete('/permission').send({});
+            expect(res.status).toBe(400);
         });
     });
 });
