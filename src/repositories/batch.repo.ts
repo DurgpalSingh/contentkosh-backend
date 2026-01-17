@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, UserRole } from '@prisma/client';
 import { prisma } from '../config/database';
 
 const batchSelect = {
@@ -224,9 +224,15 @@ export async function findBatchesByUserId(userId: number) {
   });
 }
 
-export async function findUsersByBatchId(batchId: number) {
+export async function findUsersByBatchId(batchId: number, role?: UserRole) {
+  const where: any = { batchId };
+
+  if (role) {
+    where.user = { role };
+  }
+
   return prisma.batchUser.findMany({
-    where: { batchId },
+    where,
     select: {
       id: true,
       isActive: true,
