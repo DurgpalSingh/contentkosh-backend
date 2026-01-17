@@ -99,7 +99,7 @@ describe('User Controller', () => {
             req.body = validUserData;
 
             (BusinessRepo.findBusinessById as jest.Mock).mockResolvedValue({ id: 1 });
-            (UserRepo.createUser as jest.Mock).mockRejectedValue(new Error('EMAIL_ALREADY_EXISTS'));
+            (UserRepo.createUser as jest.Mock).mockRejectedValue(new AlreadyExistsError('User with this email already exists'));
 
             await expect(UserController.createUserForBusiness(req as Request, res as Response))
                 .rejects.toThrow(AlreadyExistsError);
@@ -110,7 +110,7 @@ describe('User Controller', () => {
             req.body = validUserData;
 
             (BusinessRepo.findBusinessById as jest.Mock).mockResolvedValue({ id: 1 });
-            (UserRepo.createUser as jest.Mock).mockRejectedValue(new Error('MOBILE_ALREADY_EXISTS'));
+            (UserRepo.createUser as jest.Mock).mockRejectedValue(new AlreadyExistsError('User with this mobile already exists'));
 
             await expect(UserController.createUserForBusiness(req as Request, res as Response))
                 .rejects.toThrow(AlreadyExistsError);
@@ -163,6 +163,14 @@ describe('User Controller', () => {
             await UserController.getUsersByBusiness(req as Request, res as Response);
 
             expect(UserRepo.findByBusinessId).toHaveBeenCalledWith(1, 'TEACHER');
+        });
+
+        it('should throw BadRequestError if role is invalid', async () => {
+            req.params = { businessId: '1' };
+            req.query = { role: 'INVALID_ROLE' };
+
+            await expect(UserController.getUsersByBusiness(req as Request, res as Response))
+                .rejects.toThrow(BadRequestError);
         });
 
         it('should throw BadRequestError if businessId is invalid', async () => {

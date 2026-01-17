@@ -8,7 +8,7 @@ import logger from '../utils/logger';
 import * as userRepo from '../repositories/user.repo';
 import * as refreshTokenRepo from '../repositories/refreshToken.repo';
 import { UserStatus, UserRole } from '@prisma/client';
-import { AuthError } from '../errors/api.errors';
+import { AuthError, ForbiddenError } from '../errors/api.errors';
 
 export class AuthService {
   static async hashPassword(password: string): Promise<string> {
@@ -149,16 +149,16 @@ export class AuthService {
     const user = await userRepo.findByEmailWithBusinesses(data.email);
 
     if (!user) {
-      throw new AuthError('INVALID_CREDENTIALS');
+      throw new AuthError('Invalid email or password');
     }
 
     const isMatch = await this.verifyPassword(data.password, user.password);
     if (!isMatch) {
-      throw new AuthError('INVALID_CREDENTIALS');
+      throw new AuthError('Invalid email or password');
     }
 
     if (user.status !== UserStatus.ACTIVE) {
-      throw new Error('USER_INACTIVE');
+      throw new ForbiddenError('User account is inactive');
     }
 
     const accessToken = this.generateAccessToken({
@@ -188,23 +188,23 @@ export class AuthService {
     const storedToken = await refreshTokenRepo.findByToken(refreshToken);
 
     if (!storedToken) {
-      throw new AuthError('INVALID_REFRESH_TOKEN');
+      throw new AuthError('Invalid refresh token');
     }
 
     // Check if token is revoked
     if (storedToken.isRevoked) {
-      throw new AuthError('REFRESH_TOKEN_REVOKED');
+      throw new AuthError('Refresh token has been revoked');
     }
 
     // Check if token is expired
     if (new Date() > storedToken.expiresAt) {
-      throw new AuthError('REFRESH_TOKEN_EXPIRED');
+      throw new AuthError('Refresh token has expired');
     }
 
     // Check if user is still active
     const user = storedToken.user;
     if (user.status !== UserStatus.ACTIVE) {
-      throw new AuthError('USER_INACTIVE');
+      throw new ForbiddenError('User account is inactive');
     }
 
     // Revoke the old refresh token (rotation for security)

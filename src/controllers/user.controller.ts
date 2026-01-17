@@ -7,12 +7,18 @@ import { BadRequestError } from '../errors/api.errors';
 import { plainToInstance } from 'class-transformer';
 import { CreateUserDto, UpdateUserDto } from '../dtos/user.dto';
 
+// Helper to validate and parse ID
+const validateId = (id: any, name: string): number => {
+  const parsedId = Number(id);
+  if (!Number.isInteger(parsedId) || parsedId <= 0) {
+    throw new BadRequestError(`Valid ${name} is required`);
+  }
+  return parsedId;
+};
+
 // Admin adds user to business
 export const createUserForBusiness = async (req: Request, res: Response) => {
-  const businessId = Number(req.params.businessId);
-  if (!Number.isInteger(businessId) || businessId <= 0) {
-    throw new BadRequestError('Valid Business ID is required');
-  }
+  const businessId = validateId(req.params.businessId, 'Business ID');
 
   const userData = plainToInstance(CreateUserDto, req.body);
   const newUser = await userService.createUserForBusiness(businessId, userData);
@@ -22,22 +28,20 @@ export const createUserForBusiness = async (req: Request, res: Response) => {
 };
 
 export const getUsersByBusiness = async (req: Request, res: Response) => {
-  const businessId = Number(req.params.businessId);
-  if (!Number.isInteger(businessId) || businessId <= 0) {
-    throw new BadRequestError('Valid Business ID is required');
-  }
+  const businessId = validateId(req.params.businessId, 'Business ID');
+
 
   const role = req.query.role as UserRole | undefined;
+  if (role && !Object.values(UserRole).includes(role)) {
+    throw new BadRequestError('Invalid role');
+  }
 
   const users = await userService.getUsersByBusiness(businessId, role);
   ApiResponseHandler.success(res, users, 'Business users fetched successfully');
 };
 
 export const updateUser = async (req: Request, res: Response) => {
-  const userId = Number(req.params.userId);
-  if (!Number.isInteger(userId) || userId <= 0) {
-    throw new BadRequestError('Valid User ID is required');
-  }
+  const userId = validateId(req.params.userId, 'User ID');
 
   const userData = plainToInstance(UpdateUserDto, req.body);
   const updatedUser = await userService.updateUser(userId, userData);
@@ -46,10 +50,7 @@ export const updateUser = async (req: Request, res: Response) => {
 };
 
 export const deleteUser = async (req: Request, res: Response) => {
-  const userId = Number(req.params.userId);
-  if (!Number.isInteger(userId) || userId <= 0) {
-    throw new BadRequestError('Valid User ID is required');
-  }
+  const userId = validateId(req.params.userId, 'User ID');
 
   await userService.deleteUser(userId);
   ApiResponseHandler.success(res, null, 'User deleted successfully');

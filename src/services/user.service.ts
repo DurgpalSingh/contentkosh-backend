@@ -1,7 +1,7 @@
 import { UserRole, UserStatus } from '@prisma/client';
 import * as userRepo from '../repositories/user.repo';
 import * as businessRepo from '../repositories/business.repo';
-import { NotFoundError, AlreadyExistsError, ForbiddenError } from '../errors/api.errors';
+import { NotFoundError, ForbiddenError } from '../errors/api.errors';
 import { IUser } from '../dtos/auth.dto';
 import { CreateUserDto, UpdateUserDto } from '../dtos/user.dto';
 import { AuthService } from './auth.service';
@@ -13,37 +13,28 @@ export const createUserForBusiness = async (businessId: number, userData: Create
         throw new NotFoundError('Business not found');
     }
 
-    try {
-        // Build create object, only including mobile if defined
-        const createData: {
-            name: string;
-            email: string;
-            password: string;
-            role: UserRole;
-            businessId: number;
-            status: UserStatus;
-            mobile?: string;
-        } = {
-            name: userData.name,
-            email: userData.email,
-            password: await AuthService.hashPassword(userData.password),
-            role: userData.role,
-            businessId,
-            status: UserStatus.ACTIVE
-        };
-        if (userData.mobile !== undefined) createData.mobile = userData.mobile;
 
-        const newUser = await userRepo.createUser(createData);
-        return newUser;
-    } catch (error: any) {
-        if (error.message === 'EMAIL_ALREADY_EXISTS') {
-            throw new AlreadyExistsError('User with this email already exists');
-        }
-        if (error.message === 'MOBILE_ALREADY_EXISTS') {
-            throw new AlreadyExistsError('User with this mobile already exists');
-        }
-        throw error;
-    }
+    // Build create object, only including mobile if defined
+    const createData: {
+        name: string;
+        email: string;
+        password: string;
+        role: UserRole;
+        businessId: number;
+        status: UserStatus;
+        mobile?: string;
+    } = {
+        name: userData.name,
+        email: userData.email,
+        password: await AuthService.hashPassword(userData.password),
+        role: userData.role,
+        businessId,
+        status: UserStatus.ACTIVE
+    };
+    if (userData.mobile !== undefined) createData.mobile = userData.mobile;
+
+    const newUser = await userRepo.createUser(createData);
+    return newUser;
 };
 
 export const getUsersByBusiness = async (businessId: number, role?: UserRole) => {

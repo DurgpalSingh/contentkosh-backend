@@ -5,6 +5,7 @@ import { ApiResponseHandler } from '../utils/apiResponse';
 import { AuthService } from '../services/auth.service';
 import { AuthRequest, IUser } from '../dtos/auth.dto';
 import { UserRole } from '@prisma/client';
+import { ApiError } from '../errors/api.errors';
 
 export const authenticate = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
@@ -40,8 +41,12 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
         });
 
     } catch (error) {
-        logger.error('Authentication error:', error);
-        ApiResponseHandler.error(res, 'Authentication error', 401);
+        if (error instanceof ApiError) {
+            ApiResponseHandler.error(res, error.message, error.statusCode);
+        } else {
+            logger.error('Authentication error:', error);
+            ApiResponseHandler.error(res, 'Authentication error', 401);
+        }
     }
 };
 

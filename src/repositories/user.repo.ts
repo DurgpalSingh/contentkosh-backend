@@ -1,6 +1,6 @@
-// src/repositories/user.repo.ts
 import { PrismaClient, Prisma, UserRole, UserStatus } from '@prisma/client';
 import { prisma } from '../config/database';
+import { AlreadyExistsError } from '../errors/api.errors';
 
 export async function createUser(data: {
   email: string;
@@ -27,8 +27,8 @@ export async function createUser(data: {
     });
   } catch (e: any) {
     if (e.code === 'P2002') {
-      if (e.meta?.target?.includes('email')) throw new Error('EMAIL_ALREADY_EXISTS');
-      if (e.meta?.target?.includes('mobile')) throw new Error('MOBILE_ALREADY_EXISTS');
+      if (e.meta?.target?.includes('email')) throw new AlreadyExistsError('User with this email already exists');
+      if (e.meta?.target?.includes('mobile')) throw new AlreadyExistsError('User with this mobile already exists');
     }
     throw e;
   }
