@@ -60,25 +60,8 @@ export class AuthService {
       // Generate a random token
       const token = crypto.randomBytes(64).toString('hex');
 
-      const expiresIn = config.jwt.refreshTokenExpiresIn || '7d';
-      const expiresAt = new Date();
-
-      // Parse duration string (e.g., \"7d\", \"24h\")
-      const match = expiresIn.match(/^(\d+)([dhms])$/);
-      if (match && match[1] && match[2]) {
-        const value = parseInt(match[1], 10);
-        const unit = match[2];
-        switch (unit) {
-          case 'd': expiresAt.setDate(expiresAt.getDate() + value); break;
-          case 'h': expiresAt.setHours(expiresAt.getHours() + value); break;
-          case 'm': expiresAt.setMinutes(expiresAt.getMinutes() + value); break;
-          case 's': expiresAt.setSeconds(expiresAt.getSeconds() + value); break;
-        }
-      } else {
-        // Default to 7 days if parsing fails
-        expiresAt.setDate(expiresAt.getDate() + 7);
-      }
-
+      const expiresIn = config.jwt.refreshTokenExpiresIn; // in ms
+      const expiresAt = new Date(Date.now() + (typeof expiresIn === 'number' ? expiresIn : 604800000));
       // Store in database
       await refreshTokenRepo.createRefreshToken(userId, token, expiresAt);
 
@@ -114,6 +97,9 @@ export class AuthService {
   static async register(data: RegisterRequest): Promise<AuthResponse> {
     const hashedPassword = await this.hashPassword(data.password);
 
+    // Note: Creating user without businessId initially. 
+    // Users are associated with a business when an admin adds them to a business-specific entity (like Batch),
+    // or if the registration flow identifies the business context (not currently in RegisterRequest).
     const newUser = await userRepo.createUser({
       name: data.name,
       email: data.email,

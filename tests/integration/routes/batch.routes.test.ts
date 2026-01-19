@@ -167,24 +167,11 @@ describe('Batch Routes', () => {
             expect(res.status).toBe(200);
 
             // Verify the service transformed the options
+            // Verify the service passes the include option to the repo
+            // Logic for mapping 'students' to 'batchUsers' is now in the repo, so we verify exact pass-through
             const expectedOptions = {
                 include: {
-                    batchUsers: {
-                        where: {
-                            user: { role: 'STUDENT' }
-                        },
-                        include: {
-                            user: {
-                                select: {
-                                    id: true,
-                                    name: true,
-                                    email: true,
-                                    mobile: true,
-                                    role: true
-                                }
-                            }
-                        }
-                    }
+                    students: true
                 }
             };
 

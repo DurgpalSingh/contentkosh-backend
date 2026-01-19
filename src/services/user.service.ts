@@ -1,7 +1,7 @@
 import { UserRole, UserStatus } from '@prisma/client';
 import * as userRepo from '../repositories/user.repo';
 import * as businessRepo from '../repositories/business.repo';
-import { NotFoundError, ForbiddenError } from '../errors/api.errors';
+import { NotFoundError, ForbiddenError, AlreadyExistsError } from '../errors/api.errors';
 import { IUser } from '../dtos/auth.dto';
 import { CreateUserDto, UpdateUserDto } from '../dtos/user.dto';
 import { AuthService } from './auth.service';
@@ -11,6 +11,12 @@ export const createUserForBusiness = async (businessId: number, userData: Create
     const business = await businessRepo.findBusinessById(businessId);
     if (!business) {
         throw new NotFoundError('Business not found');
+    }
+
+    // Check if user exists
+    const existingUser = await userRepo.findByEmail(userData.email);
+    if (existingUser) {
+        throw new AlreadyExistsError('User with this email already exists');
     }
 
 

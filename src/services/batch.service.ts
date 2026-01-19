@@ -51,39 +51,18 @@ export class BatchService {
     }
 
 
-    async getBatchesByCourse(courseId: number, options?: any): Promise<Batch[]> {
+    async getBatchesByCourse(courseId: number, options: batchRepo.BatchFindOptions = {}): Promise<Batch[]> {
         logger.info('BatchService: Fetching batches for course', { courseId });
 
-        if (options?.include?.students) {
-            delete options.include.students;
-            options.include.batchUsers = {
-                where: {
-                    user: {
-                        role: UserRole.STUDENT
-                    }
-                },
-                include: {
-                    user: {
-                        select: {
-                            id: true,
-                            name: true,
-                            email: true,
-                            mobile: true,
-                            role: true
-                        }
-                    }
-                }
-            };
-        }
-
         let batches;
+        // Logic handled entirely in repo now (including students expansion)
         if (options?.where?.isActive === true) {
             batches = await batchRepo.findActiveBatchesByCourseId(courseId, options);
         } else {
             batches = await batchRepo.findBatchesByCourseId(courseId, options);
         }
 
-        return batches.map(b => BatchMapper.toDomain(b));
+        return batches.map((b: Batch) => BatchMapper.toDomain(b));
     }
 
     async updateBatch(id: number, data: UpdateBatchDto): Promise<Batch> {
@@ -159,7 +138,7 @@ export class BatchService {
         }
 
         // 4. Validate Role - only Teachers and Students can be added to a batch
-        if (user.role !== 'TEACHER' && user.role !== 'STUDENT') {
+        if (user.role !== UserRole.TEACHER && user.role !== UserRole.STUDENT) {
             throw new BadRequestError('Only Teachers and Students can be added to a batch');
         }
 
@@ -200,32 +179,6 @@ export class BatchService {
 
     async validateBatchAccess(batchId: number, user: IUser): Promise<void> {
         // Batch -> Course -> Exam -> Business
-        const batch = await batchRepo.findBatchById(batchId, {
-            include: {
-                course: {
-                    include: {
-                        exam: true
-                    }
-                }
-            }
-        });
-
-        if (!batch) {
-            throw new NotFoundError('Batch not found');
-        }
-
-        // Using safe navigation, though with our schema and repo, structure should be intact
-        // We cast to any or define a type because standard Batch return type might not show the deep includes unless typed
-        // However, Prisma client types usually handle includes if we use the generic correctly, but here we used `findBatchById` which returns `Batch | null`.
-        // Let's re-fetch or use a specific query if `findBatchById` doesn't support generic inclusion well in the repo signature.
-        // Actually the repo method `findBatchById` implementation might just return `prisma.batch.findUnique`.
-        // If the repo doesn't support custom includes via arguments easily, we might need a specific repo method or rely on what we can get.
-        // The middleware gathered it manually. Let's do it cleanly.
-
-        // Re-fetch using repo if possible, or assume the repo method allows options.
-        // The repo signature seen in previous turn: findBatchById(id, options?)
-        // So we can pass include.
-
         const batchWithRelations = await batchRepo.findBatchById(batchId, {
             include: { course: { include: { exam: true } } }
         }) as any; // Cast for simplified access
