@@ -328,6 +328,28 @@ async function main() {
 
   console.log('✅ Created batch user assignments');
 
+
+  // Create permissions
+  const permissionsData = [
+    { code: 'CONTENT_CREATE', description: 'Create content' },
+    { code: 'CONTENT_EDIT', description: 'Edit content' },
+    { code: 'CONTENT_DELETE', description: 'Delete content' },
+    { code: 'CONTENT_VIEW', description: 'View content' },
+    { code: 'ANNOUNCEMENT_CREATE', description: 'Create announcement' },
+    { code: 'ANNOUNCEMENT_VIEW', description: 'View announcement' },
+  ];
+
+  const permissions = await Promise.all(
+    permissionsData.map((perm) =>
+      prisma.permission.upsert({
+        where: { code: perm.code },
+        update: {},
+        create: perm,
+      })
+    )
+  );
+  console.log('✅ Seeding permissions:', permissions.map(p => p.code));
+
   // Create announcements
   const announcements = await Promise.all([
     prisma.announcement.create({

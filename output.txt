@@ -1,4 +1,0 @@
-﻿
-> contentkosh-backend@1.3.0 test
-> jest tests/unit/controllers/course.controller.test.ts -t should return 404 if exam does not exist
-

@@ -1,6 +1,29 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+
+## Version [1.8.0] - Permission API & Role Management
+**P.R raised by**  : aaditya-singh-21
+**Date** : 2026-01-18
+### Added
+- **Permission System**:
+    - **Models**: Added `Permission` and `RolePermission` tables to `schema.prisma`.
+    - **Seeding**: Populated database with standard permissions (`CONTENT_*`, `ANNOUNCEMENT_*`).
+    - **Repository**: Created `PermissionRepository` to abstract database operations.
+    - **Service**: Implemented `PermissionService` with validation logic (User existence, Permission validity).
+    - **Controller**: Implemented `PermissionController` with consistent error handling (`ApiError`).
+- **API Endpoints**:
+    - `GET /permission`: Fetch permissions for a user (by `user_id` query param).
+    - `POST /permission`: Assign new permissions to a user.
+    - `PUT /permission`: Replace all permissions for a user.
+    - `DELETE /permission`: Remove all or specific permissions for a user.
+- **Tests**:
+    - **Integration**: Added comprehensive test suite `tests/integration/routes/permission.routes.test.ts` covering all CRUD operations (10 tests).
+
+### Refactored
+- **Architecture**: Enforced strict Controller -> Service -> Repository pattern for Permission module.
+- **Error Handling**: Standardized usage of `ApiResponseHandler` and typed `ApiError` across the new module.
+
 ## Version [1.7.0] - User & Auth API
 **P.R raised by**  : aaditya-singh-21
 **Date** : 2026-01-14
