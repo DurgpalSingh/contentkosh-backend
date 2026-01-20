@@ -14,28 +14,62 @@ datasource db {
 }
 
 enum UserRole {
-  STUDENT
-  TEACHER
-  ADMIN
   SUPERADMIN
-  GUEST
+  ADMIN
+  TEACHER
+  STUDENT
+  USER
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  password  String
-  name      String
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  id           Int        @id @default(autoincrement())
+  businessId   Int?       @map("business_id")
+  name         String
+  email        String
+  mobile       String?
+  password     String     @map("password_hash")
+  role         UserRole   @default(USER)
+  status       UserStatus @default(ACTIVE)
+  emailVerified Boolean   @default(false) @map("email_verified")
+  
+  createdBy    Int?       @map("created_by")
+  updatedBy    Int?       @map("updated_by")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @default(now()) @updatedAt @map("updated_at")
 
   // Relations
-  businessUsers BusinessUser[]
+  business      Business?  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdExams  Exam[]     @relation("CreatedExams")
+  updatedExams  Exam[]     @relation("UpdatedExams")
   batchUsers    BatchUser[]
-  createdExams  Exam[] @relation("CreatedExams")
-  updatedExams  Exam[] @relation("UpdatedExams")
+  refreshTokens RefreshToken[]
 
+  @@unique([businessId, email])
+  @@unique([businessId, mobile])
+  @@index([businessId])
+  @@index([businessId, role])
+  @@index([businessId, status])
   @@map("users")
+}
+
+model RefreshToken {
+  id        Int      @id @default(autoincrement())
+  token     String   @unique
+  userId    Int      @map("user_id")
+  expiresAt DateTime @map("expires_at")
+  isRevoked Boolean  @default(false) @map("is_revoked")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@map("refresh_tokens")
 }
 
 model Business {
@@ -55,27 +89,10 @@ model Business {
 
   // Relations
   exams         Exam[]
-  businessUsers BusinessUser[]
+  users         User[]
   announcements Announcement[]
 
   @@map("business")
-}
-
-model BusinessUser {
-  id        Int      @id @default(autoincrement())
-  userId    Int      @map("user_id")
-  businessId Int     @map("business_id")
-  role      UserRole
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
-
-  // Relations
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, businessId])
-  @@map("business_users")
 }
 
 model Batch {

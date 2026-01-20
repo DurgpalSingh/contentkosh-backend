@@ -1,6 +1,52 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## Version [1.7.0] - User & Auth API
+**P.R raised by**  : aaditya-singh-21
+**Date** : 2026-01-14
+### Added
+- **Secure Refresh Token Rotation**: Implemented a robust token refresh mechanism to maintain user sessions securely without frequent re-logins.
+    - **Endpoint**: `POST /auth/refresh`
+    - **Mechanism**: Exchanges a valid (long-lived) refresh token for a new (short-lived) access token.
+    - **Security**:
+        - Refresh tokens are stored in the database (`RefreshToken` model) with strict expiration times.
+        - Support for token revocation (e.g., on logout), limiting the risk of stolen tokens.
+        - Prevents "forever" sessions if a user is banned or their access is revoked server-side.
+- **Batch User Filtering**: Added ability to filter users within a batch by their role.
+    - **Endpoint**: `GET /api/batches/:batchId/users?role=STUDENT`
+    - **Use Case**: Allows fetching only Students or Teachers for a specific batch.
+- **Swagger Documentation Updates**:
+    - Updated `User` schema to include critical fields (`role`, `status`, `mobile`).
+    - Standardized API documentation using shared schema references (`$ref`) for consistency.
+- **Auth API**: New dedicated authentication routes under `/api/auth`:
+    - `POST /auth/signup`: Public user registration (role defaults to USER).
+    - `POST /auth/login`: User login with JWT token generation.
+    - `POST /auth/logout`: Client-side logout acknowledgement.
+    - `GET /auth/me`: Fetch logged-in user profile.
+- **User Management API**: Admin-only user CRUD under `/api`:
+    - `GET /business/:businessId/users`: List users for a business (with optional role filter).
+    - `POST /business/:businessId/users`: Create user for a business.
+    - `PUT /users/:userId`: Update user details (name, mobile, role, status).
+    - `DELETE /users/:userId`: Soft delete user (sets status to INACTIVE).
+- **DTOs**: Added `CreateUserDto`, `UpdateUserDto` with strict `class-validator` rules.
+- **Schema**: Updated `User` model:
+    - Added `businessId` (FK), `mobile`, `role`, `status`, `emailVerified`, `createdBy`, `updatedBy`.
+    - Added `UserStatus` Enum (ACTIVE/INACTIVE).
+    - Composite unique constraints on `[businessId, email]` and `[businessId, mobile]`.
+- **Removed `BusinessUser` Model**: Simplified user-business relationship to 1:1.
+
+### Refactored
+- **Cross-Tenant Authorization**: Enhanced security on user management routes. Now enforces strict checks to ensure admins can only manage users within their own business/tenant.
+- **Swagger Schemas**: Refactored `user.routes.ts` to use centralized schema definitions.
+- **User Controller**: Refactored to use new schema fields and `UserRepository` methods.
+- **Auth Service**: Consolidated `register`, `login`, and token generation logic.
+- **Routes**: Separated auth routes from user management routes.
+- **Authorization**: Implemented role-based authorization for user management.
+- **Middleware**: Added `authMiddleware` to protect routes.
+
+### Tests
+- **Integration**: Added more integration tests for user management.
+
 ## Version [1.6.0] - Batch API & Test Coverage
 **P.R raised by**  : aaditya-singh-21
 **Date** : 2026-01-08

@@ -18,6 +18,11 @@ jest.mock('../../../src/middlewares/auth.middleware', () => ({
     authenticate: (req: any, res: any, next: any) => next(),
     authorize: () => (req: any, res: any, next: any) => next(),
 }));
+jest.mock('../../../src/middlewares/validation.middleware', () => ({
+    validateIdParam: () => (req: any, res: any, next: any) => next(),
+    authorizeBatchAccess: (req: any, res: any, next: any) => next(),
+    authorizeCourseAccess: (req: any, res: any, next: any) => next(),
+}));
 jest.mock('../../../src/utils/logger');
 
 const app = express();
@@ -143,6 +148,37 @@ describe('Batch Routes', () => {
             expect(res.body.data).toHaveLength(2);
         });
 
+        it('should map include=students to batchUsers with student role', async () => {
+            const mockBatches = [
+                {
+                    id: 1,
+                    codeName: 'BATCH001',
+                    batchUsers: [
+                        { user: { id: 1, name: 'Student 1', role: 'STUDENT' } }
+                    ]
+                }
+            ];
+            (BatchRepo.findBatchesByCourseId as jest.Mock).mockResolvedValue(mockBatches);
+            (CourseRepo.findCourseById as jest.Mock).mockResolvedValue({ id: 1, examId: 1 });
+            (ExamRepo.findExamById as jest.Mock).mockResolvedValue({ id: 1, businessId: 1 });
+
+            const res = await request(app).get('/api/batches/course/1?include=students');
+
+            expect(res.status).toBe(200);
+
+            // Verify the service transformed the options
+            // Verify the service passes the include option to the repo
+            // Logic for mapping 'students' to 'batchUsers' is now in the repo, so we verify exact pass-through
+            const expectedOptions = {
+                include: {
+                    students: true
+                }
+            };
+
+            // Check the second argument of the call (options)
+            expect(BatchRepo.findBatchesByCourseId).toHaveBeenCalledWith(1, expect.objectContaining(expectedOptions));
+        });
+
         it('should return 400 if courseId is invalid', async () => {
             const res = await request(app).get('/api/batches/course/invalid');
 
@@ -229,7 +265,8 @@ describe('Batch Routes', () => {
             (UserRepo.findPublicById as jest.Mock).mockResolvedValue({
                 id: 1,
                 name: 'Test User',
-                businessUsers: [{ business: { id: 1 }, role: 'STUDENT', isActive: true }]
+                businessId: 1,
+                role: 'STUDENT'
             });
             // Mock deep select for batch
             (BatchRepo.findBatchById as jest.Mock).mockResolvedValue({
@@ -259,7 +296,8 @@ describe('Batch Routes', () => {
         it('should return 409 if user is already in batch', async () => {
             (UserRepo.findPublicById as jest.Mock).mockResolvedValue({
                 id: 1,
-                businessUsers: [{ business: { id: 1 }, role: 'STUDENT', isActive: true }]
+                businessId: 1,
+                role: 'STUDENT'
             });
             (BatchRepo.findBatchById as jest.Mock).mockResolvedValue({
                 id: 1,
@@ -279,7 +317,8 @@ describe('Batch Routes', () => {
             (UserRepo.findPublicById as jest.Mock).mockResolvedValue({
                 id: 1,
                 name: 'Admin User',
-                businessUsers: [{ business: { id: 1 }, role: 'ADMIN', isActive: true }]
+                businessId: 1,
+                role: 'ADMIN'
             });
             (BatchRepo.findBatchById as jest.Mock).mockResolvedValue({
                 id: 1,
@@ -299,7 +338,8 @@ describe('Batch Routes', () => {
             (UserRepo.findPublicById as jest.Mock).mockResolvedValue({
                 id: 1,
                 name: 'Other Biz User',
-                businessUsers: [{ business: { id: 2 }, role: 'STUDENT', isActive: true }]
+                businessId: 2,
+                role: 'STUDENT'
             });
             (BatchRepo.findBatchById as jest.Mock).mockResolvedValue({
                 id: 1,
@@ -371,6 +411,32 @@ describe('Batch Routes', () => {
 
             expect(res.status).toBe(200);
             expect(res.body.data).toHaveLength(1);
+            expect(BatchRepo.findUsersByBatchId).toHaveBeenCalledWith(1, undefined);
+        });
+
+        it('should filter users by role', async () => {
+            const batch = { id: 1, course: { examId: 1 } };
+            const mockBatchUsers = [{ id: 1, user: { id: 1, name: 'Student 1', role: 'STUDENT' } }];
+
+            (BatchRepo.findBatchById as jest.Mock).mockResolvedValue(batch);
+            (ExamRepo.findExamById as jest.Mock).mockResolvedValue({ id: 1, businessId: 1 });
+            (BatchRepo.findUsersByBatchId as jest.Mock).mockResolvedValue(mockBatchUsers);
+
+            const res = await request(app).get('/api/batches/1/users?role=STUDENT');
+
+            expect(res.status).toBe(200);
+            expect(BatchRepo.findUsersByBatchId).toHaveBeenCalledWith(1, 'STUDENT');
+            expect(res.body.data).toHaveLength(1);
+        });
+
+        it('should return 400 if role is invalid', async () => {
+            const batch = { id: 1, course: { examId: 1 } };
+            (BatchRepo.findBatchById as jest.Mock).mockResolvedValue(batch);
+            (ExamRepo.findExamById as jest.Mock).mockResolvedValue({ id: 1, businessId: 1 });
+
+            const res = await request(app).get('/api/batches/1/users?role=INVALID');
+            expect(res.status).toBe(400);
+            expect(res.body.message).toContain('Invalid role');
         });
 
         it('should return 400 if batchId is invalid', async () => {

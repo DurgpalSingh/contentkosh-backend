@@ -37,6 +37,13 @@ export class UnauthorizedError extends ApiError {
   }
 }
 
+export class AuthError extends ApiError {
+  constructor(message: string = 'Authentication failed') {
+    super(message, 401);
+    this.name = 'AuthError';
+  }
+}
+
 export class ForbiddenError extends ApiError {
   constructor(message: string = 'Forbidden') {
     super(message, 403);

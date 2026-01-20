@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, UserRole } from '@prisma/client';
 import { prisma } from '../config/database';
 
 const batchSelect = {
@@ -32,6 +32,7 @@ export interface BatchFindOptions {
   take?: number;
   select?: Prisma.BatchSelect;
   include?: Prisma.BatchInclude;
+  includeStudents?: boolean;
 }
 
 export async function createBatch(data: Prisma.BatchCreateInput) {
@@ -76,6 +77,17 @@ export async function findBatchByCodeName(codeName: string) {
 }
 
 export async function findBatchesByCourseId(courseId: number, options: BatchFindOptions = {}) {
+  // Handle "students" request whether it comes from top-level flag or nested include (legacy/compatible)
+  // Casting to any to safely check nested property without TS error if type is strict
+  const requestIncludeStudents = options.includeStudents || (options.include as any)?.students;
+
+  // Clean up the nested property if it exists to avoid Prisma errors
+  if ((options.include as any)?.students) {
+    // Shallow copy include to avoid mutating original object if used elsewhere (good practice)
+    options.include = { ...options.include };
+    delete (options.include as any).students;
+  }
+
   const query: Prisma.BatchFindManyArgs = {
     where: {
       courseId,
@@ -87,7 +99,29 @@ export async function findBatchesByCourseId(courseId: number, options: BatchFind
   if (options.skip !== undefined) query.skip = options.skip;
   if (options.take !== undefined) query.take = options.take;
 
-  if (options.select) {
+  if (requestIncludeStudents) {
+    // Custom include logic for students - overrides standard select/include
+    query.include = {
+      ...(options.include || {}),
+      batchUsers: {
+        where: {
+          user: { role: UserRole.STUDENT }
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              mobile: true,
+              role: true
+            }
+          }
+        }
+      }
+    };
+    // Ensure we don't send includeStudents to prisma if we were spreading options elsewhere (though we aren't here)
+  } else if (options.select) {
     query.select = options.select;
   } else if (options.include) {
     query.include = options.include;
@@ -102,30 +136,13 @@ export async function findBatchesByCourseId(courseId: number, options: BatchFind
 }
 
 export async function findActiveBatchesByCourseId(courseId: number, options: BatchFindOptions = {}) {
-  const query: Prisma.BatchFindManyArgs = {
+  return findBatchesByCourseId(courseId, {
+    ...options,
     where: {
-      courseId,
-      isActive: true,
       ...(options.where || {}),
-    },
-    orderBy: options.orderBy || { createdAt: 'desc' },
-  };
-
-  if (options.skip !== undefined) query.skip = options.skip;
-  if (options.take !== undefined) query.take = options.take;
-
-  if (options.select) {
-    query.select = options.select;
-  } else if (options.include) {
-    query.include = options.include;
-  } else {
-    (query as any).select = {
-      ...batchSelect,
-      course: { select: courseSelect }
-    };
-  }
-
-  return prisma.batch.findMany(query);
+      isActive: true,
+    }
+  });
 }
 
 
@@ -224,9 +241,15 @@ export async function findBatchesByUserId(userId: number) {
   });
 }
 
-export async function findUsersByBatchId(batchId: number) {
+export async function findUsersByBatchId(batchId: number, role?: UserRole) {
+  const where: any = { batchId };
+
+  if (role) {
+    where.user = { role };
+  }
+
   return prisma.batchUser.findMany({
-    where: { batchId },
+    where,
     select: {
       id: true,
       isActive: true,
@@ -262,3 +285,5 @@ export async function updateBatchUser(userId: number, batchId: number, data: Pri
     throw error;
   }
 }
+
+

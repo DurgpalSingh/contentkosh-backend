@@ -1,9 +1,10 @@
-import { Prisma, Batch } from '@prisma/client';
+import { Prisma, Batch, UserRole } from '@prisma/client';
 import * as batchRepo from '../repositories/batch.repo';
 import * as courseRepo from '../repositories/course.repo';
 import * as userRepo from '../repositories/user.repo';
 import { CreateBatchDto, UpdateBatchDto } from '../dtos/batch.dto';
-import { NotFoundError, BadRequestError, AlreadyExistsError } from '../errors/api.errors';
+import { NotFoundError, BadRequestError, AlreadyExistsError, ForbiddenError } from '../errors/api.errors';
+import { IUser } from '../dtos/auth.dto';
 import logger from '../utils/logger';
 import { BatchMapper } from '../mappers/batch.mapper';
 
@@ -50,21 +51,18 @@ export class BatchService {
     }
 
 
-    async getBatchesByCourse(courseId: number, options?: any): Promise<Batch[]> {
+    async getBatchesByCourse(courseId: number, options: batchRepo.BatchFindOptions = {}): Promise<Batch[]> {
         logger.info('BatchService: Fetching batches for course', { courseId });
 
         let batches;
-        // Check if options has explicit active filter (from query params usually handled in controller)
-        // But here we rely on repository options.
-        // If options.where.isActive is true, we could use findActiveBatchesByCourseId or just pass it to generic find.
-
+        // Logic handled entirely in repo now (including students expansion)
         if (options?.where?.isActive === true) {
             batches = await batchRepo.findActiveBatchesByCourseId(courseId, options);
         } else {
             batches = await batchRepo.findBatchesByCourseId(courseId, options);
         }
 
-        return batches.map(b => BatchMapper.toDomain(b));
+        return batches.map((b: Batch) => BatchMapper.toDomain(b));
     }
 
     async updateBatch(id: number, data: UpdateBatchDto): Promise<Batch> {
@@ -130,18 +128,17 @@ export class BatchService {
         const businessId = batch.course?.exam?.businessId;
         if (!businessId) throw new BadRequestError('Batch is not associated with a valid business');
 
-        // 2. Fetch User with Business Roles
+        // 2. Fetch User
         const user = await userRepo.findPublicById(userId);
         if (!user) throw new NotFoundError('User not found');
 
-        // 3. Validate Role
-        const businessUser = user.businessUsers?.find(bu => bu.business.id === businessId);
-
-        if (!businessUser) {
+        // 3. Validate User belongs to this business
+        if (user.businessId !== businessId) {
             throw new BadRequestError('User is not part of this business');
         }
 
-        if (businessUser.role !== 'TEACHER' && businessUser.role !== 'STUDENT') {
+        // 4. Validate Role - only Teachers and Students can be added to a batch
+        if (user.role !== UserRole.TEACHER && user.role !== UserRole.STUDENT) {
             throw new BadRequestError('Only Teachers and Students can be added to a batch');
         }
 
@@ -166,9 +163,9 @@ export class BatchService {
         return await batchRepo.findBatchesByUserId(userId);
     }
 
-    async getUsersByBatch(batchId: number, options?: any) {
-        logger.info('BatchService: Fetching users for batch', { batchId });
-        return await batchRepo.findUsersByBatchId(batchId);
+    async getUsersByBatch(batchId: number, role?: UserRole) {
+        logger.info('BatchService: Fetching users for batch', { batchId, role });
+        return await batchRepo.findUsersByBatchId(batchId, role);
     }
 
     async updateBatchUser(batchId: number, userId: number, data: any) {
@@ -178,5 +175,26 @@ export class BatchService {
         if (!existing) throw new NotFoundError('User is not in this batch');
 
         return await batchRepo.updateBatchUser(userId, batchId, data);
+    }
+
+    async validateBatchAccess(batchId: number, user: IUser): Promise<void> {
+        // Batch -> Course -> Exam -> Business
+        const batchWithRelations = await batchRepo.findBatchById(batchId, {
+            include: { course: { include: { exam: true } } }
+        }) as any; // Cast for simplified access
+
+        if (!batchWithRelations) throw new NotFoundError('Batch not found');
+
+        const exam = batchWithRelations.course?.exam;
+        if (!exam) {
+            throw new ForbiddenError('Batch is not correctly associated with an exam');
+        }
+
+        const isSuperAdmin = user.role === UserRole.SUPERADMIN;
+        const hasBusinessAccess = exam.businessId === user.businessId;
+
+        if (!isSuperAdmin && !hasBusinessAccess) {
+            throw new ForbiddenError('You do not have access to this batch');
+        }
     }
 }
