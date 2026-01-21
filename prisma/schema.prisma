@@ -27,28 +27,30 @@ enum UserStatus {
 }
 
 model User {
-  id           Int        @id @default(autoincrement())
-  businessId   Int?       @map("business_id")
-  name         String
-  email        String
-  mobile       String?
-  password     String     @map("password_hash")
-  role         UserRole   @default(USER)
-  status       UserStatus @default(ACTIVE)
-  emailVerified Boolean   @default(false) @map("email_verified")
-  
-  createdBy    Int?       @map("created_by")
-  updatedBy    Int?       @map("updated_by")
-  createdAt    DateTime   @default(now()) @map("created_at")
-  updatedAt    DateTime   @default(now()) @updatedAt @map("updated_at")
+  id            Int        @id @default(autoincrement())
+  businessId    Int?       @map("business_id")
+  name          String
+  email         String
+  mobile        String?
+  password      String     @map("password_hash")
+  role          UserRole   @default(USER)
+  status        UserStatus @default(ACTIVE)
+  emailVerified Boolean    @default(false) @map("email_verified")
+
+  createdBy Int?     @map("created_by")
+  updatedBy Int?     @map("updated_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
   // Relations
-  business      Business?  @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  createdExams  Exam[]     @relation("CreatedExams")
-  updatedExams  Exam[]     @relation("UpdatedExams")
-  batchUsers    BatchUser[]
-  rolePermissions RolePermission[]
-  refreshTokens RefreshToken[]
+  business         Business?        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdExams     Exam[]           @relation("CreatedExams")
+  updatedExams     Exam[]           @relation("UpdatedExams")
+  batchUsers       BatchUser[]
+  rolePermissions  RolePermission[]
+  refreshTokens    RefreshToken[]
+  uploadedContents Content[]        @relation("ContentUploader")
+  updatedContents  Content[]        @relation("ContentUpdater")
 
   @@unique([businessId, email])
   @@unique([businessId, mobile])
@@ -76,7 +78,7 @@ model RefreshToken {
 model Business {
   id            Int      @id @default(autoincrement())
   instituteName String   @map("institute_name")
-  logo          String?  // URL or file path to logo
+  logo          String? // URL or file path to logo
   tagline       String?
   contactNumber String?  @map("contact_number")
   email         String?
@@ -108,8 +110,9 @@ model Batch {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   // Relations
-  course     Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  course     Course      @relation(fields: [courseId], references: [id], onDelete: Cascade)
   batchUsers BatchUser[]
+  contents   Content[]
 
   @@index([courseId])
   @@map("batches")
@@ -132,18 +135,18 @@ model BatchUser {
 }
 
 model Announcement {
-  id          Int      @id @default(autoincrement())
-  heading     String
-  content     String
-  startDate   DateTime @map("start_date")
-  endDate     DateTime @map("end_date")
-  isActive    Boolean  @default(true) @map("is_active")
-  businessId  Int      @map("business_id")
-  visibleToAdmins    Boolean @default(false) @map("visible_to_admins")
-  visibleToTeachers  Boolean @default(false) @map("visible_to_teachers")
-  visibleToStudents  Boolean @default(false) @map("visible_to_students")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id                Int      @id @default(autoincrement())
+  heading           String
+  content           String
+  startDate         DateTime @map("start_date")
+  endDate           DateTime @map("end_date")
+  isActive          Boolean  @default(true) @map("is_active")
+  businessId        Int      @map("business_id")
+  visibleToAdmins   Boolean  @default(false) @map("visible_to_admins")
+  visibleToTeachers Boolean  @default(false) @map("visible_to_teachers")
+  visibleToStudents Boolean  @default(false) @map("visible_to_students")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
 
   // Relations
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
@@ -168,8 +171,8 @@ enum SubjectStatus {
 }
 
 model Exam {
-  id          Int      @id @default(autoincrement())
-  name        String   // e.g., "UPSC", "NEET"
+  id          Int        @id @default(autoincrement())
+  name        String // e.g., "UPSC", "NEET"
   code        String?
   description String?
   status      ExamStatus @default(ACTIVE)
@@ -179,56 +182,56 @@ model Exam {
   createdBy   Int?       @map("created_by")
   updatedBy   Int?       @map("updated_by")
 
-  createdByUser User? @relation("CreatedExams", fields: [createdBy], references: [id], onDelete: Cascade)
-  updatedByUser User? @relation("UpdatedExams", fields: [updatedBy], references: [id], onDelete: Cascade)
-  createdAt   DateTime   @default(now()) @map("created_at")
-  updatedAt   DateTime   @updatedAt @map("updated_at")
+  createdByUser User?    @relation("CreatedExams", fields: [createdBy], references: [id], onDelete: Cascade)
+  updatedByUser User?    @relation("UpdatedExams", fields: [updatedBy], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
 
   // Relations
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   courses  Course[]
 
+  @@unique([businessId, name])
   @@index([businessId])
   @@index([businessId, status])
-  @@unique([businessId, name])
   @@map("exams")
 }
 
 model Course {
-  id          Int      @id @default(autoincrement())
-  name        String   // e.g., "Civil Services Course", "Medical Entrance Course"
+  id          Int          @id @default(autoincrement())
+  name        String // e.g., "Civil Services Course", "Medical Entrance Course"
   description String?
-  startDate   DateTime? @map("start_date")
-  endDate     DateTime? @map("end_date")
+  startDate   DateTime?    @map("start_date")
+  endDate     DateTime?    @map("end_date")
   status      CourseStatus @default(ACTIVE)
-  examId      Int      @map("exam_id")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  examId      Int          @map("exam_id")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
 
   // Relations
   exam     Exam      @relation(fields: [examId], references: [id], onDelete: Cascade)
   subjects Subject[]
   batches  Batch[]
 
-  @@index([examId])
   @@unique([examId, name])
+  @@index([examId])
   @@map("courses")
 }
 
 model Subject {
-  id          Int      @id @default(autoincrement())
-  name        String   // e.g., "Geography", "History", "Physics"
+  id          Int           @id @default(autoincrement())
+  name        String // e.g., "Geography", "History", "Physics"
   description String?
   status      SubjectStatus @default(ACTIVE)
-  courseId    Int      @map("course_id")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  courseId    Int           @map("course_id")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
 
   // Relations
   course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
-  @@index([courseId])
   @@unique([courseId, name])
+  @@index([courseId])
   @@map("subjects")
 }
 
@@ -256,4 +259,38 @@ model RolePermission {
 
   @@unique([userId, permissionId])
   @@map("role_permissions")
+}
+
+enum ContentType {
+  PDF
+  IMAGE
+}
+
+enum ContentStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model Content {
+  id         Int           @id @default(autoincrement())
+  batchId    Int           @map("batch_id")
+  title      String
+  type       ContentType
+  filePath   String        @map("file_path")
+  fileSize   Int           @map("file_size") // in bytes
+  status     ContentStatus @default(ACTIVE)
+  uploadedBy Int           @map("uploaded_by")
+  updatedBy  Int?          @map("updated_by")
+  createdAt  DateTime      @default(now()) @map("created_at")
+  updatedAt  DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  batch    Batch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  uploader User  @relation("ContentUploader", fields: [uploadedBy], references: [id], onDelete: Cascade)
+  updater  User? @relation("ContentUpdater", fields: [updatedBy], references: [id], onDelete: Cascade)
+
+  @@index([batchId])
+  @@index([batchId, status])
+  @@index([uploadedBy])
+  @@map("contents")
 }
