@@ -5,6 +5,7 @@ import examRoutes from './exam.routes';
 import announcementRoutes from './announcement.routes';
 import batchRoutes from './batch.routes';
 import permissionRoutes from './permission.routes';
+import contentRoutes from './content.routes';
 import healthRoutes from './health.routes';
 import authRoutes from './auth.routes';
 import { authenticate } from '../middlewares/auth.middleware';
@@ -22,5 +23,6 @@ router.use('/api/exams', authenticate, examRoutes);
 router.use('/api/announcements', authenticate, announcementRoutes);
 router.use('/api/batches', authenticate, batchRoutes);
 router.use('/api/permission', authenticate, permissionRoutes);
+router.use('/api', contentRoutes);
 
 export default router; 
