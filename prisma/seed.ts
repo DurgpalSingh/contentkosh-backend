@@ -1,5 +1,6 @@
 import { PrismaClient, UserRole, UserStatus, CourseStatus, SubjectStatus } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { PERMISSIONS } from '../src/constants/permission.constants';
 
 const prisma = new PrismaClient();
 
@@ -327,6 +328,19 @@ async function main() {
   ]);
 
   console.log('✅ Created batch user assignments');
+
+
+  // Create permissions
+  const permissions = await Promise.all(
+    PERMISSIONS.map((perm) =>
+      prisma.permission.upsert({
+        where: { code: perm.code },
+        update: {},
+        create: perm,
+      })
+    )
+  );
+  console.log('✅ Seeding permissions:', permissions.map(p => p.code));
 
   // Create announcements
   const announcements = await Promise.all([

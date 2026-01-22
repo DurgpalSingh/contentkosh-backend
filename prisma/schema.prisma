@@ -47,6 +47,7 @@ model User {
   createdExams  Exam[]     @relation("CreatedExams")
   updatedExams  Exam[]     @relation("UpdatedExams")
   batchUsers    BatchUser[]
+  rolePermissions RolePermission[]
   refreshTokens RefreshToken[]
 
   @@unique([businessId, email])
@@ -229,4 +230,30 @@ model Subject {
   @@index([courseId])
   @@unique([courseId, name])
   @@map("subjects")
+}
+
+model Permission {
+  id          Int      @id @default(autoincrement())
+  code        String   @unique
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  id           Int @id @default(autoincrement())
+  userId       Int @map("user_id")
+  permissionId Int @map("permission_id")
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  isDeleted Boolean @default(false) @map("is_deleted")
+
+  @@unique([userId, permissionId])
+  @@map("role_permissions")
 }
