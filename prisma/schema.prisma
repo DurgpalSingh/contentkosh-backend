@@ -252,6 +252,8 @@ model RolePermission {
   user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
 
+  isDeleted Boolean @default(false) @map("is_deleted")
+
   @@unique([userId, permissionId])
   @@map("role_permissions")
 }

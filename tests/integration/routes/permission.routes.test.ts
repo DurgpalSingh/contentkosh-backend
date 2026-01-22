@@ -106,13 +106,13 @@ describe('Permission Routes', () => {
     // ==================== DELETE PERMISSIONS ====================
     describe('DELETE /permission', () => {
         it('should delete all permissions if permissions list is empty', async () => {
-            (PermissionService.prototype.deletePermissions as jest.Mock).mockResolvedValue({ count: 5 });
+            (PermissionService.prototype.handlePermissionDeletion as jest.Mock).mockResolvedValue({ message: 'All permissions removed' });
 
             const res = await request(app).delete('/permission').send({ userId: 1 });
 
             expect(res.status).toBe(200);
             expect(res.body.data.message).toBe('All permissions removed');
-            expect(PermissionService.prototype.deletePermissions).toHaveBeenCalledWith(1);
+            expect(PermissionService.prototype.handlePermissionDeletion).toHaveBeenCalledWith(expect.objectContaining({ userId: 1 }));
         });
 
         it('should delete specific permissions if provided', async () => {
@@ -120,12 +120,13 @@ describe('Permission Routes', () => {
                 user: { id: 1, role: 'USER' },
                 permissions: ['CONTENT_VIEW']
             };
-            (PermissionService.prototype.deleteSpecificPermissions as jest.Mock).mockResolvedValue(remainingPermissions);
+            (PermissionService.prototype.handlePermissionDeletion as jest.Mock).mockResolvedValue(remainingPermissions);
 
             const res = await request(app).delete('/permission').send({ userId: 1, permissions: ['CONTENT_CREATE'] });
 
             expect(res.status).toBe(200);
             expect(res.body.data).toEqual(remainingPermissions);
+            expect(PermissionService.prototype.handlePermissionDeletion).toHaveBeenCalledWith(expect.objectContaining({ userId: 1, permissions: ['CONTENT_CREATE'] }));
         });
 
         it('should return 400 if userId is missing', async () => {
