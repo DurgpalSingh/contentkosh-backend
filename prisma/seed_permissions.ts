@@ -1,32 +1,31 @@
 
 import { PrismaClient } from '@prisma/client';
+import { PERMISSIONS } from '../src/constants/permission.constants';
 
 const prisma = new PrismaClient();
 
-const permissions = [
-    { code: 'CONTENT_CREATE', description: 'Create content' },
-    { code: 'CONTENT_EDIT', description: 'Edit content' },
-    { code: 'CONTENT_DELETE', description: 'Delete content' },
-    { code: 'CONTENT_VIEW', description: 'View content' },
-    { code: 'ANNOUNCEMENT_CREATE', description: 'Create announcement' },
-    { code: 'ANNOUNCEMENT_VIEW', description: 'View announcement' },
-];
-
 async function main() {
     console.log('Seeding permissions...');
-    for (const p of permissions) {
-        await prisma.permission.upsert({
-            where: { code: p.code },
-            update: {},
-            create: p,
+
+    try {
+        await prisma.$transaction(async (tx) => {
+            for (const p of PERMISSIONS) {
+                await tx.permission.upsert({
+                    where: { code: p.code },
+                    update: {},
+                    create: p,
+                });
+            }
         });
+        console.log('Permissions seeded successfully.');
+    } catch (error: any) {
+        console.error('Error seeding permissions:', error.message || error);
+        throw error;
     }
-    console.log('Permissions seeded.');
 }
 
 main()
     .catch((e) => {
-        console.error(e);
         process.exit(1);
     })
     .finally(async () => {

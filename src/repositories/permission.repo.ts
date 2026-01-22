@@ -1,12 +1,10 @@
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../config/database';
 
-const prisma = new PrismaClient();
-
-export const findAll = async () => {
+export const findAllPermissions = async () => {
     return prisma.permission.findMany();
 };
 
-export const findByCodes = async (codes: string[]) => {
+export const findPermissionsByCodes = async (codes: string[]) => {
     return prisma.permission.findMany({
         where: {
             code: { in: codes },
@@ -23,7 +21,7 @@ export const findUserPermissions = async (userId: number) => {
     });
 };
 
-export const assignPermissions = async (userId: number, permissionIds: number[]) => {
+export const assignUserPermissions = async (userId: number, permissionIds: number[]) => {
     const data = permissionIds.map((permissionId) => ({
         userId,
         permissionId,
@@ -35,7 +33,7 @@ export const assignPermissions = async (userId: number, permissionIds: number[])
     });
 };
 
-export const removePermissions = async (userId: number, permissionIds?: number[]) => {
+export const removeUserPermissions = async (userId: number, permissionIds?: number[]) => {
     if (permissionIds && permissionIds.length > 0) {
         return prisma.rolePermission.deleteMany({
             where: {
@@ -50,7 +48,7 @@ export const removePermissions = async (userId: number, permissionIds?: number[]
     }
 };
 
-export const replacePermissions = async (userId: number, permissionIds: number[]) => {
+export const replaceUserPermissions = async (userId: number, permissionIds: number[]) => {
     return prisma.$transaction(async (tx) => {
         // Delete all existing permissions for the user
         await tx.rolePermission.deleteMany({

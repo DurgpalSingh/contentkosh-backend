@@ -1,5 +1,6 @@
 import { PrismaClient, UserRole, UserStatus, CourseStatus, SubjectStatus } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { PERMISSIONS } from '../src/constants/permission.constants';
 
 const prisma = new PrismaClient();
 
@@ -330,17 +331,8 @@ async function main() {
 
 
   // Create permissions
-  const permissionsData = [
-    { code: 'CONTENT_CREATE', description: 'Create content' },
-    { code: 'CONTENT_EDIT', description: 'Edit content' },
-    { code: 'CONTENT_DELETE', description: 'Delete content' },
-    { code: 'CONTENT_VIEW', description: 'View content' },
-    { code: 'ANNOUNCEMENT_CREATE', description: 'Create announcement' },
-    { code: 'ANNOUNCEMENT_VIEW', description: 'View announcement' },
-  ];
-
   const permissions = await Promise.all(
-    permissionsData.map((perm) =>
+    PERMISSIONS.map((perm) =>
       prisma.permission.upsert({
         where: { code: perm.code },
         update: {},

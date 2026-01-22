@@ -5,7 +5,7 @@ import { NotFoundError, BadRequestError } from '../errors/api.errors';
 
 export class PermissionService {
     async getAllPermissions() {
-        return permissionRepo.findAll();
+        return permissionRepo.findAllPermissions();
     }
 
     async getUserPermissions(userId: number) {
@@ -36,7 +36,8 @@ export class PermissionService {
         }
 
         // Get permission records to verify valid codes
-        const permissionRecords = await permissionRepo.findByCodes(permissions);
+        // We check length to ensure ALL requested permissions exist in the DB
+        const permissionRecords = await permissionRepo.findPermissionsByCodes(permissions);
         if (permissionRecords.length !== permissions.length) {
             throw new BadRequestError('Some permissions are invalid');
         }
@@ -44,7 +45,7 @@ export class PermissionService {
         const permissionIds = permissionRecords.map(p => p.id);
 
         // Use repository to assign (skip duplicates)
-        await permissionRepo.assignPermissions(userId, permissionIds);
+        await permissionRepo.assignUserPermissions(userId, permissionIds);
 
         return this.getUserPermissions(userId);
     }
@@ -57,7 +58,8 @@ export class PermissionService {
             throw new NotFoundError('User not found');
         }
 
-        const permissionRecords = await permissionRepo.findByCodes(permissions);
+        // We check length to ensure ALL requested permissions exist in the DB
+        const permissionRecords = await permissionRepo.findPermissionsByCodes(permissions);
         if (permissionRecords.length !== permissions.length) {
             throw new BadRequestError('Some permissions are invalid');
         }
@@ -65,7 +67,7 @@ export class PermissionService {
         const permissionIds = permissionRecords.map(p => p.id);
 
         // Replace all permissions
-        await permissionRepo.replacePermissions(userId, permissionIds);
+        await permissionRepo.replaceUserPermissions(userId, permissionIds);
 
         return this.getUserPermissions(userId);
     }
@@ -76,7 +78,7 @@ export class PermissionService {
             throw new NotFoundError('User not found');
         }
 
-        return await permissionRepo.removePermissions(userId);
+        return await permissionRepo.removeUserPermissions(userId);
     }
 
     async deleteSpecificPermissions(dto: AssignPermissionDto) {
@@ -87,11 +89,20 @@ export class PermissionService {
             throw new NotFoundError('User not found');
         }
 
-        const permissionRecords = await permissionRepo.findByCodes(permissions);
+        const permissionRecords = await permissionRepo.findPermissionsByCodes(permissions);
         const idsToDelete = permissionRecords.map(p => p.id);
 
-        await permissionRepo.removePermissions(userId, idsToDelete);
+        await permissionRepo.removeUserPermissions(userId, idsToDelete);
 
         return this.getUserPermissions(userId);
+    }
+
+    async handlePermissionDeletion(dto: AssignPermissionDto) {
+        if (dto.permissions && dto.permissions.length > 0) {
+            return this.deleteSpecificPermissions(dto);
+        } else {
+            await this.deletePermissions(dto.userId);
+            return { message: 'All permissions removed' };
+        }
     }
 }
