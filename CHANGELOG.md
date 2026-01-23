@@ -23,6 +23,53 @@ All notable changes to this project will be documented in this file.
 ### Refactored
 - **Architecture**: Enforced strict Controller -> Service -> Repository pattern for Permission module.
 - **Error Handling**: Standardized usage of `ApiResponseHandler` and typed `ApiError` across the new module.
+## Version [1.8.0] - Content Management API
+**P.R raised by**  : Shubh404-SE  
+**Date** : 2026-01-23
+
+### Added
+- **Content Management API**: Implemented full lifecycle management for batch-specific educational content (PDFs and Images).
+  - **Create Content (Multipart Upload)**:
+    - `POST /api/batches/:batchId/contents`
+    - Secure file upload using `multer` with server-side derivation of:
+      - `type` (PDF | IMAGE)
+      - `filePath`
+      - `fileSize`
+    - Strict middleware pipeline enforcing authentication, role-based authorization (ADMIN, TEACHER), batch access validation, file validation, and DTO validation.
+  - **List Batch Contents**:
+    - `GET /api/batches/:batchId/contents`
+  - **Get Content Metadata**:
+    - `GET /api/contents/:contentId`
+  - **Content File Streaming**:
+    - `GET /api/contents/:contentId/file`
+    - Streams stored files securely without exposing filesystem paths.
+  - **Update Content**:
+    - `PUT /api/contents/:contentId`
+    - Supports metadata updates with proper authorization checks.
+  - **Delete Content**:
+    - `DELETE /api/contents/:contentId`
+    - Cascade deletion handled via Prisma relations.
+
+- **DTOs**:
+  - Added `CreateContentDto` and `UpdateContentDto` with strict `class-validator` rules.
+  - DTOs validate request body only; path parameters and derived fields are handled outside DTOs.
+
+- **Schema**:
+  - Added `Content` model with relations to `Batch` and `User`.
+  - Introduced `ContentType` (PDF, IMAGE) and `ContentStatus` (ACTIVE, INACTIVE) enums.
+  - Enabled cascade delete behavior.
+
+### Refactored
+- **Middleware Pipeline**:
+  - Standardized multipart upload flow to ensure predictable preprocessing and validation order.
+- **Service Layer**:
+  - Enforced explicit service method contracts with no dependency on request or route parameters.
+- **Authorization**:
+  - Centralized batch-level access validation for all content operations.
+
+### Tests
+- **Integration**:
+  - Added and verified end-to-end tests covering content creation, retrieval, file streaming, update, and deletion.
 
 ## Version [1.7.0] - User & Auth API
 **P.R raised by**  : aaditya-singh-21
