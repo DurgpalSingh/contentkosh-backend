@@ -1371,5 +1371,182 @@ export const swaggerSchemas = {
         description: 'Whether the batch user should be active'
       }
     }
+  },
+
+  // Content Schemas
+  Content: {
+    type: 'object',
+    properties: {
+      id: {
+        type: 'integer',
+        description: 'Content ID'
+      },
+      batchId: {
+        type: 'integer',
+        description: 'ID of the batch this content belongs to'
+      },
+      title: {
+        type: 'string',
+        description: 'Title of the content'
+      },
+      type: {
+        type: 'string',
+        enum: ['PDF', 'IMAGE'],
+        description: 'Type of the content file'
+      },
+      filePath: {
+        type: 'string',
+        description: 'File path on the server'
+      },
+      fileSize: {
+        type: 'integer',
+        description: 'File size in bytes'
+      },
+      status: {
+        type: 'string',
+        enum: ['ACTIVE', 'INACTIVE'],
+        description: 'Status of the content'
+      },
+      uploadedBy: {
+        type: 'integer',
+        description: 'ID of the user who uploaded the content'
+      },
+      updatedBy: {
+        type: 'integer',
+        description: 'ID of the user who last updated the content'
+      },
+      createdAt: {
+        type: 'string',
+        format: 'date-time',
+        description: 'Content creation timestamp'
+      },
+      updatedAt: {
+        type: 'string',
+        format: 'date-time',
+        description: 'Content last update timestamp'
+      },
+      batch: {
+        type: 'object',
+        properties: {
+          id: {
+            type: 'integer',
+            description: 'Batch ID'
+          },
+          codeName: {
+            type: 'string',
+            description: 'Batch code name'
+          },
+          displayName: {
+            type: 'string',
+            description: 'Batch display name'
+          }
+        }
+      },
+      uploader: {
+        type: 'object',
+        properties: {
+          id: {
+            type: 'integer',
+            description: 'User ID'
+          },
+          name: {
+            type: 'string',
+            description: 'User name'
+          },
+          email: {
+            type: 'string',
+            description: 'User email'
+          }
+        }
+      },
+      updater: {
+        type: 'object',
+        properties: {
+          id: {
+            type: 'integer',
+            description: 'User ID'
+          },
+          name: {
+            type: 'string',
+            description: 'User name'
+          },
+          email: {
+            type: 'string',
+            description: 'User email'
+          }
+        }
+      }
+    }
+  },
+  CreateContentRequest: {
+    type: 'object',
+    required: ['batchId', 'title', 'type', 'filePath', 'fileSize'],
+    properties: {
+      batchId: {
+        type: 'integer',
+        description: 'ID of the batch this content belongs to (required)'
+      },
+      title: {
+        type: 'string',
+        minLength: 1,
+        description: 'Title of the content (required)'
+      },
+      type: {
+        type: 'string',
+        enum: ['PDF', 'IMAGE'],
+        description: 'Type of the content file (required)'
+      },
+      filePath: {
+        type: 'string',
+        minLength: 1,
+        description: 'File path on the server (required)'
+      },
+      fileSize: {
+        type: 'integer',
+        minimum: 1,
+        description: 'File size in bytes (required)'
+      },
+      status: {
+        type: 'string',
+        enum: ['ACTIVE', 'INACTIVE'],
+        default: 'ACTIVE',
+        description: 'Status of the content'
+      }
+    }
+  },
+  UpdateContentRequest: {
+    type: 'object',
+    properties: {
+      title: {
+        type: 'string',
+        minLength: 1,
+        description: 'Title of the content'
+      },
+      status: {
+        type: 'string',
+        enum: ['ACTIVE', 'INACTIVE'],
+        description: 'Status of the content'
+      }
+    }
+  },
+  ContentListResponse: {
+    type: 'object',
+    properties: {
+      contents: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/Content'
+        },
+        description: 'List of contents'
+      },
+      total: {
+        type: 'integer',
+        description: 'Total number of contents'
+      },
+      hasMore: {
+        type: 'boolean',
+        description: 'Whether there are more contents to fetch'
+      }
+    }
   }
 };
