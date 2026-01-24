@@ -1,5 +1,30 @@
-import { PrismaClient, Prisma, Content, ContentType, ContentStatus } from '@prisma/client';
+import { Prisma, Content } from '@prisma/client';
 import { prisma } from '../config/database';
+
+const userBasicSelect: Prisma.UserSelect = {
+  id: true,
+  name: true,
+  email: true
+};
+
+const batchBasicSelect: Prisma.BatchSelect = {
+  id: true,
+  codeName: true,
+  displayName: true
+};
+
+const contentDefaultInclude: Prisma.ContentInclude = {
+  batch: {
+    select: batchBasicSelect
+  },
+  uploader: {
+    select: userBasicSelect
+  },
+  updater: {
+    select: userBasicSelect
+  }
+};
+
 
 export interface ContentFindOptions {
   where?: Prisma.ContentWhereInput;
@@ -14,20 +39,8 @@ export const createContent = async (data: Prisma.ContentCreateInput): Promise<Co
   return await prisma.content.create({
     data,
     include: {
-      batch: {
-        select: {
-          id: true,
-          codeName: true,
-          displayName: true
-        }
-      },
-      uploader: {
-        select: {
-          id: true,
-          name: true,
-          email: true
-        }
-      }
+      batch: { select: batchBasicSelect },
+      uploader: { select: userBasicSelect }
     }
   });
 };
@@ -46,29 +59,7 @@ export const findContentById = async (
   
   return await prisma.content.findUnique({
     where: { id },
-    include: options.include || {
-      batch: {
-        select: {
-          id: true,
-          codeName: true,
-          displayName: true
-        }
-      },
-      uploader: {
-        select: {
-          id: true,
-          name: true,
-          email: true
-        }
-      },
-      updater: {
-        select: {
-          id: true,
-          name: true,
-          email: true
-        }
-      }
-    }
+    include: options.include || contentDefaultInclude
   });
 };
 
@@ -98,20 +89,8 @@ export const findContentsByBatchId = async (
     ...(options.skip !== undefined && { skip: options.skip }),
     ...(options.take !== undefined && { take: options.take }),
     include: options.include || {
-      uploader: {
-        select: {
-          id: true,
-          name: true,
-          email: true
-        }
-      },
-      updater: {
-        select: {
-          id: true,
-          name: true,
-          email: true
-        }
-      }
+      uploader: { select: userBasicSelect },
+      updater: { select: userBasicSelect }
     }
   });
 };
@@ -123,29 +102,7 @@ export const updateContent = async (
   return await prisma.content.update({
     where: { id },
     data,
-    include: {
-      batch: {
-        select: {
-          id: true,
-          codeName: true,
-          displayName: true
-        }
-      },
-      uploader: {
-        select: {
-          id: true,
-          name: true,
-          email: true
-        }
-      },
-      updater: {
-        select: {
-          id: true,
-          name: true,
-          email: true
-        }
-      }
-    }
+    include: contentDefaultInclude
   });
 };
 
