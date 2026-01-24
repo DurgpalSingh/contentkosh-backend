@@ -88,6 +88,7 @@ export const getExam = async (req: Request, res: Response) => {
 export const getExamsByBusiness = async (req: Request, res: Response) => {
     try {
         const businessId = validateBusinessId(req);
+        console.log('getExamsByBusiness: businessId from params:', req.params.businessId, 'parsed:', businessId);
 
         const options = QueryBuilder.parse(req.query);
 

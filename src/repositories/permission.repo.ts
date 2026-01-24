@@ -17,7 +17,6 @@ export const findUserPermissions = async (userId: number) => {
     return prisma.rolePermission.findMany({
         where: {
             userId,
-            isDeleted: false // Filter out soft-deleted permissions
         },
         include: {
             permission: true,
@@ -36,13 +35,10 @@ export const assignUserPermissions = async (userId: number, permissionIds: numbe
                         permissionId,
                     },
                 },
-                update: {
-                    isDeleted: false, // Revive if it exists (even if was soft deleted)
-                },
+                update: {},
                 create: {
                     userId,
                     permissionId,
-                    isDeleted: false,
                 },
             })
         )
@@ -51,50 +47,33 @@ export const assignUserPermissions = async (userId: number, permissionIds: numbe
 
 export const removeUserPermissions = async (userId: number, permissionIds?: number[]) => {
     if (permissionIds && permissionIds.length > 0) {
-        return prisma.rolePermission.updateMany({
+        return prisma.rolePermission.deleteMany({
             where: {
                 userId,
                 permissionId: { in: permissionIds },
             },
-            data: {
-                isDeleted: true,
-            },
         });
     } else {
-        return prisma.rolePermission.updateMany({
+        return prisma.rolePermission.deleteMany({
             where: { userId },
-            data: {
-                isDeleted: true,
-            },
         });
     }
 };
 
 export const replaceUserPermissions = async (userId: number, permissionIds: number[]) => {
     return prisma.$transaction(async (tx) => {
-        // Soft delete ALL existing permissions for the user
-        await tx.rolePermission.updateMany({
+        // Delete ALL existing permissions for the user
+        await tx.rolePermission.deleteMany({
             where: { userId },
-            data: { isDeleted: true },
         });
 
-        // Revive or create the new set of permissions
-        for (const permissionId of permissionIds) {
-            await tx.rolePermission.upsert({
-                where: {
-                    userId_permissionId: {
-                        userId,
-                        permissionId,
-                    },
-                },
-                update: {
-                    isDeleted: false,
-                },
-                create: {
+        // Create the new set of permissions
+        if (permissionIds.length > 0) {
+            await tx.rolePermission.createMany({
+                data: permissionIds.map(permissionId => ({
                     userId,
-                    permissionId,
-                    isDeleted: false,
-                },
+                    permissionId
+                }))
             });
         }
     });

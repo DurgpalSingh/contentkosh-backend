@@ -2,6 +2,16 @@
 All notable changes to this project will be documented in this file.
 
 
+## Version [1.9.0] - Support for Dynamic UI & Permissions
+**P.R raised by**  : aaditya-singh-21
+**Date** : 2026-01-24
+### Changed
+- **Profile API for Dynamic UI**: Enhanced `GET /api/users/profile` to return complete user profile data (including `role`, `name`, and `business` context). This enables the frontend to dynamically render the correct dashboard layout and sidebar items based on the user's identity.
+
+### Fixed
+- **Permission Repository**: Fixed `Invalid column` error in `role_permissions` query by removing references to non-existent `isDeleted` column.
+- **Architecture Compliance**: Refactored `Auth Controller` to route database requests through `UserService`, ensuring properly layered architecture.
+
 ## Version [1.8.0] - Permission API & Role Management
 **P.R raised by**  : aaditya-singh-21
 **Date** : 2026-01-18

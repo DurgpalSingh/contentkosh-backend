@@ -4,6 +4,7 @@ import express from 'express';
 import authRoutes from '../../../src/routes/auth.routes';
 import { AuthService } from '../../../src/services/auth.service';
 import * as UserRepo from '../../../src/repositories/user.repo';
+import * as UserService from '../../../src/services/user.service';
 import { errorHandler } from '../../../src/middlewares/error.middleware';
 import { AuthError, ForbiddenError, AlreadyExistsError } from '../../../src/errors/api.errors';
 import logger from '../../../src/utils/logger';
@@ -11,6 +12,7 @@ import logger from '../../../src/utils/logger';
 // Mock dependencies
 jest.mock('../../../src/services/auth.service');
 jest.mock('../../../src/repositories/user.repo');
+jest.mock('../../../src/services/user.service');
 jest.mock('../../../src/utils/logger');
 
 // Mock authenticate middleware for /me route
@@ -283,6 +285,14 @@ describe('Auth Routes', () => {
 
     describe('GET /auth/me', () => {
         it('should return user profile when authenticated', async () => {
+            (UserService.findUserById as jest.Mock).mockResolvedValue({
+                id: 1,
+                email: 'test@test.com',
+                name: 'Test User',
+                role: 'USER',
+                businessId: 1
+            });
+
             const res = await request(app)
                 .get('/auth/me')
                 .set('Authorization', 'Bearer valid-token');
