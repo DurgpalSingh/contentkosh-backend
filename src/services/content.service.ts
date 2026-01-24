@@ -15,7 +15,7 @@ export class ContentService {
     batchId: number,
     data: CreateContentDto,
     user: IUser
-  ): Promise<any> {
+  ): Promise<Content> {
     logger.info('ContentService: Creating new content', {
       batchId,
       title: data.title,
@@ -47,7 +47,7 @@ export class ContentService {
 
   }
 
-  async getContent(id: number, user: IUser): Promise<any> {
+  async getContent(id: number, user: IUser): Promise<Content> {
     logger.info('ContentService: Fetching content', { contentId: id, userId: user.id });
 
     const content = await contentRepo.findContentById(id);
@@ -65,7 +65,7 @@ export class ContentService {
     batchId: number,
     query: ContentQueryDto,
     user: IUser
-  ): Promise<any> {
+  ): Promise<Content[]> {
     logger.info('ContentService: Fetching contents for batch', {
       batchId,
       userId: user.id,
@@ -92,12 +92,10 @@ export class ContentService {
       orderBy: { createdAt: 'desc' }
     });
 
-    return {
-      contents: contents.map(content => ContentMapper.toResponse(content))
-    };
+    return contents.map(content => ContentMapper.toResponse(content));
   }
 
-  async updateContent(id: number, data: UpdateContentDto, user: IUser): Promise<any> {
+  async updateContent(id: number, data: UpdateContentDto, user: IUser): Promise<Content> {
     logger.info('ContentService: Updating content', { contentId: id, userId: user.id });
 
     const existingContent = await contentRepo.findContentById(id);
