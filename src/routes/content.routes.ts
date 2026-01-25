@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { UserRole } from '@prisma/client';
 import { authenticate, authorize } from '../middlewares/auth.middleware';
-import { validateIdParam, authorizeBatchAccess } from '../middlewares/validation.middleware';
+import { validateIdParam, authorizeContentAccess, authorizeContentCreation } from '../middlewares/validation.middleware';
 import { validateDto } from '../middlewares/validation/dto.middleware';
 import { CreateContentDto, UpdateContentDto } from '../dtos/content.dto';
 import { contentController } from '../controllers/content.controller';
@@ -64,7 +64,7 @@ router.post(
   '/batches/:batchId/contents',
   authorize(UserRole.ADMIN, UserRole.TEACHER),
   validateIdParam('batchId'),
-  authorizeBatchAccess,
+  authorizeContentCreation,
   uploadSingleFile,
   handleUploadError,
   validateFileSize,
@@ -119,7 +119,7 @@ router.post(
 router.get(
   '/batches/:batchId/contents',
   validateIdParam('batchId'),
-  authorizeBatchAccess,
+  authorizeContentCreation,
   contentController.getContentsByBatch
 );
 
@@ -153,6 +153,7 @@ router.get(
 router.get(
   '/contents/:contentId',
   validateIdParam('contentId'),
+  authorizeContentAccess,
   contentController.getContent
 );
 
@@ -199,6 +200,7 @@ router.get(
 router.get(
   '/contents/:contentId/file',
   validateIdParam('contentId'),
+  authorizeContentAccess,
   contentController.getContentFile
 );
 
@@ -239,6 +241,7 @@ router.put(
   '/contents/:contentId',
   authorize(UserRole.ADMIN, UserRole.TEACHER),
   validateIdParam('contentId'),
+  authorizeContentAccess,
   validateDto(UpdateContentDto),
   contentController.updateContent
 );
@@ -274,6 +277,7 @@ router.delete(
   '/contents/:contentId',
   authorize(UserRole.ADMIN, UserRole.TEACHER),
   validateIdParam('contentId'),
+  authorizeContentAccess,
   contentController.deleteContent
 );
 
