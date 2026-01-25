@@ -8,6 +8,8 @@ import logger from '../utils/logger';
 import { ContentMapper } from '../mappers/content.mapper';
 import * as fs from 'fs';
 import * as path from 'path';
+import { BatchService } from './batch.service';
+const batchService = new BatchService();
 
 export class ContentService {
 
@@ -23,27 +25,31 @@ export class ContentService {
       userId: user.id
     });
 
-    // Validate batch exists and user has access
-    await this.validateBatchAccess(batchId, user);
-
     this.validateFileUpload(data.type, data.fileSize);
+    this.validateFilePath(data.filePath, data.type);
 
-    const createData: Prisma.ContentCreateInput = {
-      title: data.title,
-      type: data.type,
-      filePath: data.filePath,
-      fileSize: data.fileSize,
-      status: data.status || ContentStatus.ACTIVE,
-      batch: {
-        connect: { id: batchId }
-      },
-      uploader: {
-        connect: { id: user.id }
+    try {
+      const createData: Prisma.ContentCreateInput = {
+        title: data.title,
+        type: data.type,
+        filePath: data.filePath,
+        fileSize: data.fileSize,
+        status: data.status || ContentStatus.ACTIVE,
+        batch: {
+          connect: { id: batchId }
+        },
+        uploader: {
+          connect: { id: user.id }
+        }
+      };
+      const content = await contentRepo.createContent(createData);
+      return ContentMapper.toResponse(content);
+    } catch (error: any) {
+      if (fs.existsSync(data.filePath)) {
+        fs.unlinkSync(data.filePath);
       }
-    };
-
-    const content = await contentRepo.createContent(createData);
-    return ContentMapper.toResponse(content);
+      throw error;
+    }
 
   }
 
@@ -54,9 +60,6 @@ export class ContentService {
     if (!content) {
       throw new NotFoundError('Content not found');
     }
-
-    // Validate user has access to the batch
-    await this.validateBatchAccess(content.batchId, user);
 
     return ContentMapper.toResponse(content);
   }
@@ -71,9 +74,6 @@ export class ContentService {
       userId: user.id,
       query
     });
-
-    // Validate batch access
-    await this.validateBatchAccess(batchId, user);
 
     const where: Prisma.ContentWhereInput = {
       batchId,
@@ -103,9 +103,6 @@ export class ContentService {
       throw new NotFoundError('Content not found');
     }
 
-    // Validate user has access to the batch
-    await this.validateBatchAccess(existingContent.batchId, user);
-
     // Only allow admins/teachers or the original uploader to update
     if (user.role !== UserRole.ADMIN &&
       user.role !== UserRole.TEACHER &&
@@ -134,9 +131,6 @@ export class ContentService {
       throw new NotFoundError('Content not found');
     }
 
-    // Validate user has access to the batch
-    await this.validateBatchAccess(existingContent.batchId, user);
-
     // Only allow admins/teachers or the original uploader to delete
     if (user.role !== UserRole.ADMIN &&
       user.role !== UserRole.TEACHER &&
@@ -147,6 +141,7 @@ export class ContentService {
     // Delete the physical file
     try {
       if (fs.existsSync(existingContent.filePath)) {
+        await contentRepo.deleteContent(id);
         fs.unlinkSync(existingContent.filePath);
         logger.info('Physical file deleted', { filePath: existingContent.filePath });
       }
@@ -156,8 +151,6 @@ export class ContentService {
         error: error.message
       });
     }
-
-    await contentRepo.deleteContent(id);
   }
 
   async getContentFile(id: number, user: IUser): Promise<{ filePath: string; fileName: string; mimeType: string }> {
@@ -167,9 +160,6 @@ export class ContentService {
     if (!content) {
       throw new NotFoundError('Content not found');
     }
-
-    // Validate user has access to the batch
-    await this.validateBatchAccess(content.batchId, user);
 
     if (!fs.existsSync(content.filePath)) {
       throw new NotFoundError('File not found on server');
@@ -183,42 +173,6 @@ export class ContentService {
       fileName: `${content.title}${path.extname(fileName)}`,
       mimeType
     };
-  }
-
-  private async validateBatchAccess(batchId: number, user: IUser): Promise<void> {
-    const batchWithRelations = await batchRepo.findBatchById(batchId, {
-      include: {
-        course: {
-          include: {
-            exam: {
-              select: { businessId: true }
-            }
-          }
-        }
-      }
-    }) as any;
-
-    if (!batchWithRelations) {
-      throw new NotFoundError('Batch not found');
-    }
-
-    const exam = batchWithRelations.course?.exam;
-    if (!exam) {
-      throw new BadRequestError('Batch is not correctly associated with an exam');
-    }
-
-    const isSuperAdmin = user.role === UserRole.SUPERADMIN;
-    const hasBusinessAccess = exam.businessId === user.businessId;
-
-    if (!isSuperAdmin && !hasBusinessAccess) {
-      throw new ForbiddenError('You do not have access to this batch');
-    }
-
-    // Additional role-based validation for content operations
-    if (user.role === UserRole.STUDENT) {
-      // Students can only view content, not create/update/delete
-      // This check should be done at the controller level for specific operations
-    }
   }
 
   private validateFileUpload(type: ContentType, fileSize: number): void {
@@ -249,6 +203,40 @@ export class ContentService {
     }
   }
 
+  private validateFilePath(
+    filePath: string,
+    type: ContentType
+  ): void {
+    if (!filePath) {
+      throw new BadRequestError('File path is required');
+    }
+
+    const uploadDir = path.resolve(process.env.UPLOAD_DIR || 'uploads/content');
+    const resolvedFilePath = path.resolve(filePath);
+
+    if (!resolvedFilePath.startsWith(uploadDir + path.sep)) {
+      throw new BadRequestError('Invalid file path');
+    }
+
+    if (!fs.existsSync(resolvedFilePath)) {
+      throw new BadRequestError('Uploaded file does not exist');
+    }
+
+    const ext = path.extname(resolvedFilePath).toLowerCase();
+
+    if (type === ContentType.PDF && ext !== '.pdf') {
+      throw new BadRequestError('File extension does not match PDF content type');
+    }
+
+    if (
+      type === ContentType.IMAGE &&
+      !['.jpg', '.jpeg', '.png'].includes(ext)
+    ) {
+      throw new BadRequestError('File extension does not match IMAGE content type');
+    }
+  }
+
+
   private getMimeType(type: ContentType, fileName: string): string {
     if (type === ContentType.PDF) {
       return 'application/pdf';
@@ -263,6 +251,51 @@ export class ContentService {
         return 'image/png';
       default:
         return 'application/octet-stream';
+    }
+  }
+
+  //  Authorize content creation: Only ADMIN, SUPERADMIN, or active TEACHER in the batch
+
+  async authorizeContentCreation(batchId: number, user: IUser): Promise<void> {
+
+    // Validate batch access first
+    await batchService.validateBatchAccess(batchId, user);
+
+    if (user.role === UserRole.SUPERADMIN) {
+      return;
+    }
+
+    const batchUser = await batchRepo.findBatchUser(user.id, batchId);
+    if (batchUser && batchUser.isActive) {
+      return;
+    }
+
+    throw new ForbiddenError('You must be an active user in this batch for content');
+  }
+
+  // Authorize content access: Any user in the batch can access content (view/get)
+  async validateContentAccess(contentId: number, user: IUser): Promise<void> {
+
+    const content = await contentRepo.findContentById(contentId);
+    if (!content) {
+      throw new NotFoundError('Content not found');
+    }
+
+    const batchId = content.batchId;
+    if (user.role === UserRole.SUPERADMIN) {
+      return;
+    }
+
+    await batchService.validateBatchAccess(batchId, user);
+
+    const batchUser = await batchRepo.findBatchUser(user.id, batchId);
+    if (!batchUser) {
+      throw new ForbiddenError('You are not a member of this batch');
+    }
+
+    // User must be active in the batch to access content
+    if (!batchUser.isActive) {
+      throw new ForbiddenError('You are not active in this batch');
     }
   }
 }
