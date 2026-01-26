@@ -2,7 +2,7 @@
 All notable changes to this project will be documented in this file.
 
 
-## Version [1.9.0] - Support for Dynamic UI & Permissions
+## Version [1.8.1] - Support for Dynamic UI & Permissions
 **P.R raised by**  : aaditya-singh-21
 **Date** : 2026-01-24
 ### Changed

@@ -98,7 +98,12 @@ export const getExamsByBusiness = async (req: Request, res: Response) => {
             return ApiResponseHandler.notFound(res, `Business with ID ${businessId} not found`);
         }
 
-        const exams = await examService.getExamsByBusiness(businessId, options);
+        const user = (req as AuthRequest).user;
+        if (!user) {
+            return ApiResponseHandler.unauthorized(res, 'User not authenticated');
+        }
+
+        const exams = await examService.getExamsByBusiness(businessId, user, options);
 
         ApiResponseHandler.success(res, exams, 'Exams fetched successfully');
     } catch (error: any) {

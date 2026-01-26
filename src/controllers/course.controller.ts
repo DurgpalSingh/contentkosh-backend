@@ -85,7 +85,12 @@ export const getCoursesByExam = async (req: Request, res: Response) => {
 
 
 
-        const courses = await courseService.getCoursesByExam(examId, options);
+        const user = (req as any).user;
+        if (!user) {
+            return ApiResponseHandler.unauthorized(res, 'User not authenticated');
+        }
+
+        const courses = await courseService.getCoursesByExam(examId, user, options);
 
         ApiResponseHandler.success(res, courses, 'Courses fetched successfully');
     } catch (error: any) {

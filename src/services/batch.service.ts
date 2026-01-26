@@ -51,8 +51,20 @@ export class BatchService {
     }
 
 
-    async getBatchesByCourse(courseId: number, options: batchRepo.BatchFindOptions = {}): Promise<Batch[]> {
-        logger.info('BatchService: Fetching batches for course', { courseId });
+    async getBatchesByCourse(courseId: number, user: IUser, options: batchRepo.BatchFindOptions = {}): Promise<Batch[]> {
+        logger.info('BatchService: Fetching batches for course', { courseId, userId: user.id, role: user.role });
+
+        if (user.role === UserRole.TEACHER) {
+            options.where = {
+                ...options.where,
+                batchUsers: {
+                    some: {
+                        userId: user.id,
+                        isActive: true
+                    }
+                }
+            };
+        }
 
         let batches;
         // Logic handled entirely in repo now (including students expansion)

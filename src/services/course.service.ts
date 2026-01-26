@@ -41,8 +41,25 @@ export class CourseService {
         return CourseMapper.toDomain(course);
     }
 
-    async getCoursesByExam(examId: number, options?: any): Promise<Course[]> {
-        logger.info('CourseService: Fetching courses by exam', { examId });
+    async getCoursesByExam(examId: number, user: IUser, options: any = {}): Promise<Course[]> {
+        logger.info('CourseService: Fetching courses by exam', { examId, userId: user.id, role: user.role });
+
+        if (user.role === UserRole.TEACHER) {
+            options.where = {
+                ...options.where,
+                batches: {
+                    some: {
+                        batchUsers: {
+                            some: {
+                                userId: user.id,
+                                isActive: true
+                            }
+                        }
+                    }
+                }
+            };
+        }
+
         const courses = await courseRepo.findCoursesByExamId(examId, options);
         return courses.map(c => CourseMapper.toDomain(c));
     }
