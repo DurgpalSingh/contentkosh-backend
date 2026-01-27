@@ -9,7 +9,7 @@ const router = Router();
 
 /**
  * @swagger
- * /auth/signup:
+ * /api/auth/signup:
  *   post:
  *     summary: Register a new user
  *     tags: [Auth]
@@ -25,14 +25,19 @@ const router = Router();
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 accessToken:
- *                   type: string
- *                 refreshToken:
- *                   type: string
- *                 user:
- *                   type: object
+ *               allOf:
+ *                 - $ref: '#/components/schemas/ApiResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         accessToken:
+ *                           type: string
+ *                         refreshToken:
+ *                           type: string
+ *                         user:
+ *                           type: object
  *       409:
  *         description: Email or mobile already exists
  */
@@ -40,7 +45,7 @@ router.post('/signup', validateDto(RegisterRequest), register);
 
 /**
  * @swagger
- * /auth/login:
+ * /api/auth/login:
  *   post:
  *     summary: Login user
  *     tags: [Auth]
@@ -56,14 +61,19 @@ router.post('/signup', validateDto(RegisterRequest), register);
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 accessToken:
- *                   type: string
- *                 refreshToken:
- *                   type: string
- *                 user:
- *                   type: object
+ *               allOf:
+ *                 - $ref: '#/components/schemas/ApiResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         accessToken:
+ *                           type: string
+ *                         refreshToken:
+ *                           type: string
+ *                         user:
+ *                           type: object
  *       401:
  *         description: Invalid credentials
  *       403:
@@ -73,7 +83,7 @@ router.post('/login', validateDto(LoginRequest), login);
 
 /**
  * @swagger
- * /auth/refresh:
+ * /api/auth/refresh:
  *   post:
  *     summary: Refresh access token using refresh token
  *     tags: [Auth]
@@ -95,14 +105,19 @@ router.post('/login', validateDto(LoginRequest), login);
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 accessToken:
- *                   type: string
- *                 refreshToken:
- *                   type: string
- *                 user:
- *                   type: object
+ *               allOf:
+ *                 - $ref: '#/components/schemas/ApiResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         accessToken:
+ *                           type: string
+ *                         refreshToken:
+ *                           type: string
+ *                         user:
+ *                           type: object
  *       401:
  *         description: Invalid, expired, or revoked refresh token
  *       403:
@@ -112,7 +127,7 @@ router.post('/refresh', validateDto(RefreshTokenRequest), refreshToken);
 
 /**
  * @swagger
- * /auth/logout:
+ * /api/auth/logout:
  *   post:
  *     summary: Logout user (revokes refresh token)
  *     tags: [Auth]
@@ -133,7 +148,7 @@ router.post('/logout', logout);
 
 /**
  * @swagger
- * /auth/me:
+ * /api/auth/me:
  *   get:
  *     summary: Get logged-in user profile
  *     tags: [Auth]

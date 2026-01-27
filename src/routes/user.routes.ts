@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { getUsersByBusiness, createUserForBusiness, updateUser, deleteUser } from '../controllers/user.controller';
+import { getProfile } from '../controllers/auth.controller';
 import { authenticate, authorize } from '../middlewares/auth.middleware';
 import { validateDto } from '../middlewares/validation/dto.middleware';
 import { validateIdParam, authorizeUserAccess, authorizeBusinessAccess } from '../middlewares/validation.middleware';
@@ -7,6 +8,26 @@ import { CreateUserDto, UpdateUserDto } from '../dtos/user.dto';
 import { UserRole } from '@prisma/client';
 
 const router = Router();
+
+/**
+ * @swagger
+ * /api/users/profile:
+ *   get:
+ *     summary: Get logged-in user profile (Alias for /auth/me)
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Profile fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/User'
+ *       401:
+ *         description: Unauthorized
+ */
+router.get('/users/profile', authenticate, getProfile);
 
 /**
  * @swagger

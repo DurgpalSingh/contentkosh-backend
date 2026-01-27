@@ -43,8 +43,29 @@ export class ExamService {
         return ExamMapper.toDomain(exam);
     }
 
-    async getExamsByBusiness(businessId: number, options?: any): Promise<Exam[]> {
-        logger.info('ExamService: Fetching exams by business', { businessId });
+    async getExamsByBusiness(businessId: number, user: IUser, options: any = {}): Promise<Exam[]> {
+        logger.info('ExamService: Fetching exams by business', { businessId, userId: user.id, role: user.role });
+
+        if (user.role === UserRole.TEACHER) {
+            options.where = {
+                ...options.where,
+                courses: {
+                    some: {
+                        batches: {
+                            some: {
+                                batchUsers: {
+                                    some: {
+                                        userId: user.id,
+                                        isActive: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            };
+        }
+
         const exams = await examRepo.findActiveExamsByBusinessId(businessId, options);
         return exams.map(e => ExamMapper.toDomain(e));
     }

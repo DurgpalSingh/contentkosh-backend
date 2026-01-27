@@ -79,8 +79,8 @@ export function findPublicById(id: number) {
   });
 }
 
-export function findByBusinessId(businessId: number, role?: UserRole) {
-  return prisma.user.findMany({
+export async function findByBusinessId(businessId: number, role?: UserRole) {
+  const users = await prisma.user.findMany({
     where: {
       businessId,
       ...(role && { role })
@@ -95,6 +95,19 @@ export function findByBusinessId(businessId: number, role?: UserRole) {
       createdAt: true
     }
   });
+
+  // Map to BusinessUser structure expected by frontend
+  return users.map(u => ({
+    id: u.id,
+    role: u.role,
+    createdAt: u.createdAt,
+    user: {
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      mobile: u.mobile
+    }
+  }));
 }
 
 export function updateUser(id: number, data: { name?: string; mobile?: string; role?: UserRole; status?: UserStatus; password?: string }) {

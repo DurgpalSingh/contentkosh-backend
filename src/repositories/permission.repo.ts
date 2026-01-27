@@ -17,7 +17,7 @@ export const findUserPermissions = async (userId: number) => {
     return prisma.rolePermission.findMany({
         where: {
             userId,
-            isDeleted: false // Filter out soft-deleted permissions
+            isDeleted: false,
         },
         include: {
             permission: true,
@@ -37,7 +37,7 @@ export const assignUserPermissions = async (userId: number, permissionIds: numbe
                     },
                 },
                 update: {
-                    isDeleted: false, // Revive if it exists (even if was soft deleted)
+                    isDeleted: false,
                 },
                 create: {
                     userId,

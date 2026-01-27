@@ -6,6 +6,11 @@ import { IUser } from '../dtos/auth.dto';
 import { CreateUserDto, UpdateUserDto } from '../dtos/user.dto';
 import { AuthService } from './auth.service';
 
+export const findUserById = async (userId: number) => {
+    const user = await userRepo.findPublicById(userId);
+    return user;
+};
+
 export const createUserForBusiness = async (businessId: number, userData: CreateUserDto) => {
     // Verify business exists
     const business = await businessRepo.findBusinessById(businessId);

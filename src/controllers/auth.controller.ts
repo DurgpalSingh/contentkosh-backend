@@ -5,6 +5,7 @@ import { ApiResponseHandler } from '../utils/apiResponse';
 import { RegisterRequest, LoginRequest, AuthRequest, RefreshTokenRequest } from '../dtos/auth.dto';
 import { plainToInstance } from 'class-transformer';
 import { ApiError } from '../errors/api.errors';
+import * as userService from '../services/user.service';
 
 export const register = async (req: Request, res: Response) => {
     try {
@@ -50,10 +51,17 @@ export const refreshToken = async (req: Request, res: Response) => {
 
 export const getProfile = async (req: AuthRequest, res: Response) => {
     try {
-        const user = req.user;
-        if (!user) {
+        const tokenUser = req.user;
+        if (!tokenUser) {
             return ApiResponseHandler.error(res, 'User not found', 404);
         }
+
+        // Fetch full user details from database
+        const user = await userService.findUserById(tokenUser.id);
+        if (!user) {
+            return ApiResponseHandler.error(res, 'User not found in database', 404);
+        }
+
         ApiResponseHandler.success(res, user, 'Profile fetched successfully');
     } catch (error: any) {
         ApiResponseHandler.error(res, error.message || 'Error fetching profile', 500);

@@ -54,7 +54,12 @@ export class BatchController {
         options.where = { ...options.where, isActive: true };
       }
 
-      const batches = await this.batchService.getBatchesByCourse(courseId, options);
+      const user = (req as any).user;
+      if (!user) {
+        return ApiResponseHandler.unauthorized(res, 'User not authenticated');
+      }
+
+      const batches = await this.batchService.getBatchesByCourse(courseId, user, options);
       ApiResponseHandler.success(res, batches, 'Batches fetched successfully');
     } catch (error: any) {
       logger.error(`Error fetching batches for course: ${error.message}`);
