@@ -45,7 +45,7 @@ export class ContentService {
       const content = await contentRepo.createContent(createData);
       return ContentMapper.toResponse(content);
     } catch (error: any) {
-      if (fs.existsSync(data.filePath)) {
+      if (fs.existsSync(data.filePath)) { // If DB creation fails, delete the uploaded file
         fs.unlinkSync(data.filePath);
       }
       throw error;
@@ -142,8 +142,8 @@ export class ContentService {
     try {
       if (fs.existsSync(existingContent.filePath)) {
         await contentRepo.deleteContent(id);
-        fs.unlinkSync(existingContent.filePath);
-        logger.info('Physical file deleted', { filePath: existingContent.filePath });
+        // fs.unlinkSync(existingContent.filePath);
+        logger.info('soft deleted', { filePath: existingContent.filePath });
       }
     } catch (error: any) {
       logger.warn('Failed to delete physical file', {

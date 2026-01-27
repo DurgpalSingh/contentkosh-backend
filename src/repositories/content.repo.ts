@@ -107,8 +107,11 @@ export const updateContent = async (
 };
 
 export const deleteContent = async (id: number): Promise<Content> => {
-  return await prisma.content.delete({
-    where: { id }
+  return await prisma.content.update({
+    where: { id },
+    data: {
+      status: 'INACTIVE',
+    },
   });
 };
 

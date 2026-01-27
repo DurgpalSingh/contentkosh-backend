@@ -30,6 +30,8 @@ model User {
   batchUsers    BatchUser[]
   rolePermissions RolePermission[]
   refreshTokens RefreshToken[]
+  contentUploads Content[] @relation("ContentUploader")
+  contentUpdates Content[] @relation("ContentUpdater")
 
   @@unique([businessId, email])
   @@unique([businessId, mobile])
@@ -88,6 +90,7 @@ model Batch {
   // Relations
   course     Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
   batchUsers BatchUser[]
+  contents   Content[]
 
   @@index([courseId])
   @@map("batches")
