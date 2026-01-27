@@ -33,7 +33,7 @@ All notable changes to this project will be documented in this file.
 ### Refactored
 - **Architecture**: Enforced strict Controller -> Service -> Repository pattern for Permission module.
 - **Error Handling**: Standardized usage of `ApiResponseHandler` and typed `ApiError` across the new module.
-## Version [1.8.0] - Content Management API
+## Version [1.1.8] - Content Management API
 **P.R raised by**  : Shubh404-SE  
 **Date** : 2026-01-23
 
