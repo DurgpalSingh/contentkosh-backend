@@ -5,18 +5,18 @@ import * as fs from 'fs';
 import { BadRequestError } from '../errors/api.errors';
 import { ContentType } from '@prisma/client';
 
-const DEFAULT_ALLOWED_FILE_TYPES = ['pdf', 'jpg', 'jpeg', 'png'];
-const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png'];
-const PDF_EXTENSION = '.pdf';
+import { FILE_TYPE_CONFIG } from '../config/file-type';
+import {
+  FILE_EXTENSIONS,
+  IMAGE_EXTENSIONS
+} from '../constants/file.constants';
 
 const BYTES_IN_MB = 1024 * 1024;
 
-const MAX_PDF_SIZE_MB = parseInt(process.env.MAX_PDF_SIZE_MB || '10', 10);
-const MAX_IMAGE_SIZE_MB = parseInt(process.env.MAX_IMAGE_SIZE_MB || '5', 10);
-
-// Multer needs ONE max size; use the larger of the two
-const MAX_UPLOAD_SIZE_BYTES =
-  Math.max(MAX_PDF_SIZE_MB, MAX_IMAGE_SIZE_MB) * BYTES_IN_MB;
+const MAX_UPLOAD_SIZE_BYTES = Math.max(
+  FILE_TYPE_CONFIG[ContentType.PDF].maxSizeBytes,
+  FILE_TYPE_CONFIG[ContentType.IMAGE].maxSizeBytes
+);
 
 // Ensure upload directory exists
 const uploadDir = process.env.UPLOAD_DIR || 'uploads/content';
@@ -31,28 +31,29 @@ const storage = multer.diskStorage({
   },
   filename: (req, file, cb) => {
     // Generate unique filename with timestamp
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
     const ext = path.extname(file.originalname);
     cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
   }
 });
 
-// File filter function
-const fileFilter = (
-  req: Request,
-  file: Express.Multer.File,
-  cb: multer.FileFilterCallback
+const fileFilter: multer.Options['fileFilter'] = (
+  req,
+  file,
+  cb
 ) => {
-  const allowedTypes =
-    process.env.ALLOWED_FILE_TYPES?.split(',') ||
-    DEFAULT_ALLOWED_FILE_TYPES;
+  const ext = path.extname(file.originalname).toLowerCase();
 
-  const ext = path.extname(file.originalname).toLowerCase().substring(1);
-  
-  if (allowedTypes.includes(ext)) {
+  const isPdf = ext === FILE_EXTENSIONS.PDF;
+  const isImage = IMAGE_EXTENSIONS.includes(ext);
+
+  if (
+    (isPdf && FILE_TYPE_CONFIG[ContentType.PDF].allowed) ||
+    (isImage && FILE_TYPE_CONFIG[ContentType.IMAGE].allowed)
+  ) {
     cb(null, true);
   } else {
-    cb(new BadRequestError(`File type .${ext} is not allowed. Allowed types: ${allowedTypes.join(', ')}`));
+    cb(new BadRequestError(`File type .${ext} is not allowed.`));
   }
 };
 
@@ -77,17 +78,21 @@ export const validateFileSize = (req: Request, res: Response, next: NextFunction
   const fileSize = req.file.size;
   const ext = path.extname(req.file.originalname).toLowerCase();
 
-  if (ext === PDF_EXTENSION) {
-    if (fileSize > MAX_PDF_SIZE_MB * BYTES_IN_MB) {
+  if (ext === FILE_EXTENSIONS.PDF) {
+    const config = FILE_TYPE_CONFIG[ContentType.PDF];
+
+    if (fileSize > config.maxSizeBytes) {
       fs.unlinkSync(req.file.path);
-      return next(new BadRequestError(`PDF file size cannot exceed ${MAX_PDF_SIZE_MB}MB`));
+      return next(new BadRequestError(`PDF file size cannot exceed ${config.maxSizeBytes / BYTES_IN_MB}MB`));
     }
     // Set content type in request body
     req.body.type = ContentType.PDF;
   } else if (IMAGE_EXTENSIONS.includes(ext)) {
-    if (fileSize > MAX_IMAGE_SIZE_MB * BYTES_IN_MB) {
+    const config = FILE_TYPE_CONFIG[ContentType.IMAGE];
+
+    if (fileSize > config.maxSizeBytes) {
       fs.unlinkSync(req.file.path);
-      return next(new BadRequestError(`Image file size cannot exceed ${MAX_IMAGE_SIZE_MB}MB`));
+      return next(new BadRequestError(`Image file size cannot exceed ${config.maxSizeBytes / BYTES_IN_MB}MB`));
     }
     // Set content type in request body
     req.body.type = ContentType.IMAGE;

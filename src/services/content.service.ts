@@ -9,6 +9,8 @@ import { ContentMapper } from '../mappers/content.mapper';
 import * as fs from 'fs';
 import * as path from 'path';
 import { BatchService } from './batch.service';
+import { FILE_TYPE_CONFIG } from '../config/file-type';
+import { FILE_EXTENSIONS, MIME_TYPES } from '../constants/file.constants';
 const batchService = new BatchService();
 
 export class ContentService {
@@ -175,31 +177,20 @@ export class ContentService {
     };
   }
 
-  private validateFileUpload(type: ContentType, fileSize: number): void {
-    const allowedTypes = process.env.ALLOWED_FILE_TYPES?.split(',') || ['pdf', 'jpg', 'jpeg', 'png'];
-    const maxPdfSizeMB = parseInt(process.env.MAX_PDF_SIZE_MB || '10');
-    const maxImageSizeMB = parseInt(process.env.MAX_IMAGE_SIZE_MB || '5');
+  private validateFileUpload(
+    type: ContentType,
+    fileSize: number
+  ): void {
+    const config = FILE_TYPE_CONFIG[type];
 
-    const maxPdfSizeBytes = maxPdfSizeMB * 1024 * 1024;
-    const maxImageSizeBytes = maxImageSizeMB * 1024 * 1024;
+    if (!config || !config.allowed) {
+      throw new BadRequestError('File type is not allowed');
+    }
 
-    if (type === ContentType.PDF) {
-      if (!allowedTypes.includes('pdf')) {
-        throw new BadRequestError('PDF files are not allowed');
-      }
-      if (fileSize > maxPdfSizeBytes) {
-        throw new BadRequestError(`PDF file size cannot exceed ${maxPdfSizeMB}MB`);
-      }
-    } else if (type === ContentType.IMAGE) {
-      const imageTypes = allowedTypes.filter(t => ['jpg', 'jpeg', 'png'].includes(t));
-      if (imageTypes.length === 0) {
-        throw new BadRequestError('Image files are not allowed');
-      }
-      if (fileSize > maxImageSizeBytes) {
-        throw new BadRequestError(`Image file size cannot exceed ${maxImageSizeMB}MB`);
-      }
-    } else {
-      throw new BadRequestError('Invalid file type');
+    if (fileSize > config.maxSizeBytes) {
+      throw new BadRequestError(
+        `File size exceeds allowed limit`
+      );
     }
   }
 
@@ -212,45 +203,51 @@ export class ContentService {
     }
 
     const uploadDir = path.resolve(process.env.UPLOAD_DIR || 'uploads/content');
-    const resolvedFilePath = path.resolve(filePath);
+    const resolvedPath = path.resolve(filePath);
 
-    if (!resolvedFilePath.startsWith(uploadDir + path.sep)) {
+    if (!resolvedPath.startsWith(uploadDir + path.sep)) {
       throw new BadRequestError('Invalid file path');
     }
 
-    if (!fs.existsSync(resolvedFilePath)) {
+    if (!fs.existsSync(resolvedPath)) {
       throw new BadRequestError('Uploaded file does not exist');
     }
 
-    const ext = path.extname(resolvedFilePath).toLowerCase();
-
-    if (type === ContentType.PDF && ext !== '.pdf') {
-      throw new BadRequestError('File extension does not match PDF content type');
+    const config = FILE_TYPE_CONFIG[type];
+    if (!config) {
+      throw new BadRequestError('Invalid content type');
     }
 
-    if (
-      type === ContentType.IMAGE &&
-      !['.jpg', '.jpeg', '.png'].includes(ext)
-    ) {
-      throw new BadRequestError('File extension does not match IMAGE content type');
+    const ext = path.extname(resolvedPath).toLowerCase();
+
+    if (!config.extensions.includes(ext)) {
+      throw new BadRequestError(
+        'File extension does not match content type'
+      );
     }
   }
 
 
-  private getMimeType(type: ContentType, fileName: string): string {
+  private getMimeType(
+    type: ContentType,
+    fileName: string
+  ): string {
     if (type === ContentType.PDF) {
-      return 'application/pdf';
+      return MIME_TYPES.PDF;
     }
 
     const ext = path.extname(fileName).toLowerCase();
+
     switch (ext) {
-      case '.jpg':
-      case '.jpeg':
-        return 'image/jpeg';
-      case '.png':
-        return 'image/png';
+      case FILE_EXTENSIONS.JPG:
+      case FILE_EXTENSIONS.JPEG:
+        return MIME_TYPES.JPEG;
+
+      case FILE_EXTENSIONS.PNG:
+        return MIME_TYPES.PNG;
+
       default:
-        return 'application/octet-stream';
+        return MIME_TYPES.DEFAULT;
     }
   }
 
