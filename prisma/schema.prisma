@@ -320,7 +320,7 @@ model Teacher {
   designation      String
   bio              String?
   languages        String[]      @default([])
-  gender           Gender
+  gender           Gender?
   dob              DateTime?     @map("date_of_birth")
   address          String?
   status           TeacherStatus @default(ACTIVE)

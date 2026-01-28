@@ -10,7 +10,7 @@ import {
   ValidateNested
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
-import { TeacherStatus } from '@prisma/client';
+import { TeacherStatus, Gender } from '@prisma/client';
 
 export class ProfessionalDetailsDto {
   @IsString()
@@ -40,8 +40,8 @@ export class ProfessionalDetailsDto {
 
 export class PersonalDetailsDto {
   @IsOptional()
-  @IsString()
-  gender?: string;
+  @IsEnum(Gender, { message: 'Gender must be one of: male, female, other' })
+  gender?: Gender;
 
   @IsOptional()
   @IsDateString()

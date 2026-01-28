@@ -5,7 +5,11 @@ import { validateDto } from '../middlewares/validation/dto.middleware';
 import { CreateTeacherDto, UpdateTeacherDto } from '../dtos/teacher.dto';
 import { TeacherController } from '../controllers/teacher.controller';
 import { TeacherService } from '../services/teacher.service';
-import { validateIdParam } from '../middlewares/validation.middleware';
+import {
+    validateIdParam,
+    authorizeTeacherAccess,
+    authorizeTeacher,
+} from '../middlewares/validation.middleware';
 
 const router = Router();
 
@@ -81,6 +85,7 @@ router.use(authenticate);
 router.post(
     '/profile',
     authorize(UserRole.ADMIN),
+    authorizeTeacherAccess,
     validateDto(CreateTeacherDto),
     teacherController.createTeacher
 );
@@ -113,6 +118,7 @@ router.post(
 router.get(
     '/:teacherId',
     validateIdParam('teacherId'),
+    authorizeTeacher,
     teacherController.getTeacher
 );
 
@@ -180,9 +186,10 @@ router.get(
  */
 router.put(
     '/:teacherId',
-    validateDto(UpdateTeacherDto),
-    authorize(UserRole.ADMIN),
     validateIdParam('teacherId'),
+    authorize(UserRole.ADMIN),
+    authorizeTeacherAccess,
+    validateDto(UpdateTeacherDto),
     teacherController.updateTeacher
 );
 

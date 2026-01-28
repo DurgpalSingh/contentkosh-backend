@@ -1,4 +1,4 @@
-import { Prisma, Teacher, TeacherStatus, UserRole } from '@prisma/client';
+import { Prisma, Teacher, TeacherStatus, UserRole, Gender } from '@prisma/client';
 import * as teacherRepo from '../repositories/teacher.repo';
 import * as userRepo from '../repositories/user.repo';
 import { CreateTeacherDto, UpdateTeacherDto } from '../dtos/teacher.dto';
@@ -160,5 +160,32 @@ export class TeacherService {
             });
             throw error;
         }
+    }
+
+    async validateTeacherCreationAuth(businessId: number, user: IUser): Promise<void> {
+
+        // Only ADMIN or SUPERADMIN can create teachers
+        if (user.role !== UserRole.ADMIN && user.role !== UserRole.SUPERADMIN) {
+            throw new ForbiddenError('Only administrators can create teacher profiles');
+        }
+
+        // Check if user belongs to the business (except SUPERADMIN)
+        if (user.role === UserRole.ADMIN && user.businessId !== businessId) {
+            throw new ForbiddenError('You do not have access to this business');
+        }
+    }
+
+    async validateTeacherAccess(teacherId: number, user: IUser): Promise<void> {
+
+        const teacher = await teacherRepo.findTeacherById(teacherId);
+        if (!teacher) {
+            throw new NotFoundError('Teacher profile not found');
+        }
+
+        if (user.role === UserRole.SUPERADMIN || user.id === teacher.userId || user.businessId === teacher.businessId) {
+            return;
+        }
+
+        throw new ForbiddenError('You do not have access to this teacher profile');
     }
 }

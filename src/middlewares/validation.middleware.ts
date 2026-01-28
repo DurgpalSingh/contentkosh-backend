@@ -8,11 +8,13 @@ import { CourseService } from '../services/course.service';
 import * as userService from '../services/user.service';
 import { ForbiddenError, NotFoundError } from '../errors/api.errors';
 import { ContentService } from '../services/content.service';
+import { TeacherService } from '../services/teacher.service';
 
 const examService = new ExamService();
 const batchService = new BatchService();
 const courseService = new CourseService();
 const contentService = new ContentService();
+const teacherService = new TeacherService();
 
 export const validateIdParam = (paramName: string = 'id') => {
     return (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -212,6 +214,63 @@ export const authorizeContentAccess = async (req: AuthRequest, res: Response, ne
         }
 
         await contentService.validateContentAccess(contentId, req.user);
+        next();
+    } catch (error: any) {
+        if (error instanceof NotFoundError) {
+            return ApiResponseHandler.notFound(res, error.message);
+        }
+        if (error instanceof ForbiddenError) {
+            return ApiResponseHandler.error(res, error.message, 403);
+        }
+        console.error('Authorization error:', error);
+        ApiResponseHandler.error(res, 'Internal server error during authorization');
+    }
+};
+
+/**
+ * Middleware to validate and authorize teacher creation
+ * Only ADMIN or SUPERADMIN can create teachers
+ */
+export const authorizeTeacherAccess = async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+        const businessId = Number(req.body?.businessId);
+
+        if (!businessId || !Number.isInteger(businessId)) {
+            return ApiResponseHandler.badRequest(res, 'Invalid Business ID');
+        }
+
+        if (!req.user) {
+            return ApiResponseHandler.error(res, 'Unauthorized', 401);
+        }
+
+        await teacherService.validateTeacherCreationAuth(businessId, req.user);
+        next();
+    } catch (error: any) {
+        if (error instanceof ForbiddenError) {
+            return ApiResponseHandler.error(res, error.message, 403);
+        }
+        console.error('Authorization error:', error);
+        ApiResponseHandler.error(res, 'Internal server error during authorization');
+    }
+};
+
+/**
+ * Middleware to validate teacher access
+ * Users in same business or admins can access teacher profiles
+ */
+export const authorizeTeacher = async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+        const teacherId = Number(req.params.teacherId);
+
+        if (!teacherId || !Number.isInteger(teacherId)) {
+            return ApiResponseHandler.badRequest(res, 'Invalid Teacher ID');
+        }
+
+        if (!req.user) {
+            return ApiResponseHandler.error(res, 'Unauthorized', 401);
+        }
+
+        await teacherService.validateTeacherAccess(teacherId, req.user);
         next();
     } catch (error: any) {
         if (error instanceof NotFoundError) {
