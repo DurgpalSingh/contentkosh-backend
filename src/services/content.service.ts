@@ -89,10 +89,7 @@ export class ContentService {
       })
     };
 
-    const contents = await contentRepo.findContentsByBatchId(batchId, {
-      where,
-      orderBy: { createdAt: 'desc' }
-    });
+    const contents = await contentRepo.findContentsByBatchId(batchId, { where });
 
     return contents.map(content => ContentMapper.toResponse(content));
   }
