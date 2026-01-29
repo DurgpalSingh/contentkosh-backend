@@ -34,6 +34,9 @@ export class ContentController {
       ApiResponseHandler.success(res, content, 'Content created successfully', 201);
     } catch (error: any) {
       if (error instanceof BadRequestError || error instanceof NotFoundError || error instanceof ForbiddenError) {
+
+        //TODO: Need to change this in future
+
         const statusCode = error instanceof NotFoundError ? 404 :
           error instanceof ForbiddenError ? 403 : 400;
         return ApiResponseHandler.error(res, error.message, statusCode);

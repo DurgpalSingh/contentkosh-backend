@@ -6,12 +6,10 @@ import { NotFoundError, BadRequestError, ForbiddenError } from '../errors/api.er
 import { IUser } from '../dtos/auth.dto';
 import logger from '../utils/logger';
 import { ContentMapper } from '../mappers/content.mapper';
-import * as fs from 'fs';
+import { promises as fs } from 'fs';
 import * as path from 'path';
-import { BatchService } from './batch.service';
 import { FILE_TYPE_CONFIG } from '../config/file-type';
 import { FILE_EXTENSIONS, MIME_TYPES } from '../constants/file.constants';
-const batchService = new BatchService();
 
 export class ContentService {
 
@@ -47,8 +45,8 @@ export class ContentService {
       const content = await contentRepo.createContent(createData);
       return ContentMapper.toResponse(content);
     } catch (error: any) {
-      if (fs.existsSync(data.filePath)) { // If DB creation fails, delete the uploaded file
-        fs.unlinkSync(data.filePath);
+      if (data.filePath) { // If DB creation fails, delete the uploaded file
+        fs.unlink(data.filePath);
       }
       throw error;
     }
@@ -139,11 +137,10 @@ export class ContentService {
 
     // Delete the physical file
     try {
-      if (fs.existsSync(existingContent.filePath)) {
-        await contentRepo.deleteContent(id);
-        // fs.unlinkSync(existingContent.filePath);
-        logger.info('soft deleted', { filePath: existingContent.filePath });
-      }
+      await fs.access(existingContent.filePath);
+      await contentRepo.deleteContent(id);
+      // fs.unlinkSync(existingContent.filePath);
+      logger.info('soft deleted', { filePath: existingContent.filePath });
     } catch (error: any) {
       logger.warn('Failed to delete physical file', {
         filePath: existingContent.filePath,
@@ -160,7 +157,9 @@ export class ContentService {
       throw new NotFoundError('Content not found');
     }
 
-    if (!fs.existsSync(content.filePath)) {
+    try {
+      await fs.access(content.filePath);
+    } catch {
       throw new NotFoundError('File not found on server');
     }
 
@@ -206,10 +205,6 @@ export class ContentService {
       throw new BadRequestError('Invalid file path');
     }
 
-    if (!fs.existsSync(resolvedPath)) {
-      throw new BadRequestError('Uploaded file does not exist');
-    }
-
     const config = FILE_TYPE_CONFIG[type];
     if (!config) {
       throw new BadRequestError('Invalid content type');
@@ -253,7 +248,7 @@ export class ContentService {
   async authorizeContentCreation(batchId: number, user: IUser): Promise<void> {
 
     // Validate batch access first
-    await batchService.validateBatchAccess(batchId, user);
+    await this.validateBatchAccess(batchId, user);
 
     if (user.role === UserRole.SUPERADMIN) {
       return;
@@ -280,7 +275,7 @@ export class ContentService {
       return;
     }
 
-    await batchService.validateBatchAccess(batchId, user);
+    await this.validateBatchAccess(batchId, user);
 
     const batchUser = await batchRepo.findBatchUser(user.id, batchId);
     if (!batchUser) {
@@ -290,6 +285,27 @@ export class ContentService {
     // User must be active in the batch to access content
     if (!batchUser.isActive) {
       throw new ForbiddenError('You are not active in this batch');
+    }
+  }
+
+  private async validateBatchAccess(batchId: number, user: IUser): Promise<void> {
+    // Batch -> Course -> Exam -> Business
+    const batchWithRelations = await batchRepo.findBatchById(batchId, {
+      include: { course: { include: { exam: true } } }
+    }) as any; // Cast for simplified access
+
+    if (!batchWithRelations) throw new NotFoundError('Batch not found');
+
+    const exam = batchWithRelations.course?.exam;
+    if (!exam) {
+      throw new ForbiddenError('Batch is not correctly associated with an exam');
+    }
+
+    const isSuperAdmin = user.role === UserRole.SUPERADMIN;
+    const hasBusinessAccess = exam.businessId === user.businessId;
+
+    if (!isSuperAdmin && !hasBusinessAccess) {
+      throw new ForbiddenError('You do not have access to this batch');
     }
   }
 }
