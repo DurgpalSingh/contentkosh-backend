@@ -7,10 +7,12 @@ import { BatchService } from '../services/batch.service';
 import { CourseService } from '../services/course.service';
 import * as userService from '../services/user.service';
 import { ForbiddenError, NotFoundError } from '../errors/api.errors';
+import { ContentService } from '../services/content.service';
 
 const examService = new ExamService();
 const batchService = new BatchService();
 const courseService = new CourseService();
+const contentService = new ContentService();
 
 export const validateIdParam = (paramName: string = 'id') => {
     return (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -159,6 +161,65 @@ export const authorizeBusinessAccess = async (req: AuthRequest, res: Response, n
 
         next();
     } catch (error) {
+        console.error('Authorization error:', error);
+        ApiResponseHandler.error(res, 'Internal server error during authorization');
+    }
+};
+/**
+ * Middleware to authorize content creation
+ * Only ADMIN, SUPERADMIN, or active TEACHER in the batch can create content
+ */
+export const authorizeContentCreation = async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+        const batchId = Number(req.params.batchId);
+
+        if (!batchId || !Number.isInteger(batchId)) {
+            return ApiResponseHandler.badRequest(res, 'Invalid Batch ID');
+        }
+
+        if (!req.user) {
+            return ApiResponseHandler.error(res, 'Unauthorized', 401);
+        }
+
+        await contentService.authorizeContentCreation(batchId, req.user);
+        next();
+    } catch (error: any) {
+        if (error instanceof NotFoundError) {
+            return ApiResponseHandler.notFound(res, error.message);
+        }
+        if (error instanceof ForbiddenError) {
+            return ApiResponseHandler.error(res, error.message, 403);
+        }
+        console.error('Authorization error:', error);
+        ApiResponseHandler.error(res, 'Internal server error during authorization');
+    }
+};
+
+/**
+ * Middleware to authorize content access (view/get)
+ * Any user in the batch can access content
+ */
+export const authorizeContentAccess = async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+        const contentId = Number(req.params.contentId);
+
+        if (!contentId || !Number.isInteger(contentId)) {
+            return ApiResponseHandler.badRequest(res, 'Invalid Content ID');
+        }
+
+        if (!req.user) {
+            return ApiResponseHandler.error(res, 'Unauthorized', 401);
+        }
+
+        await contentService.validateContentAccess(contentId, req.user);
+        next();
+    } catch (error: any) {
+        if (error instanceof NotFoundError) {
+            return ApiResponseHandler.notFound(res, error.message);
+        }
+        if (error instanceof ForbiddenError) {
+            return ApiResponseHandler.error(res, error.message, 403);
+        }
         console.error('Authorization error:', error);
         ApiResponseHandler.error(res, 'Internal server error during authorization');
     }
