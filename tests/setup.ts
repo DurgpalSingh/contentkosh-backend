@@ -1,3 +1,4 @@
+import 'reflect-metadata';
 import logger from '../src/utils/logger';
 
 // Mock Prisma Client globally

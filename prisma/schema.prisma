@@ -32,6 +32,9 @@ model User {
   refreshTokens RefreshToken[]
   contentUploads Content[] @relation("ContentUploader")
   contentUpdates Content[] @relation("ContentUpdater")
+  teacher       Teacher?
+  createdTeachers Teacher[] @relation("TeacherCreatedBy")
+  updatedTeachers Teacher[] @relation("TeacherUpdatedBy")
 
   @@unique([businessId, email])
   @@unique([businessId, mobile])
@@ -72,6 +75,7 @@ model Business {
   announcements Announcement[]
   exams         Exam[]
   users         User[]
+  teachers      Teacher[]
 
   @@map("business")
 }
@@ -272,4 +276,45 @@ model Content {
   @@index([batchId, status])
   @@index([uploadedBy])
   @@map("contents")
+}
+
+enum TeacherStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum Gender {
+  male
+  female
+  other
+}
+
+model Teacher {
+  id               Int           @id @default(autoincrement())
+  userId           Int           @unique @map("user_id")
+  businessId       Int           @map("business_id")
+  qualification    String
+  experienceYears  Int           @map("experience_years")
+  designation      String
+  bio              String?
+  languages        String[]      @default([])
+  gender           Gender?
+  dob              DateTime?     @map("date_of_birth")
+  address          String?
+  status           TeacherStatus @default(ACTIVE)
+  createdBy        Int?          @map("created_by")
+  updatedBy        Int?          @map("updated_by")
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business  Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdByUser User? @relation("TeacherCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updatedByUser User? @relation("TeacherUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([businessId])
+  @@index([status])
+  @@map("teachers")
 }
