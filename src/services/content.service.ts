@@ -250,16 +250,14 @@ export class ContentService {
     // Validate batch access first
     await this.validateBatchAccess(batchId, user);
 
-    if (user.role === UserRole.SUPERADMIN) {
+    if (user.role === UserRole.SUPERADMIN || user.role === UserRole.ADMIN) {
       return;
     }
 
     const batchUser = await batchRepo.findBatchUser(user.id, batchId);
-    if (batchUser && batchUser.isActive) {
-      return;
+    if (!batchUser || !batchUser.isActive) {
+      throw new ForbiddenError('You must be an active user in this batch for content');
     }
-
-    throw new ForbiddenError('You must be an active user in this batch for content');
   }
 
   // Authorize content access: Any user in the batch can access content (view/get)
@@ -271,11 +269,11 @@ export class ContentService {
     }
 
     const batchId = content.batchId;
-    if (user.role === UserRole.SUPERADMIN) {
+    await this.validateBatchAccess(batchId, user);
+
+    if (user.role === UserRole.SUPERADMIN || user.role === UserRole.ADMIN) {
       return;
     }
-
-    await this.validateBatchAccess(batchId, user);
 
     const batchUser = await batchRepo.findBatchUser(user.id, batchId);
     if (!batchUser) {
