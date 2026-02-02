@@ -2,6 +2,46 @@
 All notable changes to this project will be documented in this file.
 
 
+## Version [1.1.9] - Teacher Management API
+**P.R raised by**  : Shubh404-SE 
+**Date** : 2026-01-30
+
+### Added
+- **Teacher Management API**: Introduced full lifecycle management for teacher profiles with strict authorization and validation.
+  - **Create Teacher Profile**:
+    - `POST /api/teachers/profile`
+    - Admin-only creation with business ownership validation.
+    - Supports professional and personal details with nested DTO validation.
+  - **Get Teacher Profile**:
+    - `GET /api/teachers/:teacherId`
+    - Accessible to Admins and authorized business users.
+  - **Update Teacher Profile**:
+    - `PUT /api/teachers/:teacherId`
+    - Supports partial updates for professional details, personal details, and status.
+
+- **DTOs**:
+  - Added `CreateTeacherDto` and `UpdateTeacherDto` with nested validation using `class-validator` and `class-transformer`.
+  - Introduced structured sub-DTOs for `ProfessionalDetails` and `PersonalDetails`.
+
+- **Service Layer**:
+  - Implemented `TeacherService` with centralized business rules:
+    - Cross-business access control
+    - Duplicate teacher prevention
+    - Experience validation
+    - Ownership-based update permissions
+
+- **Controller Layer**:
+  - Added `TeacherController` with consistent response handling using `ApiResponseHandler`.
+  - Standardized error mapping for `400`, `403`, and `404` scenarios.
+
+- **Authorization & Validation**:
+  - Integrated role-based access control (`ADMIN`, `SUPERADMIN`) and teacher-level authorization.
+  - Added strict path param validation and DTO-based request validation.
+
+### Tests
+- **Controller Tests**:
+  - Added comprehensive unit tests for Teacher controller covering success paths, authorization failures, validation errors, and edge cases.
+
 ## Version [1.8.1] - Support for Dynamic UI & Permissions
 **P.R raised by**  : aaditya-singh-21
 **Date** : 2026-01-24
