@@ -1,41 +1,51 @@
-import { Prisma, PrismaClient } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 
-// const prisma = new PrismaClient();
-
 export async function createBusiness(data: Prisma.BusinessCreateInput) {
-  try {
-    return await prisma.business.create({
-      data
-    });
-  } catch (error) {
-    throw error;
-  }
+  return await prisma.business.create({
+    data
+  });
 }
 
+
 export async function findBusinessById(id: number) {
-  return prisma.business.findUnique({
-    where: { id },
+  return prisma.business.findFirst({
+    where: {
+      id,
+      isDeleted: false
+    },
+  });
+}
+
+export async function findBusinessBySlug(slug: string) {
+  return prisma.business.findFirst({
+    where: {
+      slug,
+      isDeleted: false
+    },
   });
 }
 
 export async function findFirstBusiness() {
-  return prisma.business.findFirst();
+  return prisma.business.findFirst({
+    where: {
+      isDeleted: false
+    }
+  });
 }
 
 export async function updateBusiness(id: number, data: Prisma.BusinessUpdateInput) {
-  try {
-    return await prisma.business.update({
-      where: { id },
-      data,
-    });
-  } catch (error) {
-    throw error;
-  }
+  return await prisma.business.update({
+    where: { id },
+    data,
+  });
 }
 
 export async function deleteBusiness(id: number) {
-  return prisma.business.delete({
+  return prisma.business.update({
     where: { id },
+    data: {
+      isDeleted: true
+    }
   });
 }
