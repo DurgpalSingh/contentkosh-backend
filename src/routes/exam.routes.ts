@@ -134,7 +134,7 @@ router.post('/:examId/courses', authorize(UserRole.ADMIN), validateIdParam('exam
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/:examId/courses', validateIdParam('examId'), authorizeExamAccess, getCoursesByExam);
+router.get('/:examId/courses', validateIdParam('examId'), authorize(), authorizeExamAccess, getCoursesByExam);
 
 /**
  * @swagger
@@ -197,7 +197,7 @@ router.get('/:examId/courses', validateIdParam('examId'), authorizeExamAccess, g
  *           application/json:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/:examId/courses/:courseId', validateIdParam('examId'), validateIdParam('courseId'), authorizeExamAccess, getCourse);
+router.get('/:examId/courses/:courseId', validateIdParam('examId'), validateIdParam('courseId'), authorize(), authorizeExamAccess, getCourse);
 
 /**
  * @swagger
@@ -422,7 +422,7 @@ router.post('/:examId/courses/:courseId/subjects', authorize(UserRole.ADMIN), va
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/:examId/courses/:courseId/subjects', validateIdParam('examId'), validateIdParam('courseId'), authorizeExamAccess, getSubjectsByCourse);
+router.get('/:examId/courses/:courseId/subjects', validateIdParam('examId'), validateIdParam('courseId'), authorize(), authorizeExamAccess, getSubjectsByCourse);
 
 /**
  * @swagger
@@ -482,7 +482,7 @@ router.get('/:examId/courses/:courseId/subjects', validateIdParam('examId'), val
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/:examId/courses/:courseId/subjects/:subjectId', validateIdParam('examId'), validateIdParam('courseId'), validateIdParam('subjectId'), authorizeExamAccess, getSubject);
+router.get('/:examId/courses/:courseId/subjects/:subjectId', validateIdParam('examId'), validateIdParam('courseId'), validateIdParam('subjectId'), authorize(), authorizeExamAccess, getSubject);
 
 /**
  * @swagger

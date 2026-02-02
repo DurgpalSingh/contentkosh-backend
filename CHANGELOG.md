@@ -1,6 +1,20 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## Version [1.8.2] - Business Signup & Slug Support
+**P.R raised by**  : aaditya-singh-21
+**Date** : 2026-02-02
+### Added
+- **Business Signup**:
+    - **Slug Support**: Added `slug` field to `Business` model to support URL-friendly identification (e.g., `contentkosh.in/vision-ias`).
+    - **Create Business**: Enhanced `POST /api/business` to accept `slug`, `logo_url`, `phone`, and `email`.
+    - **Get by Slug**: Added `GET /api/business/slug/:slug` endpoint.
+
+### Refactored
+- **Architecture**:
+    - **Business Service**: Created `BusinessService` to decouple controller from repository.
+    - **DTOs**: Implemented strict validation using `CreateBusinessDto` and `UpdateBusinessDto`.
+    - **Controller**: Refactored `BusinessController` to use DTOs and Service layer.
 
 ## Version [1.1.9] - Teacher Management API
 **P.R raised by**  : Shubh404-SE 

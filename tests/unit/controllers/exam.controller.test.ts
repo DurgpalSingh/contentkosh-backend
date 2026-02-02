@@ -29,7 +29,7 @@ describe('Exam Controller', () => {
         req = {
             query: {},
             params: {},
-            user: { id: 1, role: 'ADMIN', email: 'test@example.com', name: 'Tester', businessId: 1 }
+            user: { id: 1, role: 'ADMIN', email: 'test@example.com', businessId: 1 }
         };
         res = {
             status: jest.fn().mockReturnThis(),
@@ -158,7 +158,7 @@ describe('Exam Controller', () => {
 
             await ExamController.getExamsByBusiness(req as Request, res as Response);
 
-            expect(getExamsByBusinessSpy).toHaveBeenCalledWith(1, expect.anything());
+            expect(getExamsByBusinessSpy).toHaveBeenCalledWith(1, expect.anything(), expect.anything());
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockExams, 'Exams fetched successfully');
         });
 

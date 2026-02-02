@@ -5,6 +5,7 @@ import { ExamService } from '../../../src/services/exam.service';
 import { ApiResponseHandler } from '../../../src/utils/apiResponse';
 import { BadRequestError, NotFoundError } from '../../../src/errors/api.errors';
 import { ValidationUtils } from '../../../src/utils/validation';
+import { AuthRequest } from '../../../src/dtos/auth.dto';
 
 // Do NOT mock Service modules directly. Use spyOn.
 // Do NOT mock ValidationUtils. Use real implementation where possible, or spy if needed.
@@ -15,7 +16,7 @@ jest.mock('../../../src/utils/apiResponse');
 jest.mock('../../../src/utils/logger');
 
 describe('Course Controller', () => {
-    let req: Partial<Request>;
+    let req: Partial<AuthRequest>;
     let res: Partial<Response>;
 
     // Spies
@@ -28,7 +29,8 @@ describe('Course Controller', () => {
 
     beforeEach(() => {
         req = {
-            query: {}
+            query: {},
+            user: { id: 1, email: 'test@test.com', role: 'ADMIN', businessId: 1 }
         };
         res = {
             status: jest.fn().mockReturnThis(),
@@ -144,7 +146,7 @@ describe('Course Controller', () => {
 
             await CourseController.getCoursesByExam(req as Request, res as Response);
 
-            expect(getCoursesByExamSpy).toHaveBeenCalledWith(1, expect.anything());
+            expect(getCoursesByExamSpy).toHaveBeenCalledWith(1, expect.anything(), expect.anything());
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockCourses, 'Courses fetched successfully');
         });
 
@@ -157,7 +159,7 @@ describe('Course Controller', () => {
 
             await CourseController.getCoursesByExam(req as Request, res as Response);
 
-            expect(getCoursesByExamSpy).toHaveBeenCalledWith(1, expect.objectContaining({ where: { status: 'ACTIVE' } }));
+            expect(getCoursesByExamSpy).toHaveBeenCalledWith(1, expect.anything(), expect.objectContaining({ where: { status: 'ACTIVE' } }));
         });
 
         it('should return 404 if exam does not exist', async () => {
