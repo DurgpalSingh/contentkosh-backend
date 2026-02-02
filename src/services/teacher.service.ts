@@ -1,7 +1,8 @@
-import { Prisma, Teacher, TeacherStatus, UserRole, Gender } from '@prisma/client';
+import { Teacher, UserRole } from '@prisma/client';
 import * as teacherRepo from '../repositories/teacher.repo';
 import * as userRepo from '../repositories/user.repo';
 import { CreateTeacherDto, UpdateTeacherDto } from '../dtos/teacher.dto';
+import { TeacherMapper } from '../mappers/teacher.mapper';
 import { NotFoundError, BadRequestError, ForbiddenError } from '../errors/api.errors';
 import { IUser } from '../dtos/auth.dto';
 import logger from '../utils/logger';
@@ -44,20 +45,7 @@ export class TeacherService {
         }
 
         try {
-            const createData: Prisma.TeacherCreateInput = {
-                user: { connect: { id: data.userId } },
-                business: { connect: { id: data.businessId } },
-                qualification: data.professional.qualification,
-                experienceYears: data.professional.experienceYears,
-                designation: data.professional.designation,
-                bio: data.professional.bio ?? null,
-                languages: data.professional.languages || [],
-                gender: data.personal?.gender ?? null,
-                dob: data.personal?.dob ? new Date(data.personal.dob) : null,
-                address: data.personal?.address ?? null,
-                status: TeacherStatus.ACTIVE,
-                ...(user.id && { createdByUser: { connect: { id: user.id } } })
-            };
+            const createData = TeacherMapper.toCreateInput(data, user.id);
 
             const teacher = await teacherRepo.createTeacher(createData);
             logger.info('Teacher profile created successfully', {
@@ -128,23 +116,7 @@ export class TeacherService {
         }
 
         try {
-            const updateData: Prisma.TeacherUpdateInput = {
-                ...(data.professional && {
-                    qualification: data.professional.qualification,
-                    experienceYears: data.professional.experienceYears,
-                    designation: data.professional.designation,
-                    bio: data.professional.bio ?? null,
-                    languages: data.professional.languages
-                }),
-                ...(data.personal && {
-                    gender: data.personal.gender ?? null,
-                    dob: data.personal.dob ? new Date(data.personal.dob) : null,
-                    address: data.personal.address ?? null
-                }),
-                ...(data.status && { status: data.status }),
-                ...(user.id && { updatedByUser: { connect: { id: user.id } } }),
-                updatedAt: new Date()
-            };
+            const updateData = TeacherMapper.toUpdateInput(data, user.id);
 
             const updatedTeacher = await teacherRepo.updateTeacher(teacherId, updateData);
             logger.info('Teacher profile updated successfully', {

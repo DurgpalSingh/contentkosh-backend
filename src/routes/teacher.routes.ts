@@ -85,8 +85,8 @@ router.use(authenticate);
 router.post(
     '/profile',
     authorize(UserRole.ADMIN),
-    authorizeTeacherAccess,
     validateDto(CreateTeacherDto),
+    authorizeTeacherAccess,
     teacherController.createTeacher
 );
 

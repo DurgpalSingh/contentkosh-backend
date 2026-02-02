@@ -36,11 +36,13 @@ export interface TeacherFindOptions {
 }
 
 export const createTeacher = async (
-  data: Prisma.TeacherCreateInput
+  data: Prisma.TeacherCreateInput,
+  options: { include?: Prisma.TeacherInclude; select?: Prisma.TeacherSelect } = {}
 ): Promise<Teacher> => {
   return await prisma.teacher.create({
     data,
-    include: teacherDefaultInclude
+    ...(options.select ? { select: options.select } : {}),
+    ...(options.include ? { include: options.include } : {})
   });
 };
 
@@ -108,12 +110,14 @@ export const findTeachersByBusinessId = async (
 
 export const updateTeacher = async (
   id: number,
-  data: Prisma.TeacherUpdateInput
+  data: Prisma.TeacherUpdateInput,
+  options: { include?: Prisma.TeacherInclude; select?: Prisma.TeacherSelect } = {}
 ): Promise<Teacher> => {
   return await prisma.teacher.update({
     where: { id },
     data,
-    include: teacherDefaultInclude
+    ...(options.select ? { select: options.select } : {}),
+    ...(options.include ? { include: options.include } : {})
   });
 };
 

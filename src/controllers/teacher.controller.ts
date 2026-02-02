@@ -24,8 +24,11 @@ export class TeacherController {
   public createTeacher = async (req: AuthRequest, res: Response) => {
     try {
       const teacherData = plainToInstance(CreateTeacherDto, req.body);
-      const user = req.user!;
 
+      if (!req.user) {
+        throw new ForbiddenError('Authentication required');
+      }
+      const user = req.user;
       const teacher = await this.teacherService.createTeacher(teacherData, user);
       ApiResponseHandler.success(res, TeacherMapper.toResponse(teacher), 'Teacher profile created successfully', 201);
     } catch (error: any) {
@@ -50,7 +53,10 @@ export class TeacherController {
   public getTeacher = async (req: AuthRequest, res: Response) => {
     try {
       const teacherId = ValidationUtils.validateId(req.params.teacherId, 'Teacher ID');
-      const user = req.user!;
+      if (!req.user) {
+        throw new ForbiddenError('Authentication required');
+      }
+      const user = req.user;
 
       const teacher = await this.teacherService.getTeacherById(teacherId, user);
       ApiResponseHandler.success(res, TeacherMapper.toResponse(teacher), 'Teacher profile fetched successfully');
@@ -74,8 +80,10 @@ export class TeacherController {
     try {
       const teacherId = ValidationUtils.validateId(req.params.teacherId, 'Teacher ID');
       const teacherData = plainToInstance(UpdateTeacherDto, req.body);
-      const user = req.user!;
-
+      if (!req.user) {
+        throw new ForbiddenError('Authentication required');
+      }
+      const user = req.user;
       const teacher = await this.teacherService.updateTeacher(teacherId, teacherData, user);
       ApiResponseHandler.success(res, TeacherMapper.toResponse(teacher), 'Teacher profile updated successfully');
     } catch (error: any) {
