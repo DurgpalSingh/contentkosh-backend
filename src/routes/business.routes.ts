@@ -1,12 +1,41 @@
 import { Router } from 'express';
-import { createBusiness, getBusiness, updateBusiness, deleteBusiness } from '../controllers/business.controller';
+import { createBusiness, getBusiness, updateBusiness, deleteBusiness, getBusinessBySlug } from '../controllers/business.controller';
 import { createExam, getExamsByBusiness, getExam, updateExam, deleteExam } from '../controllers/exam.controller';
 import { CreateExamDto, UpdateExamDto } from '../dtos/exam.dto';
 import { authorize } from '../middlewares/auth.middleware';
 import { UserRole } from '@prisma/client';
 import { validateDto } from '../middlewares/validation/dto.middleware';
+import { CreateBusinessDto, UpdateBusinessDto } from '../dtos/business.dto';
 
 const router = Router();
+
+// Update createBusiness swagger to remove ADMIN restriction description effectively (though still requires auth)
+router.post('/', authorize(), createBusiness); // Allow any authenticated user to create a business
+
+// Add route for slug
+/**
+ * @swagger
+ * /api/business/slug/{slug}:
+ *   get:
+ *     summary: Get business by slug
+ *     tags: [Business]
+ *     parameters:
+ *       - in: path
+ *         name: slug
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Business Slug
+ *     responses:
+ *       200:
+ *         description: Business fetched successfully
+ *       404:
+ *         description: Business not found
+ */
+router.get('/slug/:slug', getBusinessBySlug);
+
+router.get('/', authorize(UserRole.SUPERADMIN), getBusiness);
+// ...
 
 /**
  * @swagger
@@ -105,7 +134,7 @@ router.post('/:businessId/exams', authorize(UserRole.ADMIN), validateDto(CreateE
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/:businessId/exams', getExamsByBusiness);
+router.get('/:businessId/exams', authorize(), getExamsByBusiness);
 /**
  * @swagger
  * /api/business/{businessId}/exams/{id}:
@@ -273,6 +302,12 @@ router.delete('/:businessId/exams/:id', authorize(UserRole.ADMIN), deleteExam);
 /**
  * @swagger
  * /api/business:
+
+// ...
+
+/**
+ * @swagger
+ * /api/business:
  *   post:
  *     summary: Create business configuration
  *     tags: [Business]
@@ -315,7 +350,7 @@ router.delete('/:businessId/exams/:id', authorize(UserRole.ADMIN), deleteExam);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post('/', authorize(UserRole.ADMIN), createBusiness);
+router.post('/', authorize(), validateDto(CreateBusinessDto), createBusiness);
 
 /**
  * @swagger
@@ -446,7 +481,7 @@ router.get('/:id', getBusiness);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.put('/:id', authorize(UserRole.ADMIN), updateBusiness);
+router.put('/:id', authorize(UserRole.ADMIN), validateDto(UpdateBusinessDto, true), updateBusiness);
 
 /**
  * @swagger

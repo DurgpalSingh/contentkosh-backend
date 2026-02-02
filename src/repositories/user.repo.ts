@@ -110,7 +110,7 @@ export async function findByBusinessId(businessId: number, role?: UserRole) {
   }));
 }
 
-export function updateUser(id: number, data: { name?: string; mobile?: string; role?: UserRole; status?: UserStatus; password?: string }) {
+export function updateUser(id: number, data: { name?: string; mobile?: string; role?: UserRole; status?: UserStatus; password?: string; businessId?: number }) {
   return prisma.user.update({
     where: { id },
     data,

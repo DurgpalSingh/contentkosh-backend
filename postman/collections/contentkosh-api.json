@@ -7,6 +7,257 @@
   },
   "item": [
     {
+      "name": "Content",
+      "item": [
+        {
+          "name": "Create content for a batch",
+          "id": "content-create-001",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "description": "File to upload (PDF or Image)"
+                },
+                {
+                  "key": "title",
+                  "value": "Sample Content",
+                  "type": "text"
+                },
+                {
+                  "key": "status",
+                  "value": "ACTIVE",
+                  "type": "text",
+                  "disabled": true
+                }
+              ]
+            },
+            "url": {
+              "raw": "http://{{baseUrl}}/api/batches/:batchId/contents",
+              "protocol": "http",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "batches",
+                ":batchId",
+                "contents"
+              ],
+              "variable": [
+                {
+                  "key": "batchId"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get all contents for a batch",
+          "id": "content-list-002",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://{{baseUrl}}/api/batches/:batchId/contents",
+              "protocol": "http",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "batches",
+                ":batchId",
+                "contents"
+              ],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "",
+                  "description": "Filter by content type (PDF, IMAGE)",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "",
+                  "description": "Filter by status (ACTIVE, INACTIVE)",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Search in content titles",
+                  "disabled": true
+                }
+              ],
+              "variable": [
+                {
+                  "key": "batchId"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get content by ID",
+          "id": "content-get-003",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://{{baseUrl}}/api/contents/:contentId",
+              "protocol": "http",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "contents",
+                ":contentId"
+              ],
+              "variable": [
+                {
+                  "key": "contentId"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Download/view content file",
+          "id": "content-file-004",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://{{baseUrl}}/api/contents/:contentId/file",
+              "protocol": "http",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "contents",
+                ":contentId",
+                "file"
+              ],
+              "variable": [
+                {
+                  "key": "contentId"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update content",
+          "id": "content-update-005",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Updated Content Title\",\n  \"status\": \"ACTIVE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://{{baseUrl}}/api/contents/:contentId",
+              "protocol": "http",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "contents",
+                ":contentId"
+              ],
+              "variable": [
+                {
+                  "key": "contentId"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete content",
+          "id": "content-delete-006",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://{{baseUrl}}/api/contents/:contentId",
+              "protocol": "http",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "contents",
+                ":contentId"
+              ],
+              "variable": [
+                {
+                  "key": "contentId"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "content-folder-001"
+    },
+    {
       "name": "Announcements",
       "item": [
         {
@@ -1165,6 +1416,34 @@
     {
       "name": "Business",
       "item": [
+        {
+          "name": "Get business by slug",
+          "id": "business-get-by-slug-001",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://{{baseUrl}}/api/business/slug/:slug",
+              "protocol": "http",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "business",
+                "slug",
+                ":slug"
+              ],
+              "variable": [
+                {
+                  "key": "slug",
+                  "description": "Business slug identifier"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
         {
           "name": "Create exam under business",
           "id": "e96fb488-8a13-457d-a545-47ee7b479941",

@@ -1,30 +1,34 @@
 import { Request, Response } from 'express';
 import { ApiResponseHandler } from '../utils/apiResponse';
 import logger from '../utils/logger';
-import { AlreadyExistsError, BadRequestError, NotFoundError } from '../errors/api.errors';
-import * as businessRepo from '../repositories/business.repo';
-import { Prisma } from '@prisma/client';
+import { BadRequestError } from '../errors/api.errors';
+import { BusinessService } from '../services/business.service';
+import { AuthRequest } from '../dtos/auth.dto';
+import { CreateBusinessDto, UpdateBusinessDto } from '../dtos/business.dto';
 
-export const createBusiness = async (req: Request, res: Response) => {
-  const businessData: Prisma.BusinessUncheckedCreateInput = req.body;
+export const createBusiness = async (req: AuthRequest, res: Response) => {
+  const { instituteName, slug, logo_url, phone, email, ...otherData } = req.body as CreateBusinessDto;
+  const user = req.user;
 
-  // Validate required fields
-  if (!businessData.instituteName || businessData.instituteName.trim().length === 0) {
-    throw new BadRequestError('Institute name is required');
+  if (!user) {
+    throw new BadRequestError('User context required');
   }
 
-  // Check if business already exists (only allow one business record)
-  const existingBusiness = await businessRepo.findFirstBusiness();
-  if (existingBusiness) {
-    throw new AlreadyExistsError('Business configuration already exists. Use update instead.');
-  }
+  // Map incoming fields to DB fields
+  const businessData = {
+    instituteName,
+    slug,
+    logo: logo_url ?? null,
+    contactNumber: phone ?? null,
+    email: email ?? null,
+    ...otherData
+  };
 
-  const business = await businessRepo.createBusiness(businessData);
+  const business = await BusinessService.createBusiness(businessData, user.id);
 
   logger.info(`Business created successfully: ${business.instituteName}`);
 
   ApiResponseHandler.success(res, business, 'Business created successfully', 201);
-
 };
 
 function getBusinessIdFromRequest(req: Request): number {
@@ -37,48 +41,41 @@ function getBusinessIdFromRequest(req: Request): number {
 
 export const getBusiness = async (req: Request, res: Response) => {
   const id = getBusinessIdFromRequest(req);
+  const business = await BusinessService.getBusinessById(id);
 
-    const business = await businessRepo.findBusinessById(id);
-    if (!business) {
-      throw new NotFoundError('Business not found');
-    }
-    logger.info(`Business fetched successfully: ${business.instituteName}`);
-    ApiResponseHandler.success(res, business, 'Business fetched successfully');
+  logger.info(`Business fetched successfully: ${business.instituteName}`);
+  ApiResponseHandler.success(res, business, 'Business fetched successfully');
 };
 
-export const updateBusiness = async (req: Request, res: Response) => {
-    const id = getBusinessIdFromRequest(req);
-    const businessData: Prisma.BusinessUncheckedUpdateInput = req.body;
-
-    // Validate input
-    if (businessData.instituteName !== undefined && typeof businessData.instituteName === 'string' && !businessData.instituteName.trim()) {
-      throw new BadRequestError('Institute name cannot be empty');
-    }
-
-    // Validate that business exists
-    const existingBusiness = await businessRepo.findBusinessById(id);
-    if (!existingBusiness) {
-      throw new NotFoundError('Business not found');
-    }
-
-    const business = await businessRepo.updateBusiness(id, businessData);
-    
-    logger.info(`Business updated successfully: ${business.instituteName}`);
-
-    ApiResponseHandler.success(res, business, 'Business updated successfully');
-
-};
-
-export const deleteBusiness = async (req: Request, res: Response) => {
-  const id = getBusinessIdFromRequest(req);
-  
-  // Validate that business exists
-  const existingBusiness = await businessRepo.findBusinessById(id);
-  if (!existingBusiness) {
-    throw new NotFoundError('Business not found');
+export const getBusinessBySlug = async (req: Request, res: Response) => {
+  const { slug } = req.params;
+  if (!slug) {
+    throw new BadRequestError('Slug is required');
   }
+  const business = await BusinessService.getBusinessBySlug(slug);
+  logger.info(`Business fetched successfully: ${business.instituteName}`);
+  ApiResponseHandler.success(res, business, 'Business fetched successfully');
+};
 
-  await businessRepo.deleteBusiness(id);
+export const updateBusiness = async (req: AuthRequest, res: Response) => {
+  const id = getBusinessIdFromRequest(req);
+  const { logo_url, phone, ...otherData } = req.body;
 
+  const updateData = {
+    ...otherData,
+    ...(logo_url && { logo: logo_url }),
+    ...(phone && { contactNumber: phone })
+  };
+
+  const business = await BusinessService.updateBusiness(id, updateData);
+
+  logger.info(`Business updated successfully: ${business.instituteName}`);
+
+  ApiResponseHandler.success(res, business, 'Business updated successfully');
+};
+
+export const deleteBusiness = async (req: AuthRequest, res: Response) => {
+  const id = getBusinessIdFromRequest(req);
+  await BusinessService.deleteBusiness(id);
   ApiResponseHandler.success(res, null, 'Business deleted successfully');
 };
