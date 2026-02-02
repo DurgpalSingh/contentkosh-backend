@@ -18,6 +18,7 @@ export class TeacherService {
             createdBy: user.id
         });
 
+        // TODO : need to change these repeated checks
         // Verify user has permission to create teacher (must be admin or from the same business)
         if (user.role !== UserRole.ADMIN && user.businessId !== data.businessId) {
             throw new ForbiddenError('You do not have permission to create teachers for this business');
@@ -77,6 +78,7 @@ export class TeacherService {
             throw new NotFoundError('Teacher profile not found');
         }
 
+        // TODO : need to change these repeated checks
         // Check if user has access (admin or same business)
         if (user.role !== UserRole.ADMIN && user.businessId !== teacher.businessId) {
             throw new ForbiddenError('You do not have access to this teacher profile');
@@ -103,6 +105,7 @@ export class TeacherService {
             throw new NotFoundError('Teacher profile not found');
         }
 
+        // TODO : need to change these repeated checks
         // Check if user has permission to update (admin, same business, or own profile)
         if (user.role !== UserRole.ADMIN &&
             user.businessId !== teacher.businessId &&
@@ -141,6 +144,7 @@ export class TeacherService {
             throw new ForbiddenError('Only administrators can create teacher profiles');
         }
 
+        // TODO : need to change these repeated checks
         // Check if user belongs to the business (except SUPERADMIN)
         if (user.role === UserRole.ADMIN && user.businessId !== businessId) {
             throw new ForbiddenError('You do not have access to this business');
@@ -154,6 +158,7 @@ export class TeacherService {
             throw new NotFoundError('Teacher profile not found');
         }
 
+        // TODO : need to change these repeated checks
         if (user.role === UserRole.SUPERADMIN || user.id === teacher.userId || user.businessId === teacher.businessId) {
             return;
         }
