@@ -1,7 +1,7 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
-## Version [1.1.9] - Content API Admin Access Fix
+## Version [1.1.10] - Content API Admin Access Fix
 **P.R raised by**  : shubh404-SE
 **Date** : 2026-02-1
 
