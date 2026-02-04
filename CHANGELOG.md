@@ -1,6 +1,15 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## Version [1.9.0] - Audit Logging & Bug Fixes
+**P.R raised by**  : aaditya-singh-21
+**Date** : 2026-02-04
+### Added
+- **API Audit Logging**: 
+    - **Schema**: Added `ApiAuditLog` model to `schema.prisma`.
+    - **Middleware**: Implemented `apiAuditLogger` to log all request/response details to the database asynchronously.
+    - **Verification**: Added `src/scripts/verify-audit.ts` to verify logging functionality.
+
 ## Version [1.8.2] - Business Signup & Slug Support
 **P.R raised by**  : aaditya-singh-21
 **Date** : 2026-02-02

@@ -10,6 +10,7 @@ import { config } from './config/config';
 import logger from './utils/logger';
 import { prisma } from './config/database';
 import { specs } from './config/swagger';
+import { apiAuditLogger } from './middlewares/audit.middleware';
 
 // Load environment variables
 dotenv.config();
@@ -26,6 +27,9 @@ async function start() {
     app.use(cors());
     app.use(express.json());
     app.use(express.urlencoded({ extended: true }));
+
+    // Audit Logging
+    app.use(apiAuditLogger);
 
     // Swagger Documentation
     app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs, {

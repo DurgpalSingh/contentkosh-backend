@@ -320,3 +320,22 @@ model Teacher {
   @@index([status])
   @@map("teachers")
 }
+
+model ApiAuditLog {
+  id             Int      @id @default(autoincrement())
+  userId         Int?     @map("user_id")
+  role           String?
+  httpMethod     String   @map("http_method")
+  requestUrl     String   @map("request_url")
+  requestPath    String   @map("request_path")
+  queryParams    Json?    @map("query_params")
+  requestBody    Json?    @map("request_body")
+  responseStatus Int      @map("response_status")
+  responseTimeMs Int      @map("response_time_ms")
+  responseBody   Json?    @map("response_body")
+  errorCode      String?  @map("error_code")
+  errorMessage   String?  @map("error_message")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@map("api_audit_logs")
+}
