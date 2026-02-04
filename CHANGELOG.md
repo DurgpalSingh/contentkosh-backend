@@ -1,6 +1,14 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## Version [1.1.10] - Content API Admin Access Fix
+**P.R raised by**  : shubh404-SE
+**Date** : 2026-02-1
+
+### Fixed
+- **Admin Access Control (Content API)**: Fixed incorrect authorization logic that was preventing **ADMIN** users from accessing certain Content API operations.  
+- Ensured admins now have consistent, unrestricted access to content endpoints in line with role-based access design.
+
 
 ## Version [1.1.9] - Teacher Management API
 **P.R raised by**  : Shubh404-SE 
