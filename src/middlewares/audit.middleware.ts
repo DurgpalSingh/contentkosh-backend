@@ -3,7 +3,15 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-export const apiAuditLogger = (req: Request, res: Response, next: NextFunction) => {
+import { auditService } from '../services/audit.service';
+
+export const apiAuditLogger = async (req: Request, res: Response, next: NextFunction) => {
+    // Check if auditing is enabled
+    const isEnabled = await auditService.isAuditingEnabled();
+    if (!isEnabled) {
+        return next();
+    }
+
     const start = Date.now();
     const originalSend = res.send;
     const originalJson = res.json;
