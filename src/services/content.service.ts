@@ -244,68 +244,71 @@ export class ContentService {
   }
 
   //  Authorize content creation: Only ADMIN, SUPERADMIN, or active TEACHER in the batch
-
   async authorizeContentCreation(batchId: number, user: IUser): Promise<void> {
+    const { isSuperAdmin, isAdmin, batchUser } =
+      await this.batchAccessContext(batchId, user);
 
-    // Validate batch access first
-    await this.validateBatchAccess(batchId, user);
-
-    if (user.role === UserRole.SUPERADMIN) {
+    if (isSuperAdmin || isAdmin) {
       return;
     }
 
-    const batchUser = await batchRepo.findBatchUser(user.id, batchId);
-    if (batchUser && batchUser.isActive) {
-      return;
+    if (!batchUser || !batchUser.isActive) {
+      throw new ForbiddenError(
+        'You must be an active user in this batch to create content'
+      );
     }
-
-    throw new ForbiddenError('You must be an active user in this batch for content');
   }
 
   // Authorize content access: Any user in the batch can access content (view/get)
   async validateContentAccess(contentId: number, user: IUser): Promise<void> {
-
     const content = await contentRepo.findContentById(contentId);
     if (!content) {
       throw new NotFoundError('Content not found');
     }
 
-    const batchId = content.batchId;
-    if (user.role === UserRole.SUPERADMIN) {
+    const { isSuperAdmin, isAdmin, batchUser } =
+      await this.batchAccessContext(content.batchId, user);
+
+    if (isSuperAdmin || isAdmin) {
       return;
     }
 
-    await this.validateBatchAccess(batchId, user);
-
-    const batchUser = await batchRepo.findBatchUser(user.id, batchId);
-    if (!batchUser) {
-      throw new ForbiddenError('You are not a member of this batch');
-    }
-
-    // User must be active in the batch to access content
-    if (!batchUser.isActive) {
-      throw new ForbiddenError('You are not active in this batch');
+    if (!batchUser || !batchUser.isActive) {
+      throw new ForbiddenError(
+        'You must be an active user in this batch to access content'
+      );
     }
   }
 
-  private async validateBatchAccess(batchId: number, user: IUser): Promise<void> {
-    // Batch -> Course -> Exam -> Business
-    const batchWithRelations = await batchRepo.findBatchById(batchId, {
-      include: { course: { include: { exam: true } } }
-    }) as any; // Cast for simplified access
+  private async batchAccessContext(batchId: number, user: IUser) {
+    const batch = await batchRepo.findBatchById(batchId, { include: { course: { include: { exam: true } } } }) as any;
 
-    if (!batchWithRelations) throw new NotFoundError('Batch not found');
+    if (!batch) {
+      throw new NotFoundError('Batch not found');
+    }
 
-    const exam = batchWithRelations.course?.exam;
+    const exam = batch.course?.exam;
     if (!exam) {
       throw new ForbiddenError('Batch is not correctly associated with an exam');
     }
 
     const isSuperAdmin = user.role === UserRole.SUPERADMIN;
+    const isAdmin = user.role === UserRole.ADMIN;
     const hasBusinessAccess = exam.businessId === user.businessId;
 
     if (!isSuperAdmin && !hasBusinessAccess) {
       throw new ForbiddenError('You do not have access to this batch');
     }
+
+    const batchUser =
+      isSuperAdmin || isAdmin
+        ? null
+        : await batchRepo.findBatchUser(user.id, batchId);
+
+    return {
+      isSuperAdmin,
+      isAdmin,
+      batchUser
+    };
   }
 }
