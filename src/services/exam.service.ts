@@ -1,4 +1,4 @@
-import { Prisma, Exam, UserRole } from '@prisma/client';
+import { Exam, UserRole } from '@prisma/client';
 import * as examRepo from '../repositories/exam.repo';
 import { CreateExamDto, UpdateExamDto } from '../dtos/exam.dto';
 import { NotFoundError, BadRequestError, ForbiddenError } from '../errors/api.errors';
@@ -11,8 +11,7 @@ export class ExamService {
     async createExam(data: CreateExamDto, userId: number): Promise<Exam> {
         logger.info('ExamService: Creating new exam', { name: data.name, businessId: data.businessId });
 
-        // Map DTO to Prisma input
-        const createData: Prisma.ExamUncheckedCreateInput = {
+        const createData = {
             name: data.name,
             code: data.code ?? null,
             description: data.description ?? null,
@@ -74,7 +73,7 @@ export class ExamService {
         logger.info('ExamService: Updating exam', { examId: id });
 
         // Map DTO to Prisma input (clean undefineds)
-        const updateData: Prisma.ExamUncheckedUpdateInput = {
+        const updateData = {
             ...(data.name && { name: data.name }),
             ...(data.code !== undefined && { code: data.code }), // Allow null/empty string if passed, but typically optional in DTO means undefined
             ...(data.description !== undefined && { description: data.description }),
