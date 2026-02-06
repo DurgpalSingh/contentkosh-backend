@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { UserRole } from '@prisma/client';
 import { ApiResponseHandler } from '../utils/apiResponse';
 import logger from '../utils/logger';
-import { BadRequestError, NotFoundError, AlreadyExistsError } from '../errors/api.errors';
+import { BadRequestError, NotFoundError, AlreadyExistsError, ForbiddenError } from '../errors/api.errors';
 import { ValidationUtils } from '../utils/validation';
 import { plainToInstance } from 'class-transformer';
 import { CreateBatchDto, UpdateBatchDto, AddUserToBatchDto, RemoveUserFromBatchDto, UpdateBatchUserDto } from '../dtos/batch.dto';
@@ -42,6 +42,26 @@ export class BatchController {
         return ApiResponseHandler.notFound(res, error.message);
       }
       ApiResponseHandler.error(res, 'Failed to fetch batch');
+    }
+  };
+
+  public getAllActiveBatches = async (req: Request, res: Response) => {
+    try {
+      const options = QueryBuilder.parse(req.query);
+      const user = (req as any).user;
+
+      if (!user) {
+        return ApiResponseHandler.unauthorized(res, 'User not authenticated');
+      }
+
+      const batches = await this.batchService.getAllActiveBatches(user, options);
+      ApiResponseHandler.success(res, batches, 'Active batches fetched successfully');
+    } catch (error: any) {
+      if (error instanceof ForbiddenError || error.name === 'ForbiddenError') {
+        return ApiResponseHandler.error(res, error.message, 403);
+      }
+      logger.error(`Error fetching active batches: ${error.message}`);
+      ApiResponseHandler.error(res, 'Failed to fetch active batches');
     }
   };
 

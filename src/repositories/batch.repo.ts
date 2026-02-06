@@ -140,6 +140,59 @@ export async function findBatchesByCourseId(courseId: number, options: BatchFind
   return prisma.batch.findMany(query);
 }
 
+export async function findBatches(options: BatchFindOptions = {}) {
+  // Handle "students" request whether it comes from top-level flag or nested include (legacy/compatible)
+  const requestIncludeStudents = options.includeStudents || (options.include as any)?.students;
+
+  if ((options.include as any)?.students) {
+    options.include = { ...options.include };
+    delete (options.include as any).students;
+  }
+
+  const query: Prisma.BatchFindManyArgs = {
+    where: {
+      ...(options.where || {}),
+    },
+    orderBy: options.orderBy || { createdAt: 'desc' },
+  };
+
+  if (options.skip !== undefined) query.skip = options.skip;
+  if (options.take !== undefined) query.take = options.take;
+
+  if (requestIncludeStudents) {
+    query.include = {
+      ...(options.include || {}),
+      batchUsers: {
+        where: {
+          user: { role: UserRole.STUDENT }
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              mobile: true,
+              role: true
+            }
+          }
+        }
+      }
+    };
+  } else if (options.select) {
+    query.select = options.select;
+  } else if (options.include) {
+    query.include = options.include;
+  } else {
+    (query as any).select = {
+      ...batchSelect,
+      course: { select: courseSelect }
+    };
+  }
+
+  return prisma.batch.findMany(query);
+}
+
 export async function findActiveBatchesByCourseId(courseId: number, options: BatchFindOptions = {}) {
   return findBatchesByCourseId(courseId, {
     ...options,
