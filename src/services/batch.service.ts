@@ -180,6 +180,53 @@ export class BatchService {
         return await batchRepo.findUsersByBatchId(batchId, role);
     }
 
+    async getAllActiveBatches(user: IUser, options: batchRepo.BatchFindOptions = {}): Promise<Batch[]> {
+        logger.info('BatchService: Fetching all active batches', { userId: user.id, role: user.role });
+
+        const isSuperAdmin = user.role === UserRole.SUPERADMIN;
+        const isAdmin = user.role === UserRole.ADMIN;
+        const isTeacher = user.role === UserRole.TEACHER;
+        const isStudent = user.role === UserRole.STUDENT;
+
+        if (!isSuperAdmin && !isAdmin && !isTeacher && !isStudent) {
+            throw new ForbiddenError('You do not have access to view batches');
+        }
+
+        if (!isSuperAdmin && !user.businessId) {
+            throw new ForbiddenError('User is not associated with a business');
+        }
+
+        options.where = {
+            ...(options.where || {}),
+            isActive: true,
+        };
+
+        if (!isSuperAdmin) {
+            const businessId = user.businessId as number;
+            options.where = {
+                ...options.where,
+                course: {
+                    exam: { businessId }
+                }
+            };
+        }
+
+        if (isTeacher || isStudent) {
+            options.where = {
+                ...options.where,
+                batchUsers: {
+                    some: {
+                        userId: user.id,
+                        isActive: true
+                    }
+                }
+            };
+        }
+
+        const batches = await batchRepo.findBatches(options);
+        return batches.map((b: Batch) => BatchMapper.toDomain(b));
+    }
+
     async updateBatchUser(batchId: number, userId: number, data: any) {
         logger.info('BatchService: Updating batch user', { batchId, userId });
 
