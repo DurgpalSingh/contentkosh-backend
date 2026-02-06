@@ -1,5 +1,7 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 import { prisma } from '../config/database';
+import { BadRequestError } from '../errors/api.errors';
+import { ExamStatus } from '@prisma/client';
 
 // const prisma = new PrismaClient(); // Removed local instantiation
 
@@ -18,10 +20,31 @@ const examSelect = {
 
 export async function createExam(data: Prisma.ExamUncheckedCreateInput) {
   try {
-    return await prisma.exam.create({
-      data,
-      select: examSelect,
-    });
+    return prisma.$transaction(
+      async (tx) => {
+        // Guard: active exam with same name in same business
+        const existing = await tx.exam.findFirst({
+          where: {
+            businessId: data.businessId,
+            name: data.name,
+            status: ExamStatus.ACTIVE,
+          },
+          select: { id: true },
+        });
+
+        if (existing) {
+          throw new BadRequestError('Exam with this name already exists for this business');
+        }
+
+        return tx.exam.create({
+          data,
+          select: examSelect,
+        });
+      },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      }
+    );
   } catch (error) {
     throw error;
   }
@@ -110,11 +133,35 @@ export async function findActiveExamsByBusinessId(businessId: number, options: E
 
 export async function updateExam(id: number, data: Prisma.ExamUncheckedUpdateInput) {
   try {
-    return await prisma.exam.update({
-      where: { id },
-      data,
-      select: examSelect
-    });
+    return prisma.$transaction(
+      async (tx) => {
+        // If name is being changed, enforce uniqueness
+        if (data.name) {
+          const existing = await tx.exam.findFirst({
+            where: {
+              businessId: data.businessId as number,
+              name: data.name as string,
+              status: 'ACTIVE',
+              NOT: { id },
+            },
+            select: { id: true },
+          });
+
+          if (existing) {
+            throw new BadRequestError('Exam with this name already exists for this business');
+          }
+        }
+
+        return tx.exam.update({
+          where: { id },
+          data,
+          select: examSelect,
+        });
+      },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      }
+    );
   } catch (error) {
     throw error;
   }

@@ -1,6 +1,18 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## Version [1.1.11] - Re add exam after delete error resolved
+**P.R raised by**  : shubh404-SE
+**Date** : 2026-02-1
+### Changed
+- Removed database-level unique constraints for exam name enforcement.
+- Implemented application-level validation to ensure only one **ACTIVE** exam with the same name exists per business.
+### Fixed
+- Prevented creation of multiple ACTIVE exams with the same name under concurrent requests.
+- Resolved issues caused by soft-deletes (`status = INACTIVE`) interfering with uniqueness constraints.
+
+----
+
 ## Version [1.1.10] - Content API Admin Access Fix
 **P.R raised by**  : shubh404-SE
 **Date** : 2026-02-1
