@@ -14,6 +14,24 @@ const router = Router();
 
 /**
  * @swagger
+ * /api/batches/all:
+ *   get:
+ *     summary: Get all active batches (role-aware)
+ *     tags: [Batches]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Active batches fetched successfully
+ *       403:
+ *         description: Forbidden
+ *       500:
+ *         description: Internal server error
+ */
+router.get('/all', batchController.getAllActiveBatches);
+
+/**
+ * @swagger
  * /api/batches:
  *   post:
  *     summary: Create a new batch

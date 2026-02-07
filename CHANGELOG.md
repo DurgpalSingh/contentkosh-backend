@@ -1,6 +1,17 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## Version [1.1.11] - Active Batches (Role-Aware)
+**P.R raised by**  : Shubh404-SE
+**Date** : 2026-02-06
+
+### Added
+- **Active Batches API**: Added role-aware endpoint to fetch active batches.
+  - `GET /api/batches/all`
+  - **ADMIN**: all active batches in their business.
+  - **TEACHER/STUDENT**: only active batches they belong to.
+  - **SUPERADMIN**: all active batches across businesses.
+
 ## Version [1.1.10] - Content API Admin Access Fix
 **P.R raised by**  : shubh404-SE
 **Date** : 2026-02-1
