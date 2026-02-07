@@ -74,7 +74,7 @@ export class ExamService {
         return exams.map(e => ExamMapper.toDomain(e));
     }
 
-    async updateExam(id: number, data: UpdateExamDto, userId: number): Promise<Exam> {
+    async updateExam(id: number, data: UpdateExamDto, userId: number, businessId: number): Promise<Exam> {
         logger.info('ExamService: Updating exam', { examId: id });
 
         // Map DTO to Prisma input (clean undefineds)
@@ -90,12 +90,7 @@ export class ExamService {
 
         try {
             if (data.name) {
-                const current = await examRepo.findExamById(id, { select: { id: true, businessId: true } });
-                if (!current) {
-                    throw new NotFoundError('Exam not found');
-                }
-
-                const existing = await examRepo.findActiveExamByName(current.businessId, data.name, id);
+                const existing = await examRepo.findActiveExamByName(businessId, data.name, id);
                 if (existing) {
                     throw new BadRequestError('Exam with this name already exists for this business');
                 }
