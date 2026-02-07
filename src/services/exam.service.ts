@@ -22,6 +22,11 @@ export class ExamService {
         };
 
         try {
+            const existing = await examRepo.findActiveExamByName(data.businessId, data.name);
+            if (existing) {
+                throw new BadRequestError('Exam with this name already exists for this business');
+            }
+
             const exam = await examRepo.createExam(createData);
             return ExamMapper.toDomain(exam);
         } catch (error: any) {
@@ -84,6 +89,18 @@ export class ExamService {
         };
 
         try {
+            if (data.name) {
+                const current = await examRepo.findExamById(id, { select: { id: true, businessId: true } });
+                if (!current) {
+                    throw new NotFoundError('Exam not found');
+                }
+
+                const existing = await examRepo.findActiveExamByName(current.businessId, data.name, id);
+                if (existing) {
+                    throw new BadRequestError('Exam with this name already exists for this business');
+                }
+            }
+
             const exam = await examRepo.updateExam(id, updateData);
             logger.info(`ExamService: Exam updated successfully: ${exam.name}`);
             return ExamMapper.toDomain(exam);
