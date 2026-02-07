@@ -1,11 +1,10 @@
-import { Prisma } from '@prisma/client';
 import * as businessRepo from '../repositories/business.repo';
 import * as userRepo from '../repositories/user.repo';
 import { AlreadyExistsError, BadRequestError, NotFoundError } from '../errors/api.errors';
 
 export class BusinessService {
 
-    static async createBusiness(data: Prisma.BusinessCreateInput, userId: number) {
+    static async createBusiness(data: businessRepo.BusinessCreateInput, userId: number) {
         // Validation: Check if slug is taken
         if (data.slug) {
             const existingSlug = await businessRepo.findBusinessBySlug(data.slug);
@@ -41,7 +40,7 @@ export class BusinessService {
         return business;
     }
 
-    static async updateBusiness(id: number, data: Prisma.BusinessUpdateInput) {
+    static async updateBusiness(id: number, data: businessRepo.BusinessUpdateInput) {
         // Check existence
         const existing = await businessRepo.findBusinessById(id);
         if (!existing) throw new NotFoundError('Business not found');
