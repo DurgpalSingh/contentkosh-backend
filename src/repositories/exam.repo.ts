@@ -1,5 +1,6 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 import { prisma } from '../config/database';
+import { ExamStatus } from '@prisma/client';
 
 // const prisma = new PrismaClient(); // Removed local instantiation
 
@@ -17,14 +18,17 @@ const examSelect = {
 };
 
 export async function createExam(data: Prisma.ExamUncheckedCreateInput) {
-  try {
-    return await prisma.exam.create({
-      data,
-      select: examSelect,
-    });
-  } catch (error) {
-    throw error;
-  }
+  return prisma.$transaction(
+    async (tx) => {
+      return tx.exam.create({
+        data,
+        select: examSelect,
+      });
+    },
+    {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    }
+  );
 }
 
 // Define options interface to replace 'any'
@@ -108,16 +112,35 @@ export async function findActiveExamsByBusinessId(businessId: number, options: E
   return prisma.exam.findMany(query);
 }
 
+export async function findActiveExamByName(
+  businessId: number,
+  name: string,
+  excludeId?: number
+) {
+  return prisma.exam.findFirst({
+    where: {
+      businessId,
+      name,
+      status: ExamStatus.ACTIVE,
+      ...(excludeId ? { NOT: { id: excludeId } } : {}),
+    },
+    select: { id: true },
+  });
+}
+
 export async function updateExam(id: number, data: Prisma.ExamUncheckedUpdateInput) {
-  try {
-    return await prisma.exam.update({
-      where: { id },
-      data,
-      select: examSelect
-    });
-  } catch (error) {
-    throw error;
-  }
+  return prisma.$transaction(
+    async (tx) => {
+      return tx.exam.update({
+        where: { id },
+        data,
+        select: examSelect,
+      });
+    },
+    {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    }
+  );
 }
 
 export async function deleteExam(id: number) {

@@ -132,7 +132,7 @@ export const updateExam = async (req: Request, res: Response) => {
             return ApiResponseHandler.unauthorized(res, 'User not authenticated');
         }
 
-        const exam = await examService.updateExam(id, examDataInput, userId);
+        const exam = await examService.updateExam(id, examDataInput, userId, businessId);
 
         ApiResponseHandler.success(res, exam, 'Exam updated successfully');
     } catch (error: any) {

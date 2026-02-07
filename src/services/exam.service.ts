@@ -1,4 +1,4 @@
-import { Prisma, Exam, UserRole } from '@prisma/client';
+import { Exam, UserRole } from '@prisma/client';
 import * as examRepo from '../repositories/exam.repo';
 import { CreateExamDto, UpdateExamDto } from '../dtos/exam.dto';
 import { NotFoundError, BadRequestError, ForbiddenError } from '../errors/api.errors';
@@ -11,8 +11,7 @@ export class ExamService {
     async createExam(data: CreateExamDto, userId: number): Promise<Exam> {
         logger.info('ExamService: Creating new exam', { name: data.name, businessId: data.businessId });
 
-        // Map DTO to Prisma input
-        const createData: Prisma.ExamUncheckedCreateInput = {
+        const createData = {
             name: data.name,
             code: data.code ?? null,
             description: data.description ?? null,
@@ -23,6 +22,11 @@ export class ExamService {
         };
 
         try {
+            const existing = await examRepo.findActiveExamByName(data.businessId, data.name);
+            if (existing) {
+                throw new BadRequestError('Exam with this name already exists for this business');
+            }
+
             const exam = await examRepo.createExam(createData);
             return ExamMapper.toDomain(exam);
         } catch (error: any) {
@@ -70,11 +74,11 @@ export class ExamService {
         return exams.map(e => ExamMapper.toDomain(e));
     }
 
-    async updateExam(id: number, data: UpdateExamDto, userId: number): Promise<Exam> {
+    async updateExam(id: number, data: UpdateExamDto, userId: number, businessId: number): Promise<Exam> {
         logger.info('ExamService: Updating exam', { examId: id });
 
         // Map DTO to Prisma input (clean undefineds)
-        const updateData: Prisma.ExamUncheckedUpdateInput = {
+        const updateData = {
             ...(data.name && { name: data.name }),
             ...(data.code !== undefined && { code: data.code }), // Allow null/empty string if passed, but typically optional in DTO means undefined
             ...(data.description !== undefined && { description: data.description }),
@@ -85,6 +89,13 @@ export class ExamService {
         };
 
         try {
+            if (data.name) {
+                const existing = await examRepo.findActiveExamByName(businessId, data.name, id);
+                if (existing) {
+                    throw new BadRequestError('Exam with this name already exists for this business');
+                }
+            }
+
             const exam = await examRepo.updateExam(id, updateData);
             logger.info(`ExamService: Exam updated successfully: ${exam.name}`);
             return ExamMapper.toDomain(exam);
