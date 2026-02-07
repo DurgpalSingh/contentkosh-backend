@@ -3,6 +3,7 @@ import { batchController } from '../../../src/controllers/batch.controller';
 import { BatchService } from '../../../src/services/batch.service';
 import { ApiResponseHandler } from '../../../src/utils/apiResponse';
 import { BadRequestError, NotFoundError, AlreadyExistsError } from '../../../src/errors/api.errors';
+import { AuthRequest } from '../../../src/dtos/auth.dto';
 
 // Do NOT mock BatchService module. Use spyOn.
 // Do NOT mock ValidationUtils. Use real implementation.
@@ -13,7 +14,7 @@ jest.mock('../../../src/utils/apiResponse');
 jest.mock('../../../src/utils/logger');
 
 describe('Batch Controller', () => {
-    let req: Partial<Request>;
+    let req: Partial<AuthRequest>;
     let res: Partial<Response>;
 
     // Spies
@@ -29,7 +30,9 @@ describe('Batch Controller', () => {
     let updateBatchUserSpy: jest.SpyInstance;
 
     beforeEach(() => {
-        req = {};
+        req = {
+            user: { id: 1, role: 'ADMIN', businessId: 1, email: 'test@example.com' }
+        };
         res = {
             status: jest.fn().mockReturnThis(),
             json: jest.fn(),
@@ -142,7 +145,7 @@ describe('Batch Controller', () => {
 
             await batchController.getBatchesByCourse(req as Request, res as Response);
 
-            expect(getBatchesByCourseSpy).toHaveBeenCalledWith(1, expect.any(Object));
+            expect(getBatchesByCourseSpy).toHaveBeenCalledWith(1, expect.anything(), expect.any(Object));
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockBatches, 'Batches fetched successfully');
         });
 
@@ -151,7 +154,7 @@ describe('Batch Controller', () => {
             req.query = { active: 'true' };
             getBatchesByCourseSpy.mockResolvedValue([]);
             await batchController.getBatchesByCourse(req as Request, res as Response);
-            expect(getBatchesByCourseSpy).toHaveBeenCalledWith(1, expect.any(Object));
+            expect(getBatchesByCourseSpy).toHaveBeenCalledWith(1, expect.anything(), expect.any(Object));
         });
     });
 

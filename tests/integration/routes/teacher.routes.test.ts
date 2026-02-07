@@ -1,6 +1,24 @@
 import request from 'supertest';
 import express from 'express';
-import { TeacherStatus } from '@prisma/client';
+import { TeacherStatus, Gender } from '@prisma/client';
+
+// Mock @prisma/client before other imports that might use it
+jest.mock('@prisma/client', () => {
+    const originalModule = jest.requireActual('@prisma/client');
+    return {
+        ...originalModule,
+        TeacherStatus: {
+            ACTIVE: 'ACTIVE',
+            INACTIVE: 'INACTIVE'
+        },
+        Gender: {
+            male: 'male',
+            female: 'female',
+            other: 'other'
+        }
+    };
+});
+
 import { TeacherService } from '../../../src/services/teacher.service';
 import * as TeacherRepo from '../../../src/repositories/teacher.repo';
 import * as UserRepo from '../../../src/repositories/user.repo';

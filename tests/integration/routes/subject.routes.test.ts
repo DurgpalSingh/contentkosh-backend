@@ -12,7 +12,10 @@ jest.mock('../../../src/repositories/subject.repo');
 jest.mock('../../../src/repositories/course.repo');
 jest.mock('../../../src/repositories/exam.repo');
 jest.mock('../../../src/middlewares/auth.middleware', () => ({
-    authorize: () => (req: any, res: any, next: any) => next(),
+    authorize: () => (req: any, res: any, next: any) => {
+        req.user = { id: 1, role: 'ADMIN', businessId: 1 };
+        next();
+    },
 }));
 jest.mock('../../../src/middlewares/validation.middleware', () => ({
     validateIdParam: () => (req: any, res: any, next: any) => next(),
