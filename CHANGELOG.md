@@ -30,9 +30,6 @@ All notable changes to this project will be documented in this file.
     - **Business Service**: Created `BusinessService` to decouple controller from repository.
     - **DTOs**: Implemented strict validation using `CreateBusinessDto` and `UpdateBusinessDto`.
     - **Controller**: Refactored `BusinessController` to use DTOs and Service layer.
-
-
-
 ## Version [1.1.10] - Content API Admin Access Fix
 **P.R raised by**  : shubh404-SE
 **Date** : 2026-02-1
