@@ -1,4 +1,5 @@
 import { Prisma, Batch, UserRole } from '@prisma/client';
+import { ParsedQs } from 'qs';
 import * as batchRepo from '../repositories/batch.repo';
 import * as courseRepo from '../repositories/course.repo';
 import * as userRepo from '../repositories/user.repo';
@@ -7,6 +8,7 @@ import { NotFoundError, BadRequestError, AlreadyExistsError, ForbiddenError } fr
 import { IUser } from '../dtos/auth.dto';
 import logger from '../utils/logger';
 import { BatchMapper } from '../mappers/batch.mapper';
+import { QueryBuilder } from '../utils/queryBuilder';
 
 export class BatchService {
 
@@ -51,8 +53,14 @@ export class BatchService {
     }
 
 
-    async getBatchesByCourse(courseId: number, user: IUser, options: batchRepo.BatchFindOptions = {}): Promise<Batch[]> {
+    async getBatchesByCourse(courseId: number, user: IUser, query: ParsedQs = {}): Promise<Batch[]> {
         logger.info('BatchService: Fetching batches for course', { courseId, userId: user.id, role: user.role });
+
+        const options = QueryBuilder.parse(query);
+
+        if (query.active === 'true') {
+            options.where = { ...options.where, isActive: true };
+        }
 
         if (user.role === UserRole.TEACHER) {
             options.where = {
@@ -180,8 +188,10 @@ export class BatchService {
         return await batchRepo.findUsersByBatchId(batchId, role);
     }
 
-    async getAllActiveBatches(user: IUser, options: batchRepo.BatchFindOptions = {}): Promise<Batch[]> {
+    async getAllActiveBatches(user: IUser, query: ParsedQs = {}): Promise<Batch[]> {
         logger.info('BatchService: Fetching all active batches', { userId: user.id, role: user.role });
+
+        const options = QueryBuilder.parse(query);
 
         const isSuperAdmin = user.role === UserRole.SUPERADMIN;
         const isAdmin = user.role === UserRole.ADMIN;

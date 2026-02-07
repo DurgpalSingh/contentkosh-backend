@@ -7,7 +7,7 @@ import { ValidationUtils } from '../utils/validation';
 import { plainToInstance } from 'class-transformer';
 import { CreateBatchDto, UpdateBatchDto, AddUserToBatchDto, RemoveUserFromBatchDto, UpdateBatchUserDto } from '../dtos/batch.dto';
 import { BatchService } from '../services/batch.service';
-import { QueryBuilder } from '../utils/queryBuilder';
+import { AuthRequest } from '../dtos/auth.dto';
 
 export class BatchController {
   private batchService: BatchService;
@@ -47,17 +47,13 @@ export class BatchController {
 
   public getAllActiveBatches = async (req: Request, res: Response) => {
     try {
-      const options = QueryBuilder.parse(req.query);
-      const user = (req as any).user;
+      const queryParams  = req.query;
+      const user = (req as AuthRequest).user!;
 
-      if (!user) {
-        return ApiResponseHandler.unauthorized(res, 'User not authenticated');
-      }
-
-      const batches = await this.batchService.getAllActiveBatches(user, options);
+      const batches = await this.batchService.getAllActiveBatches(user, queryParams);
       ApiResponseHandler.success(res, batches, 'Active batches fetched successfully');
     } catch (error: any) {
-      if (error instanceof ForbiddenError || error.name === 'ForbiddenError') {
+      if (error instanceof ForbiddenError) {
         return ApiResponseHandler.error(res, error.message, 403);
       }
       logger.error(`Error fetching active batches: ${error.message}`);
@@ -68,18 +64,9 @@ export class BatchController {
   public getBatchesByCourse = async (req: Request, res: Response) => {
     try {
       const courseId = ValidationUtils.validateId(req.params.courseId, 'Course ID');
-      const options = QueryBuilder.parse(req.query);
-
-      if (req.query.active === 'true') {
-        options.where = { ...options.where, isActive: true };
-      }
-
-      const user = (req as any).user;
-      if (!user) {
-        return ApiResponseHandler.unauthorized(res, 'User not authenticated');
-      }
-
-      const batches = await this.batchService.getBatchesByCourse(courseId, user, options);
+      const queryParams  = req.query;
+      const user = (req as AuthRequest).user!;
+      const batches = await this.batchService.getBatchesByCourse(courseId, user,  queryParams);
       ApiResponseHandler.success(res, batches, 'Batches fetched successfully');
     } catch (error: any) {
       logger.error(`Error fetching batches for course: ${error.message}`);
