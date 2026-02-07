@@ -330,6 +330,7 @@ model Teacher {
 
 model ApiAuditLog {
   id             Int      @id @default(autoincrement())
+  businessId     Int?     @map("business_id")
   userId         Int?     @map("user_id")
   role           String?
   httpMethod     String   @map("http_method")

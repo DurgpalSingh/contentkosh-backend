@@ -1,9 +1,7 @@
-import { PrismaClient } from '@prisma/client';
-import { SystemConfig } from '@prisma/client'; // This import might fail if generate failed to add SystemConfig, but I have to try.
-
 import { auditConfig } from '../config/audit.config';
+import { auditRepo } from '../repositories/audit.repo';
+import logger from '../utils/logger';
 
-const prisma = new PrismaClient();
 const AUDIT_ENABLED_KEY = 'AUDIT_ENABLED';
 
 let isEnabledCache: boolean | null = null;
@@ -21,16 +19,13 @@ export const auditService = {
         }
 
         try {
-            // @ts-ignore - SystemConfig might not be generated yet in client types
-            const config = await prisma.systemConfig.findUnique({
-                where: { key: AUDIT_ENABLED_KEY },
-            });
+            const config = await auditRepo.findSystemConfig(AUDIT_ENABLED_KEY);
 
             isEnabledCache = config ? config.value === 'true' : true; // Default to true if not set? Or false? Let's default to true.
             lastCacheUpdate = now;
             return isEnabledCache;
         } catch (error) {
-            console.error('Error checking audit status, defaulting to true:', error);
+            logger.error(`Error checking audit status: ${error}`);
             return true;
         }
     },
@@ -39,17 +34,19 @@ export const auditService = {
      * Enable or disable auditing.
      */
     async setAuditingEnabled(enabled: boolean): Promise<void> {
+        logger.info(`Setting audit enabled to: ${enabled}`);
         const value = String(enabled);
 
-        // @ts-ignore
-        await prisma.systemConfig.upsert({
-            where: { key: AUDIT_ENABLED_KEY },
-            update: { value },
-            create: { key: AUDIT_ENABLED_KEY, value },
-        });
+        try {
+            await auditRepo.upsertSystemConfig(AUDIT_ENABLED_KEY, value);
 
-        isEnabledCache = enabled;
-        lastCacheUpdate = Date.now();
+            isEnabledCache = enabled;
+            lastCacheUpdate = Date.now();
+            logger.info('Audit status updated successfully');
+        } catch (error) {
+            logger.error(`Error setting audit status: ${error}`);
+            throw error;
+        }
     },
 
     /**
@@ -57,21 +54,17 @@ export const auditService = {
      */
     async cleanupOldAudits(): Promise<number> {
         const retentionDays = auditConfig.retentionDays;
+        logger.info(`Cleaning up audit logs older than ${retentionDays} days`);
+
         const cutoffDate = new Date();
         cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
 
         try {
-            // @ts-ignore
-            const result = await prisma.apiAuditLog.deleteMany({
-                where: {
-                    createdAt: {
-                        lt: cutoffDate,
-                    },
-                },
-            });
+            const result = await auditRepo.deleteOldAuditLogs(cutoffDate);
+            logger.info(`Deleted ${result.count} old audit logs`);
             return result.count;
         } catch (error) {
-            console.error('Error cleaning up old audits:', error);
+            logger.error(`Error cleaning up old audits: ${error}`);
             throw error;
         }
     }

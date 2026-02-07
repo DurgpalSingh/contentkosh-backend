@@ -95,128 +95,164 @@ export class AuthService {
   }
 
   static async register(data: RegisterRequest): Promise<AuthResponse> {
-    const hashedPassword = await this.hashPassword(data.password);
+    logger.info(`Registering new user: ${data.email}`);
+    try {
+      const hashedPassword = await this.hashPassword(data.password);
 
-    // Note: Creating user without businessId initially. 
-    // Users are associated with a business when an admin adds them to a business-specific entity (like Batch),
-    // or if the registration flow identifies the business context (not currently in RegisterRequest).
-    const newUser = await userRepo.createUser({
-      name: data.name,
-      email: data.email,
-      password: hashedPassword,
-      mobile: data.mobile,
-      role: data.role || UserRole.USER,
-      status: UserStatus.ACTIVE
-    });
+      // Note: Creating user without businessId initially. 
+      // Users are associated with a business when an admin adds them to a business-specific entity (like Batch),
+      // or if the registration flow identifies the business context (not currently in RegisterRequest).
+      const newUser = await userRepo.createUser({
+        name: data.name,
+        email: data.email,
+        password: hashedPassword,
+        mobile: data.mobile,
+        role: data.role || UserRole.USER,
+        status: UserStatus.ACTIVE
+      });
 
-    const accessToken = this.generateAccessToken({
-      id: newUser.id,
-      email: newUser.email,
-      role: newUser.role,
-      businessId: newUser.businessId
-    });
-
-    const refreshToken = await this.generateRefreshToken(newUser.id);
-
-    return {
-      accessToken,
-      refreshToken,
-      user: {
+      const accessToken = this.generateAccessToken({
         id: newUser.id,
         email: newUser.email,
-        name: newUser.name,
         role: newUser.role,
         businessId: newUser.businessId
-      }
-    };
+      });
+
+      const refreshToken = await this.generateRefreshToken(newUser.id);
+
+      logger.info(`User registered successfully: ${newUser.id} (${newUser.email})`);
+
+      return {
+        accessToken,
+        refreshToken,
+        user: {
+          id: newUser.id,
+          email: newUser.email,
+          name: newUser.name,
+          role: newUser.role,
+          businessId: newUser.businessId
+        }
+      };
+    } catch (error) {
+      logger.error(`Registration failed for email ${data.email}: ${error}`);
+      throw error;
+    }
   }
 
   static async login(data: LoginRequest): Promise<AuthResponse> {
-    const user = await userRepo.findByEmailWithBusinesses(data.email);
+    logger.info(`Login attempt for email: ${data.email}`);
+    try {
+      const user = await userRepo.findByEmailWithBusinesses(data.email);
 
-    if (!user) {
-      throw new AuthError('Invalid email or password');
-    }
+      if (!user) {
+        logger.warn(`Login failed: User not found for email ${data.email}`);
+        throw new AuthError('Invalid email or password');
+      }
 
-    const isMatch = await this.verifyPassword(data.password, user.password);
-    if (!isMatch) {
-      throw new AuthError('Invalid email or password');
-    }
+      const isMatch = await this.verifyPassword(data.password, user.password);
+      if (!isMatch) {
+        logger.warn(`Login failed: Invalid password for email ${data.email}`);
+        throw new AuthError('Invalid email or password');
+      }
 
-    if (user.status !== UserStatus.ACTIVE) {
-      throw new ForbiddenError('User account is inactive');
-    }
+      if (user.status !== UserStatus.ACTIVE) {
+        logger.warn(`Login failed: Inactive user ${data.email}`);
+        throw new ForbiddenError('User account is inactive');
+      }
 
-    const accessToken = this.generateAccessToken({
-      id: user.id,
-      email: user.email,
-      role: user.role,
-      businessId: user.businessId
-    });
-
-    const refreshToken = await this.generateRefreshToken(user.id);
-
-    return {
-      accessToken,
-      refreshToken,
-      user: {
+      const accessToken = this.generateAccessToken({
         id: user.id,
         email: user.email,
-        name: user.name,
         role: user.role,
         businessId: user.businessId
+      });
+
+      const refreshToken = await this.generateRefreshToken(user.id);
+
+      logger.info(`User logged in successfully: ${user.id} (${user.email})`);
+
+      return {
+        accessToken,
+        refreshToken,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          businessId: user.businessId
+        }
+      };
+    } catch (error) {
+      if (error instanceof AuthError || error instanceof ForbiddenError) {
+        throw error;
       }
-    };
+      logger.error(`Login error for email ${data.email}: ${error}`);
+      throw error;
+    }
   }
 
   static async refreshTokens(refreshToken: string): Promise<AuthResponse> {
-    // Find the refresh token in database
-    const storedToken = await refreshTokenRepo.findByToken(refreshToken);
+    try {
+      // Find the refresh token in database
+      const storedToken = await refreshTokenRepo.findByToken(refreshToken);
 
-    if (!storedToken) {
-      throw new AuthError('Invalid refresh token');
-    }
+      if (!storedToken) {
+        logger.warn('Refresh token failed: Token not found');
+        throw new AuthError('Invalid refresh token');
+      }
 
-    // Check if token is revoked
-    if (storedToken.isRevoked) {
-      throw new AuthError('Refresh token has been revoked');
-    }
+      // Check if token is revoked
+      if (storedToken.isRevoked) {
+        logger.warn(`Refresh token failed: Token revoked (User: ${storedToken.user.id})`);
+        throw new AuthError('Refresh token has been revoked');
+      }
 
-    // Check if token is expired
-    if (new Date() > storedToken.expiresAt) {
-      throw new AuthError('Refresh token has expired');
-    }
+      // Check if token is expired
+      if (new Date() > storedToken.expiresAt) {
+        logger.warn(`Refresh token failed: Token expired (User: ${storedToken.user.id})`);
+        throw new AuthError('Refresh token has expired');
+      }
 
-    // Check if user is still active
-    const user = storedToken.user;
-    if (user.status !== UserStatus.ACTIVE) {
-      throw new ForbiddenError('User account is inactive');
-    }
+      // Check if user is still active
+      const user = storedToken.user;
+      if (user.status !== UserStatus.ACTIVE) {
+        logger.warn(`Refresh token failed: Inactive user ${user.id}`);
+        throw new ForbiddenError('User account is inactive');
+      }
 
-    // Revoke the old refresh token (rotation for security)
-    await refreshTokenRepo.revokeToken(refreshToken);
+      // Revoke the old refresh token (rotation for security)
+      await refreshTokenRepo.revokeToken(refreshToken);
 
-    // Generate new tokens
-    const newAccessToken = this.generateAccessToken({
-      id: user.id,
-      email: user.email,
-      role: user.role,
-      businessId: user.businessId
-    });
-
-    const newRefreshToken = await this.generateRefreshToken(user.id);
-
-    return {
-      accessToken: newAccessToken,
-      refreshToken: newRefreshToken,
-      user: {
+      // Generate new tokens
+      const newAccessToken = this.generateAccessToken({
         id: user.id,
         email: user.email,
-        name: user.name || '',
         role: user.role,
         businessId: user.businessId
+      });
+
+      const newRefreshToken = await this.generateRefreshToken(user.id);
+
+      logger.info(`Tokens refreshed successfully for user: ${user.id}`);
+
+      return {
+        accessToken: newAccessToken,
+        refreshToken: newRefreshToken,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name || '',
+          role: user.role,
+          businessId: user.businessId
+        }
+      };
+    } catch (error) {
+      // Don't log full stack trace for known auth errors if desired, but here we log error message
+      if (!(error instanceof AuthError) && !(error instanceof ForbiddenError)) {
+        logger.error(`Error refreshing tokens: ${error}`);
       }
-    };
+      throw error;
+    }
   }
 
   static async logout(refreshToken: string): Promise<void> {

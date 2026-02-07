@@ -33,11 +33,13 @@ export const apiAuditLogger = async (req: Request, res: Response, next: NextFunc
 
         // Extract user info if available (assuming populated by auth middleware)
         const userId = (req as any).user?.id || null;
+        const businessId = (req as any).user?.businessId || null;
         const role = (req as any).user?.role || null;
 
         try {
             await (prisma as any).apiAuditLog.create({
                 data: {
+                    businessId: businessId,
                     userId: userId,
                     role: role,
                     httpMethod: req.method,
