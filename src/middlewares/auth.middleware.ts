@@ -22,9 +22,6 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
             return;
         }
 
-        // Validate access token - no DB call needed
-        // JWT is short-lived (15 min) so we trust it
-        // User status is verified on token refresh
         const iuser = AuthService.verifyAccessToken(token);
         if (!iuser) {
             ApiResponseHandler.unauthorized(res, 'Invalid or expired token');
@@ -55,7 +52,7 @@ export const authorize = (...roles: UserRole[]) => {
         if (!req.user) {
             return ApiResponseHandler.error(res, 'Unauthorized', 401);
         }
-        if (!roles.includes(req.user.role)) {
+        if (roles.length > 0 && !roles.includes(req.user.role)) {
             return ApiResponseHandler.error(res, 'Forbidden', 403);
         }
         next();
