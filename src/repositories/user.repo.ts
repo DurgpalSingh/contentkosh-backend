@@ -74,7 +74,7 @@ export function findPublicById(id: number) {
       businessId: true,
       createdAt: true,
       updatedAt: true,
-      business: { select: { id: true, instituteName: true } }
+      business: { select: { id: true, instituteName: true, slug: true } }
     }
   });
 }
@@ -138,7 +138,7 @@ export function findByEmailWithBusinesses(email: string) {
       businessId: true,
       createdAt: true,
       updatedAt: true,
-      business: { select: { id: true, instituteName: true } }
+      business: { select: { id: true, instituteName: true, slug: true } }
     }
   });
 }

@@ -1,3 +1,4 @@
+import { UserRole } from '@prisma/client';
 import * as businessRepo from '../repositories/business.repo';
 import * as userRepo from '../repositories/user.repo';
 import { AlreadyExistsError, BadRequestError, NotFoundError } from '../errors/api.errors';
@@ -18,8 +19,11 @@ export class BusinessService {
         // Create Business
         const business = await businessRepo.createBusiness(data);
 
-        // Update User to be associated with this business (Owner)
-        await userRepo.updateUser(userId, { businessId: business.id });
+
+        await userRepo.updateUser(userId, {
+            businessId: business.id,
+            role: UserRole.ADMIN
+        });
 
         return business;
     }
