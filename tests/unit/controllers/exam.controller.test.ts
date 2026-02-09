@@ -158,7 +158,7 @@ describe('Exam Controller', () => {
 
             await ExamController.getExamsByBusiness(req as Request, res as Response);
 
-            expect(getExamsByBusinessSpy).toHaveBeenCalledWith(1, expect.anything(), expect.anything());
+            expect(getExamsByBusinessSpy).toHaveBeenCalledWith(1, req.user, expect.anything());
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockExams, 'Exams fetched successfully');
         });
 
@@ -184,7 +184,7 @@ describe('Exam Controller', () => {
 
             await ExamController.updateExam(req as Request, res as Response);
 
-            expect(updateExamSpy).toHaveBeenCalledWith(1, req.body, 1);
+            expect(updateExamSpy).toHaveBeenCalledWith(1, req.body, 1, 1);
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, updatedExam, 'Exam updated successfully');
         });
 
