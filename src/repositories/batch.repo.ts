@@ -76,16 +76,21 @@ export async function findBatchByCodeName(codeName: string) {
   });
 }
 
+export interface BatchInclude extends Prisma.BatchInclude {
+  students?: boolean;
+}
+
 export async function findBatchesByCourseId(courseId: number, options: BatchFindOptions = {}) {
   // Handle "students" request whether it comes from top-level flag or nested include (legacy/compatible)
-  // Casting to any to safely check nested property without TS error if type is strict
-  const requestIncludeStudents = options.includeStudents || (options.include as any)?.students;
+  const includeOptions = options.include as BatchInclude | undefined;
+  const requestIncludeStudents = options.includeStudents || includeOptions?.students;
 
   // Clean up the nested property if it exists to avoid Prisma errors
-  if ((options.include as any)?.students) {
+  if (includeOptions?.students) {
     // Shallow copy include to avoid mutating original object if used elsewhere (good practice)
-    options.include = { ...options.include };
-    delete (options.include as any).students;
+    options.include = { ...includeOptions };
+    const cleanInclude = options.include as BatchInclude;
+    delete cleanInclude.students;
   }
 
   const query: Prisma.BatchFindManyArgs = {

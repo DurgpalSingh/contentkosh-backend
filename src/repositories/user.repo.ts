@@ -74,7 +74,7 @@ export function findPublicById(id: number) {
       businessId: true,
       createdAt: true,
       updatedAt: true,
-      business: { select: { id: true, instituteName: true } }
+      business: { select: { id: true, instituteName: true, slug: true } }
     }
   });
 }
@@ -110,7 +110,7 @@ export async function findByBusinessId(businessId: number, role?: UserRole) {
   }));
 }
 
-export function updateUser(id: number, data: { name?: string; mobile?: string; role?: UserRole; status?: UserStatus; password?: string }) {
+export function updateUser(id: number, data: { name?: string; mobile?: string; role?: UserRole; status?: UserStatus; password?: string; businessId?: number }) {
   return prisma.user.update({
     where: { id },
     data,
@@ -138,7 +138,7 @@ export function findByEmailWithBusinesses(email: string) {
       businessId: true,
       createdAt: true,
       updatedAt: true,
-      business: { select: { id: true, instituteName: true } }
+      business: { select: { id: true, instituteName: true, slug: true } }
     }
   });
 }

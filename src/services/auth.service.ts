@@ -105,7 +105,7 @@ export class AuthService {
       email: data.email,
       password: hashedPassword,
       mobile: data.mobile,
-      role: data.role || UserRole.USER,
+      role: data.role || UserRole.ADMIN,
       status: UserStatus.ACTIVE
     });
 

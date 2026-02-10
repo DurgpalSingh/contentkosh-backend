@@ -1,4 +1,23 @@
 import { Request, Response } from 'express';
+
+// Mock @prisma/client before imports that use it
+jest.mock('@prisma/client', () => {
+    const originalModule = jest.requireActual('@prisma/client');
+    return {
+        ...originalModule,
+        TeacherStatus: {
+            ACTIVE: 'ACTIVE',
+            INACTIVE: 'INACTIVE',
+            PENDING: 'PENDING'
+        },
+        Gender: {
+            male: 'male',
+            female: 'female',
+            other: 'other'
+        }
+    };
+});
+
 import { TeacherController } from '../../../src/controllers/teacher.controller';
 import { TeacherService } from '../../../src/services/teacher.service';
 import { ApiResponseHandler } from '../../../src/utils/apiResponse';

@@ -11,6 +11,7 @@ async function main() {
   const business = await prisma.business.create({
     data: {
       instituteName: 'ContentKosh Academy',
+      slug: 'contentkosh-academy',
       tagline: 'Your Gateway to Success',
       contactNumber: '+91-9876543210',
       email: 'info@contentkosh.com',
