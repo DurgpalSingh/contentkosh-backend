@@ -1,6 +1,19 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## Version [1.1.14] - Active Batches (Role-Aware)
+**P.R raised by**  : Shubh404-SE
+**Date** : 2026-02-06
+
+### Added
+- **Active Batches API**: Added role-aware endpoint to fetch active batches.
+  - `GET /api/batches/all`
+  - **ADMIN**: all active batches in their business.
+  - **TEACHER/STUDENT**: only active batches they belong to.
+  - **SUPERADMIN**: all active batches across businesses.
+
+---
+
 ## Version [1.1.13] - Exam Name Validation
 **P.R raised by**  : shubh404-SE
 **Date** : 2026-02-10
@@ -23,8 +36,6 @@ All notable changes to this project will be documented in this file.
     - **Business Service**: Created `BusinessService` to decouple controller from repository.
     - **DTOs**: Implemented strict validation using `CreateBusinessDto` and `UpdateBusinessDto`.
     - **Controller**: Refactored `BusinessController` to use DTOs and Service layer.
-
----
 
 ## Version [1.1.11] - Re add exam after delete error resolved
 **P.R raised by**  : shubh404-SE

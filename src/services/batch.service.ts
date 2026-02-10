@@ -1,4 +1,5 @@
 import { Prisma, Batch, UserRole } from '@prisma/client';
+import { ParsedQs } from 'qs';
 import * as batchRepo from '../repositories/batch.repo';
 import * as courseRepo from '../repositories/course.repo';
 import * as userRepo from '../repositories/user.repo';
@@ -7,6 +8,7 @@ import { NotFoundError, BadRequestError, AlreadyExistsError, ForbiddenError } fr
 import { IUser } from '../dtos/auth.dto';
 import logger from '../utils/logger';
 import { BatchMapper } from '../mappers/batch.mapper';
+import { QueryBuilder } from '../utils/queryBuilder';
 
 export class BatchService {
 
@@ -51,8 +53,14 @@ export class BatchService {
     }
 
 
-    async getBatchesByCourse(courseId: number, user: IUser, options: batchRepo.BatchFindOptions = {}): Promise<Batch[]> {
+    async getBatchesByCourse(courseId: number, user: IUser, query: ParsedQs = {}): Promise<Batch[]> {
         logger.info('BatchService: Fetching batches for course', { courseId, userId: user.id, role: user.role });
+
+        const options = QueryBuilder.parse(query);
+
+        if (query.active === 'true') {
+            options.where = { ...options.where, isActive: true };
+        }
 
         if (user.role === UserRole.TEACHER) {
             options.where = {
@@ -178,6 +186,35 @@ export class BatchService {
     async getUsersByBatch(batchId: number, role?: UserRole) {
         logger.info('BatchService: Fetching users for batch', { batchId, role });
         return await batchRepo.findUsersByBatchId(batchId, role);
+    }
+
+    async getAllActiveBatches(user: IUser, query: ParsedQs = {}): Promise<Batch[]> {
+        logger.info('BatchService: Fetching all active batches', { userId: user.id, role: user.role });
+
+        const options = QueryBuilder.parse(query);
+        // Role-based access validation
+        const allowedRoles: UserRole[] = [UserRole.SUPERADMIN, UserRole.ADMIN, UserRole.TEACHER, UserRole.STUDENT];
+        if (!allowedRoles.includes(user.role)) {
+            throw new ForbiddenError('You do not have access to view batches');
+        }
+
+        // SUPERADMIN requires no business context; others must have business association
+        if (user.role !== UserRole.SUPERADMIN && !user.businessId) {
+            throw new ForbiddenError('User is not associated with a business');
+        }
+
+        options.where = {
+            ...(options.where || {}),
+            isActive: true,
+        };
+        const scopedOptions = batchRepo.applyBatchAccessFilters(options, {
+            role: user.role,
+            userId: user.id,
+            businessId: user.businessId!,
+        });
+
+        const batches = await batchRepo.findBatches(scopedOptions);
+        return batches.map((b: Batch) => BatchMapper.toDomain(b));
     }
 
     async updateBatchUser(batchId: number, userId: number, data: any) {

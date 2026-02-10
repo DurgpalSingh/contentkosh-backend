@@ -140,6 +140,59 @@ export async function findBatchesByCourseId(courseId: number, options: BatchFind
   return prisma.batch.findMany(query);
 }
 
+export async function findBatches(options: BatchFindOptions = {}) {
+  // Support legacy options.include.students flag; translate it to batchUsers include and strip it out.
+  const includeWithLegacy = options.include as (Prisma.BatchInclude & { students?: boolean }) | undefined;
+  const requestIncludeStudents = options.includeStudents || includeWithLegacy?.students;
+
+  if (includeWithLegacy?.students) {
+    options.include = { ...options.include };
+    delete (options.include as (Prisma.BatchInclude & { students?: boolean })).students;
+  }
+
+  const query: Prisma.BatchFindManyArgs = {
+    where: {
+      ...(options.where ?? {}),
+    },
+    orderBy: options.orderBy ?? { createdAt: 'desc' },
+    skip: options.skip!,
+    take: options.take!,
+  };
+
+  if (requestIncludeStudents) {
+    query.include = {
+      ...(options.include || {}),
+      batchUsers: {
+        where: {
+          user: { role: UserRole.STUDENT }
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              mobile: true,
+              role: true
+            }
+          }
+        }
+      }
+    };
+  } else if (options.select) {
+    query.select = options.select;
+  } else if (options.include) {
+    query.include = options.include;
+  } else {
+    query.select = {
+      ...batchSelect,
+      course: { select: courseSelect }
+    };
+  }
+
+  return prisma.batch.findMany(query);
+}
+
 export async function findActiveBatchesByCourseId(courseId: number, options: BatchFindOptions = {}) {
   return findBatchesByCourseId(courseId, {
     ...options,
@@ -292,3 +345,35 @@ export async function updateBatchUser(userId: number, batchId: number, data: Pri
 }
 
 
+export function applyBatchAccessFilters(
+  options: BatchFindOptions,
+  access: { role: UserRole; userId: number; businessId?: number },
+): BatchFindOptions {
+  const next: BatchFindOptions = {
+    ...options,
+    where: { ...(options.where ?? {}) },
+  };
+
+  if (access.role !== UserRole.SUPERADMIN && access.businessId) {
+    next.where = {
+      ...next.where,
+      course: {
+        exam: { businessId: access.businessId }
+      }
+    };
+  }
+
+  if (access.role === UserRole.TEACHER || access.role === UserRole.STUDENT) {
+    next.where = {
+      ...next.where,
+      batchUsers: {
+        some: {
+          userId: access.userId,
+          isActive: true
+        }
+      }
+    };
+  }
+
+  return next;
+}

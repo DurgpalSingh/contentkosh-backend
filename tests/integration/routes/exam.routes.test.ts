@@ -29,6 +29,11 @@ import businessRoutes from '../../../src/routes/business.routes';
 
 const app = express();
 app.use(express.json());
+// Middleware to simulate authenticated user for routes that read req.user directly
+app.use((req: any, res, next) => {
+    req.user = { id: 1, role: 'ADMIN', businessId: 1, email: 'test@example.com', name: 'Tester' };
+    next();
+});
 app.use('/api/exams', examRoutes);
 app.use('/api/business', businessRoutes);
 app.use(errorHandler);

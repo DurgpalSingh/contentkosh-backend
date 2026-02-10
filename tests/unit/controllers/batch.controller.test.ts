@@ -139,22 +139,24 @@ describe('Batch Controller', () => {
         it('should get batches for a course', async () => {
             req.params = { courseId: '1' };
             req.query = {};
+            (req as any).user = { id: 1, role: 'ADMIN', businessId: 1 };
             const mockBatches = [{ id: 1 }];
 
             getBatchesByCourseSpy.mockResolvedValue(mockBatches as any);
 
             await batchController.getBatchesByCourse(req as Request, res as Response);
 
-            expect(getBatchesByCourseSpy).toHaveBeenCalledWith(1, expect.anything(), expect.any(Object));
+            expect(getBatchesByCourseSpy).toHaveBeenCalledWith(1, (req as any).user, req.query);
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockBatches, 'Batches fetched successfully');
         });
 
         it('should handle active filter', async () => {
             req.params = { courseId: '1' };
             req.query = { active: 'true' };
+            (req as any).user = { id: 1, role: 'ADMIN', businessId: 1 };
             getBatchesByCourseSpy.mockResolvedValue([]);
             await batchController.getBatchesByCourse(req as Request, res as Response);
-            expect(getBatchesByCourseSpy).toHaveBeenCalledWith(1, expect.anything(), expect.any(Object));
+            expect(getBatchesByCourseSpy).toHaveBeenCalledWith(1, (req as any).user, req.query);
         });
     });
 

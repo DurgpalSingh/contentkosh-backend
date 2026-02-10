@@ -131,6 +131,25 @@ describe('Batch Routes', () => {
         });
     });
 
+    describe('GET /api/batches/all', () => {
+        it('should return all active batches for the user', async () => {
+            const mockBatches = [
+                { id: 1, codeName: 'BATCH001', isActive: true },
+                { id: 2, codeName: 'BATCH002', isActive: true }
+            ];
+            (BatchRepo.applyBatchAccessFilters as jest.Mock).mockImplementation((options) => options);
+            (BatchRepo.findBatches as jest.Mock).mockResolvedValue(mockBatches);
+
+            const res = await request(app).get('/api/batches/all');
+
+            expect(res.status).toBe(200);
+            expect(res.body.data).toHaveLength(2);
+            expect(BatchRepo.findBatches).toHaveBeenCalledWith(expect.objectContaining({
+                where: expect.objectContaining({ isActive: true })
+            }));
+        });
+    });
+
 
     describe('GET /api/batches/course/:courseId', () => {
         it('should return batches for a course', async () => {

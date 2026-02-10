@@ -139,6 +139,7 @@ describe('Course Controller', () => {
         it('should get courses for an exam', async () => {
             req.params = { examId: '1' };
             req.query = {};
+            (req as any).user = { id: 1, role: 'ADMIN', businessId: 1 };
             const mockCourses = [{ id: 1, name: 'Course 1' }];
 
             getExamSpy.mockResolvedValue({ id: 1 });
@@ -146,20 +147,21 @@ describe('Course Controller', () => {
 
             await CourseController.getCoursesByExam(req as Request, res as Response);
 
-            expect(getCoursesByExamSpy).toHaveBeenCalledWith(1, expect.anything(), expect.anything());
+            expect(getCoursesByExamSpy).toHaveBeenCalledWith(1, (req as any).user, expect.anything());
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockCourses, 'Courses fetched successfully');
         });
 
         it('should handle active filter', async () => {
             req.params = { examId: '1' };
             req.query = { active: 'true' };
+            (req as any).user = { id: 1, role: 'ADMIN', businessId: 1 };
 
             getExamSpy.mockResolvedValue({ id: 1 });
             getCoursesByExamSpy.mockResolvedValue([]);
 
             await CourseController.getCoursesByExam(req as Request, res as Response);
 
-            expect(getCoursesByExamSpy).toHaveBeenCalledWith(1, expect.anything(), expect.objectContaining({ where: { status: 'ACTIVE' } }));
+            expect(getCoursesByExamSpy).toHaveBeenCalledWith(1, (req as any).user, expect.objectContaining({ where: { status: 'ACTIVE' } }));
         });
 
         it('should return 404 if exam does not exist', async () => {
