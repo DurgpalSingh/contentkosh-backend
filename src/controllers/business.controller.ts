@@ -10,6 +10,7 @@ export const createBusiness = async (req: AuthRequest, res: Response, next: Next
   try {
     const { instituteName, slug, logo_url, phone, email, ...otherData } = req.body as CreateBusinessDto;
     const user = req.user;
+    logger.info(`Creating business: ${instituteName} for user: ${user?.id}`);
 
     if (!user) {
       throw new BadRequestError('User context required');
@@ -31,6 +32,7 @@ export const createBusiness = async (req: AuthRequest, res: Response, next: Next
 
     ApiResponseHandler.success(res, business, 'Business created successfully', 201);
   } catch (error) {
+    logger.error(`Error creating business: ${error}`);
     next(error);
   }
 };
@@ -46,11 +48,13 @@ function getBusinessIdFromRequest(req: Request): number {
 export const getBusiness = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const id = getBusinessIdFromRequest(req);
+    logger.info(`Fetching business with ID: ${id}`);
     const business = await BusinessService.getBusinessById(id);
 
     logger.info(`Business fetched successfully: ${business.instituteName}`);
     ApiResponseHandler.success(res, business, 'Business fetched successfully');
   } catch (error) {
+    logger.error(`Error fetching business with ID ${req.params.id}: ${error}`);
     next(error);
   }
 };
@@ -58,6 +62,7 @@ export const getBusiness = async (req: Request, res: Response, next: NextFunctio
 export const getBusinessBySlug = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { slug } = req.params;
+    logger.info(`Fetching business with slug: ${slug}`);
     if (!slug) {
       throw new BadRequestError('Slug is required');
     }
@@ -65,6 +70,7 @@ export const getBusinessBySlug = async (req: Request, res: Response, next: NextF
     logger.info(`Business fetched successfully: ${business.instituteName}`);
     ApiResponseHandler.success(res, business, 'Business fetched successfully');
   } catch (error) {
+    logger.error(`Error fetching business with slug ${req.params.slug}: ${error}`);
     next(error);
   }
 };
@@ -72,6 +78,7 @@ export const getBusinessBySlug = async (req: Request, res: Response, next: NextF
 export const updateBusiness = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const id = getBusinessIdFromRequest(req);
+    logger.info(`Updating business with ID: ${id}`);
     const { logo_url, phone, ...otherData } = req.body;
 
     const updateData = {
@@ -86,6 +93,7 @@ export const updateBusiness = async (req: AuthRequest, res: Response, next: Next
 
     ApiResponseHandler.success(res, business, 'Business updated successfully');
   } catch (error) {
+    logger.error(`Error updating business with ID ${req.params.id}: ${error}`);
     next(error);
   }
 };
@@ -93,9 +101,12 @@ export const updateBusiness = async (req: AuthRequest, res: Response, next: Next
 export const deleteBusiness = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const id = getBusinessIdFromRequest(req);
+    logger.info(`Deleting business with ID: ${id}`);
     await BusinessService.deleteBusiness(id);
+    logger.info(`Business deleted successfully with ID: ${id}`);
     ApiResponseHandler.success(res, null, 'Business deleted successfully');
   } catch (error) {
+    logger.error(`Error deleting business with ID ${req.params.id}: ${error}`);
     next(error);
   }
 };
