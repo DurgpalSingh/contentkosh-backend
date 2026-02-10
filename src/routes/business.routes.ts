@@ -302,12 +302,6 @@ router.delete('/:businessId/exams/:id', authorize(UserRole.ADMIN), deleteExam);
 /**
  * @swagger
  * /api/business:
-
-// ...
-
-/**
- * @swagger
- * /api/business:
  *   post:
  *     summary: Create business configuration
  *     tags: [Business]
