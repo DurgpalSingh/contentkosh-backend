@@ -137,6 +137,7 @@ describe('Batch Routes', () => {
                 { id: 1, codeName: 'BATCH001', isActive: true },
                 { id: 2, codeName: 'BATCH002', isActive: true }
             ];
+            (BatchRepo.applyBatchAccessFilters as jest.Mock).mockImplementation((options) => options);
             (BatchRepo.findBatches as jest.Mock).mockResolvedValue(mockBatches);
 
             const res = await request(app).get('/api/batches/all');
