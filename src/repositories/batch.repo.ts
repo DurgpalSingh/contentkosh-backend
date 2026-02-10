@@ -155,10 +155,9 @@ export async function findBatches(options: BatchFindOptions = {}) {
       ...(options.where ?? {}),
     },
     orderBy: options.orderBy ?? { createdAt: 'desc' },
+    skip: options.skip!,
+    take: options.take!,
   };
-
-  if (options.skip !== undefined) query.skip = options.skip;
-  if (options.take !== undefined) query.take = options.take;
 
   if (requestIncludeStudents) {
     query.include = {

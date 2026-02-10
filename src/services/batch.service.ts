@@ -192,17 +192,14 @@ export class BatchService {
         logger.info('BatchService: Fetching all active batches', { userId: user.id, role: user.role });
 
         const options = QueryBuilder.parse(query);
-
-        const isSuperAdmin = user.role === UserRole.SUPERADMIN;
-        const isAdmin = user.role === UserRole.ADMIN;
-        const isTeacher = user.role === UserRole.TEACHER;
-        const isStudent = user.role === UserRole.STUDENT;
-
-        if (!isSuperAdmin && !isAdmin && !isTeacher && !isStudent) {
+        // Role-based access validation
+        const allowedRoles: UserRole[] = [UserRole.SUPERADMIN, UserRole.ADMIN, UserRole.TEACHER, UserRole.STUDENT];
+        if (!allowedRoles.includes(user.role)) {
             throw new ForbiddenError('You do not have access to view batches');
         }
 
-        if (!isSuperAdmin && !user.businessId) {
+        // SUPERADMIN requires no business context; others must have business association
+        if (user.role !== UserRole.SUPERADMIN && !user.businessId) {
             throw new ForbiddenError('User is not associated with a business');
         }
 
