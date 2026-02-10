@@ -141,19 +141,20 @@ export async function findBatchesByCourseId(courseId: number, options: BatchFind
 }
 
 export async function findBatches(options: BatchFindOptions = {}) {
-  // Handle "students" request whether it comes from top-level flag or nested include (legacy/compatible)
-  const requestIncludeStudents = options.includeStudents || (options.include as any)?.students;
+  // Support legacy options.include.students flag; translate it to batchUsers include and strip it out.
+  const includeWithLegacy = options.include as (Prisma.BatchInclude & { students?: boolean }) | undefined;
+  const requestIncludeStudents = options.includeStudents || includeWithLegacy?.students;
 
-  if ((options.include as any)?.students) {
+  if (includeWithLegacy?.students) {
     options.include = { ...options.include };
-    delete (options.include as any).students;
+    delete (options.include as (Prisma.BatchInclude & { students?: boolean })).students;
   }
 
   const query: Prisma.BatchFindManyArgs = {
     where: {
-      ...(options.where || {}),
+      ...(options.where ?? {}),
     },
-    orderBy: options.orderBy || { createdAt: 'desc' },
+    orderBy: options.orderBy ?? { createdAt: 'desc' },
   };
 
   if (options.skip !== undefined) query.skip = options.skip;
@@ -184,7 +185,7 @@ export async function findBatches(options: BatchFindOptions = {}) {
   } else if (options.include) {
     query.include = options.include;
   } else {
-    (query as any).select = {
+    query.select = {
       ...batchSelect,
       course: { select: courseSelect }
     };
