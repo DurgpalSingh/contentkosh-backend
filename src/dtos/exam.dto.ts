@@ -1,9 +1,12 @@
-import { IsString, IsNotEmpty, IsOptional, IsDateString, IsInt, MaxLength, IsEnum } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsDateString, IsInt, MaxLength, IsEnum, Matches } from 'class-validator';
 
 export class CreateExamDto {
     @IsString()
     @IsNotEmpty({ message: 'Exam name is required' })
     @MaxLength(50, { message: 'Exam name must be shorter than 50 characters' })
+    @Matches(/^(?=.*[A-Za-z]).+$/, {
+        message: 'Exam name must contain at least one alphabet character',
+    })
     name!: string;
 
     @IsString()
@@ -32,6 +35,9 @@ export class UpdateExamDto {
     @IsNotEmpty()
     @MaxLength(50)
     @IsOptional()
+    @Matches(/^(?=.*[A-Za-z]).+$/, {
+        message: 'Exam name must contain at least one alphabet character',
+    })
     name?: string;
 
     @IsString()

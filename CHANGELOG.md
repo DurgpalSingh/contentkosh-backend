@@ -1,6 +1,14 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## Version [1.1.13] - Exam Name Validation
+**P.R raised by**  : shubh404-SE
+**Date** : 2026-02-10
+### changed Exam DTO
+- Added DTO validation to ensure exam name contains at least one alphabet character.
+- Applied to both create and update exam flows.
+
+---
 ## Version [1.1.12] - Business Signup & Slug Support
 **P.R raised by**  : aaditya-singh-21
 **Date** : 2026-02-02
@@ -15,6 +23,8 @@ All notable changes to this project will be documented in this file.
     - **Business Service**: Created `BusinessService` to decouple controller from repository.
     - **DTOs**: Implemented strict validation using `CreateBusinessDto` and `UpdateBusinessDto`.
     - **Controller**: Refactored `BusinessController` to use DTOs and Service layer.
+
+---
 
 ## Version [1.1.11] - Re add exam after delete error resolved
 **P.R raised by**  : shubh404-SE
