@@ -346,3 +346,35 @@ export async function updateBatchUser(userId: number, batchId: number, data: Pri
 }
 
 
+export function applyBatchAccessFilters(
+  options: BatchFindOptions,
+  access: { role: UserRole; userId: number; businessId?: number },
+): BatchFindOptions {
+  const next: BatchFindOptions = {
+    ...options,
+    where: { ...(options.where ?? {}) },
+  };
+
+  if (access.role !== UserRole.SUPERADMIN && access.businessId) {
+    next.where = {
+      ...next.where,
+      course: {
+        exam: { businessId: access.businessId }
+      }
+    };
+  }
+
+  if (access.role === UserRole.TEACHER || access.role === UserRole.STUDENT) {
+    next.where = {
+      ...next.where,
+      batchUsers: {
+        some: {
+          userId: access.userId,
+          isActive: true
+        }
+      }
+    };
+  }
+
+  return next;
+}

@@ -210,30 +210,13 @@ export class BatchService {
             ...(options.where || {}),
             isActive: true,
         };
+        const scopedOptions = batchRepo.applyBatchAccessFilters(options, {
+            role: user.role,
+            userId: user.id,
+            businessId: user.businessId!,
+        });
 
-        if (!isSuperAdmin) {
-            const businessId = user.businessId as number;
-            options.where = {
-                ...options.where,
-                course: {
-                    exam: { businessId }
-                }
-            };
-        }
-
-        if (isTeacher || isStudent) {
-            options.where = {
-                ...options.where,
-                batchUsers: {
-                    some: {
-                        userId: user.id,
-                        isActive: true
-                    }
-                }
-            };
-        }
-
-        const batches = await batchRepo.findBatches(options);
+        const batches = await batchRepo.findBatches(scopedOptions);
         return batches.map((b: Batch) => BatchMapper.toDomain(b));
     }
 
