@@ -95,7 +95,9 @@ export class AuthService {
   }
 
   static async register(data: RegisterRequest): Promise<AuthResponse> {
-    const hashedPassword = await this.hashPassword(data.password);
+    logger.info(`Registering new user: ${data.email}`);
+    try {
+      const hashedPassword = await this.hashPassword(data.password);
 
     // Note: Creating user without businessId initially. 
     // Users are associated with a business when an admin adds them to a business-specific entity (like Batch),
@@ -118,6 +120,8 @@ export class AuthService {
 
     const refreshToken = await this.generateRefreshToken(newUser.id);
 
+    logger.info(`User registered successfully: ${newUser.id} (${newUser.email})`);
+
     return {
       accessToken,
       refreshToken,
@@ -129,12 +133,19 @@ export class AuthService {
         businessId: newUser.businessId
       }
     };
+    } catch (error) {
+      logger.error(`Registration failed for email ${data.email}: ${error}`);
+      throw error;
+    }
   }
 
   static async login(data: LoginRequest): Promise<AuthResponse> {
+  logger.info(`Login attempt for email: ${data.email}`);
+  try {
     const user = await userRepo.findByEmailWithBusinesses(data.email);
 
     if (!user) {
+      logger.warn(`Login failed: User not found for email ${data.email}`);
       throw new AuthError('Invalid email or password');
     }
 
@@ -156,6 +167,8 @@ export class AuthService {
 
     const refreshToken = await this.generateRefreshToken(user.id);
 
+    logger.info(`User logged in successfully: ${user.id} (${user.email})`);
+
     return {
       accessToken,
       refreshToken,
@@ -166,12 +179,20 @@ export class AuthService {
         role: user.role,
         businessId: user.businessId
       }
-    };
+      };
+    } catch (error) {
+    if (error instanceof AuthError || error instanceof ForbiddenError) {
+      throw error;
+    }
+    logger.error(`Login error for email ${data.email}: ${error}`);
+    throw error;
   }
+}
 
   static async refreshTokens(refreshToken: string): Promise<AuthResponse> {
-    // Find the refresh token in database
-    const storedToken = await refreshTokenRepo.findByToken(refreshToken);
+    try {
+      // Find the refresh token in database
+      const storedToken = await refreshTokenRepo.findByToken(refreshToken);
 
     if (!storedToken) {
       throw new AuthError('Invalid refresh token');
@@ -206,6 +227,8 @@ export class AuthService {
 
     const newRefreshToken = await this.generateRefreshToken(user.id);
 
+    logger.info(`Tokens refreshed successfully for user: ${user.id}`);
+
     return {
       accessToken: newAccessToken,
       refreshToken: newRefreshToken,
@@ -217,6 +240,13 @@ export class AuthService {
         businessId: user.businessId
       }
     };
+    } catch (error) {
+      // Don't log full stack trace for known auth errors if desired, but here we log error message
+      if (!(error instanceof AuthError) && !(error instanceof ForbiddenError)) {
+        logger.error(`Error refreshing tokens: ${error}`);
+      }
+      throw error;
+    }
   }
 
   static async logout(refreshToken: string): Promise<void> {

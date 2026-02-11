@@ -10,6 +10,9 @@ import { config } from './config/config';
 import logger from './utils/logger';
 import { prisma } from './config/database';
 import { specs } from './config/swagger';
+import { apiAuditLogger } from './middlewares/audit.middleware';
+import cron from 'node-cron';
+import { auditService } from './services/audit.service';
 
 // Load environment variables
 dotenv.config();
@@ -26,6 +29,20 @@ async function start() {
     app.use(cors());
     app.use(express.json());
     app.use(express.urlencoded({ extended: true }));
+
+    // Audit Logging
+    app.use(apiAuditLogger);
+
+    // Schedule Audit Cleanup (Daily at midnight)
+    cron.schedule('0 0 * * *', async () => {
+      logger.info('Running scheduled audit cleanup...');
+      try {
+        const deletedCount = await auditService.cleanupOldAudits();
+        logger.info(`Audit cleanup complete. Deleted ${deletedCount} old logs.`);
+      } catch (error) {
+        logger.error('Audit cleanup failed:', error);
+      }
+    });
 
     // Swagger Documentation
     app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs, {
