@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
     - Updated `audit.middleware.ts` to respect the system config (cached).
 - **Audit Cleanup**:
     - Integrated `node-cron` to automatically delete audit logs older than 7 days.
+- **Jira Ticket** : CK-32
 
 ---
 

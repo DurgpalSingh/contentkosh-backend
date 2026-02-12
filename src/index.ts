@@ -13,6 +13,7 @@ import { specs } from './config/swagger';
 import { apiAuditLogger } from './middlewares/audit.middleware';
 import cron from 'node-cron';
 import { auditService } from './services/audit.service';
+import { auditConfig } from './config/audit.config';
 
 // Load environment variables
 dotenv.config();
@@ -34,7 +35,8 @@ async function start() {
     app.use(apiAuditLogger);
 
     // Schedule Audit Cleanup (Daily at midnight)
-    cron.schedule('0 0 * * *', async () => {
+    // Schedule Audit Cleanup (Daily at midnight)
+    cron.schedule(auditConfig.cleanupSchedule, async () => {
       logger.info('Running scheduled audit cleanup...');
       try {
         const deletedCount = await auditService.cleanupOldAudits();

@@ -151,10 +151,12 @@ export class AuthService {
 
     const isMatch = await this.verifyPassword(data.password, user.password);
     if (!isMatch) {
+      logger.warn(`Login failed: Invalid password for email ${data.email}`);
       throw new AuthError('Invalid email or password');
     }
 
     if (user.status !== UserStatus.ACTIVE) {
+      logger.warn(`Login failed: Inactive user account for email ${data.email}`);
       throw new ForbiddenError('User account is inactive');
     }
 
@@ -195,22 +197,26 @@ export class AuthService {
       const storedToken = await refreshTokenRepo.findByToken(refreshToken);
 
     if (!storedToken) {
+      logger.warn(`Refresh token failed: Token not found`);
       throw new AuthError('Invalid refresh token');
     }
 
     // Check if token is revoked
     if (storedToken.isRevoked) {
+      logger.warn(`Refresh token failed: Token revoked`);
       throw new AuthError('Refresh token has been revoked');
     }
 
     // Check if token is expired
     if (new Date() > storedToken.expiresAt) {
+      logger.warn(`Refresh token failed: Token expired`);
       throw new AuthError('Refresh token has expired');
     }
 
     // Check if user is still active
     const user = storedToken.user;
     if (user.status !== UserStatus.ACTIVE) {
+      logger.warn(`Refresh token failed: Inactive user ${user.id}`);
       throw new ForbiddenError('User account is inactive');
     }
 
@@ -260,7 +266,12 @@ export class AuthService {
   }
 
   static async logoutAll(userId: number): Promise<void> {
-    await refreshTokenRepo.revokeAllUserTokens(userId);
-    logger.info(`All refresh tokens revoked for user: ${userId}`);
+    try {
+      await refreshTokenRepo.revokeAllUserTokens(userId);
+      logger.info(`All refresh tokens revoked for user: ${userId}`);
+    } catch (error) {
+      logger.error(`Error revoking all tokens for user ${userId}: ${error}`);
+      throw error;
+    }
   }
 }
