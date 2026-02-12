@@ -3,7 +3,6 @@ import { prisma } from '../config/database';
 
 export type BusinessCreateInput = Prisma.BusinessCreateInput;
 export type BusinessUpdateInput = Prisma.BusinessUpdateInput;
-
 export async function createBusiness(data: Prisma.BusinessCreateInput) {
   return await prisma.business.create({
     data

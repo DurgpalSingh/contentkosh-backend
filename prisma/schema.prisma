@@ -7,34 +7,41 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model SystemConfig {
+  key   String @id
+  value String
+
+  @@map("system_config")
+}
+
 model User {
-  id           Int        @id @default(autoincrement())
-  businessId   Int?       @map("business_id")
-  name         String
-  email        String
-  mobile       String?
-  password     String     @map("password_hash")
-  role         UserRole   @default(USER)
-  status       UserStatus @default(ACTIVE)
-  emailVerified Boolean   @default(false) @map("email_verified")
-  
-  createdBy    Int?       @map("created_by")
-  updatedBy    Int?       @map("updated_by")
-  createdAt    DateTime   @default(now()) @map("created_at")
-  updatedAt    DateTime   @default(now()) @updatedAt @map("updated_at")
+  id            Int        @id @default(autoincrement())
+  businessId    Int?       @map("business_id")
+  name          String
+  email         String
+  mobile        String?
+  password      String     @map("password_hash")
+  role          UserRole   @default(USER)
+  status        UserStatus @default(ACTIVE)
+  emailVerified Boolean    @default(false) @map("email_verified")
+
+  createdBy Int?     @map("created_by")
+  updatedBy Int?     @map("updated_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
   // Relations
-  business      Business?  @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  createdExams  Exam[]     @relation("CreatedExams")
-  updatedExams  Exam[]     @relation("UpdatedExams")
-  batchUsers    BatchUser[]
+  business        Business?        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdExams    Exam[]           @relation("CreatedExams")
+  updatedExams    Exam[]           @relation("UpdatedExams")
+  batchUsers      BatchUser[]
   rolePermissions RolePermission[]
-  refreshTokens RefreshToken[]
-  contentUploads Content[] @relation("ContentUploader")
-  contentUpdates Content[] @relation("ContentUpdater")
-  teacher       Teacher?
-  createdTeachers Teacher[] @relation("TeacherCreatedBy")
-  updatedTeachers Teacher[] @relation("TeacherUpdatedBy")
+  refreshTokens   RefreshToken[]
+  contentUploads  Content[]        @relation("ContentUploader")
+  contentUpdates  Content[]        @relation("ContentUpdater")
+  teacher         Teacher?
+  createdTeachers Teacher[]        @relation("TeacherCreatedBy")
+  updatedTeachers Teacher[]        @relation("TeacherUpdatedBy")
 
   @@unique([businessId, email])
   @@unique([businessId, mobile])
@@ -94,7 +101,7 @@ model Batch {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   // Relations
-  course     Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  course     Course      @relation(fields: [courseId], references: [id], onDelete: Cascade)
   batchUsers BatchUser[]
   contents   Content[]
 
@@ -117,18 +124,18 @@ model BatchUser {
 }
 
 model Announcement {
-  id          Int      @id @default(autoincrement())
-  heading     String
-  content     String
-  startDate   DateTime @map("start_date")
-  endDate     DateTime @map("end_date")
-  isActive    Boolean  @default(true) @map("is_active")
-  businessId  Int      @map("business_id")
-  visibleToAdmins    Boolean @default(false) @map("visible_to_admins")
-  visibleToTeachers  Boolean @default(false) @map("visible_to_teachers")
-  visibleToStudents  Boolean @default(false) @map("visible_to_students")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id                Int      @id @default(autoincrement())
+  heading           String
+  content           String
+  startDate         DateTime @map("start_date")
+  endDate           DateTime @map("end_date")
+  isActive          Boolean  @default(true) @map("is_active")
+  businessId        Int      @map("business_id")
+  visibleToAdmins   Boolean  @default(false) @map("visible_to_admins")
+  visibleToTeachers Boolean  @default(false) @map("visible_to_teachers")
+  visibleToStudents Boolean  @default(false) @map("visible_to_students")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
 
   // Relations
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
@@ -292,31 +299,51 @@ enum Gender {
 }
 
 model Teacher {
-  id               Int           @id @default(autoincrement())
-  userId           Int           @unique @map("user_id")
-  businessId       Int           @map("business_id")
-  qualification    String
-  experienceYears  Int           @map("experience_years")
-  designation      String
-  bio              String?
-  languages        String[]      @default([])
-  gender           Gender?
-  dob              DateTime?     @map("date_of_birth")
-  address          String?
-  status           TeacherStatus @default(ACTIVE)
-  createdBy        Int?          @map("created_by")
-  updatedBy        Int?          @map("updated_by")
-  createdAt        DateTime      @default(now()) @map("created_at")
-  updatedAt        DateTime      @updatedAt @map("updated_at")
+  id              Int           @id @default(autoincrement())
+  userId          Int           @unique @map("user_id")
+  businessId      Int           @map("business_id")
+  qualification   String
+  experienceYears Int           @map("experience_years")
+  designation     String
+  bio             String?
+  languages       String[]      @default([])
+  gender          Gender?
+  dob             DateTime?     @map("date_of_birth")
+  address         String?
+  status          TeacherStatus @default(ACTIVE)
+  createdBy       Int?          @map("created_by")
+  updatedBy       Int?          @map("updated_by")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
 
   // Relations
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  business  Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  createdByUser User? @relation("TeacherCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
-  updatedByUser User? @relation("TeacherUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business      Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdByUser User?    @relation("TeacherCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updatedByUser User?    @relation("TeacherUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([businessId])
   @@index([status])
   @@map("teachers")
+}
+
+model ApiAuditLog {
+  id             Int      @id @default(autoincrement())
+  businessId     Int?     @map("business_id")
+  userId         Int?     @map("user_id")
+  role           String?
+  httpMethod     String   @map("http_method")
+  requestUrl     String   @map("request_url")
+  requestPath    String   @map("request_path")
+  queryParams    Json?    @map("query_params")
+  requestBody    Json?    @map("request_body")
+  responseStatus Int      @map("response_status")
+  responseTimeMs Int      @map("response_time_ms")
+  responseBody   Json?    @map("response_body")
+  errorCode      String?  @map("error_code")
+  errorMessage   String?  @map("error_message")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@map("api_audit_logs")
 }

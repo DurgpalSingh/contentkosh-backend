@@ -1,6 +1,24 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## Version [1.1.15] - Audit Logging & Bug Fixes
+**P.R raised by**  : aaditya-singh-21
+**Date** : 2026-02-11
+### Added
+- **API Audit Logging**: 
+    - **Schema**: Added `ApiAuditLog` model to `schema.prisma`.
+    - **Middleware**: Implemented `apiAuditLogger` to log all request/response details to the database asynchronously.
+    - **Verification**: Added `src/scripts/verify-audit.ts` to verify logging functionality.
+- **Audit Control**:
+    - Implemented `SystemConfig` table to manage system-wide settings.
+    - Added CLI script `src/scripts/audit-control.ts` to Enable/Disable/Status checking of auditing.
+    - Updated `audit.middleware.ts` to respect the system config (cached).
+- **Audit Cleanup**:
+    - Integrated `node-cron` to automatically delete audit logs older than 7 days.
+- **Jira Ticket** : CK-32
+
+---
+
 ## Version [1.1.14] - Active Batches (Role-Aware)
 **P.R raised by**  : Shubh404-SE
 **Date** : 2026-02-06
@@ -54,7 +72,6 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - **Admin Access Control (Content API)**: Fixed incorrect authorization logic that was preventing **ADMIN** users from accessing certain Content API operations.  
 - Ensured admins now have consistent, unrestricted access to content endpoints in line with role-based access design.
-
 
 ## Version [1.1.9] - Teacher Management API
 **P.R raised by**  : Shubh404-SE 
