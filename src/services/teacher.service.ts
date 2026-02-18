@@ -137,6 +137,29 @@ export class TeacherService {
         }
     }
 
+    /**
+     * Get teacher profile by userId
+     */
+    async getTeacherByUserId(userId: number, user: IUser): Promise<Teacher> {
+        logger.info('TeacherService: Fetching teacher profile by userId', {
+            userId,
+            requestedBy: user.id
+        });
+
+        const teacher = await teacherRepo.findTeacherByUserId(userId);
+        if (!teacher) {
+            throw new NotFoundError('Teacher profile not found');
+        }
+
+        // TODO : need to change these repeated checks
+        // Check if user has access (admin or same business)
+        if (user.role !== UserRole.ADMIN && user.businessId !== teacher.businessId) {
+            throw new ForbiddenError('You do not have access to this teacher profile');
+        }
+
+        return teacher;
+    }
+
     async validateTeacherCreationAuth(businessId: number, user: IUser): Promise<void> {
 
         // Only ADMIN or SUPERADMIN can create teachers

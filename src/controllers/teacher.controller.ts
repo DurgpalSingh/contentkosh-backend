@@ -73,6 +73,32 @@ export class TeacherController {
   };
 
   /**
+   * GET /teachers/user/{userId}
+   * Get teacher profile by user ID
+   */
+  public getTeacherByUserId = async (req: AuthRequest, res: Response) => {
+    try {
+      const userId = ValidationUtils.validateId(req.params.userId, 'User ID');
+      if (!req.user) {
+        throw new ForbiddenError('Authentication required');
+      }
+      const user = req.user;
+
+      const teacher = await this.teacherService.getTeacherByUserId(userId, user);
+      ApiResponseHandler.success(res, TeacherMapper.toResponse(teacher), 'Teacher profile fetched successfully');
+    } catch (error: any) {
+      if (error instanceof NotFoundError) {
+        return ApiResponseHandler.notFound(res, error.message);
+      }
+      if (error instanceof ForbiddenError) {
+        return ApiResponseHandler.error(res, error.message, 403);
+      }
+      logger.error(`Error fetching teacher profile by userId: ${error.message}`);
+      ApiResponseHandler.error(res, 'Failed to fetch teacher profile');
+    }
+  };
+
+  /**
    * PUT /teachers/{teacherId}
    * Update teacher profile
    */

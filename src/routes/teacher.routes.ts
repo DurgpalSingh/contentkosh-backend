@@ -9,6 +9,7 @@ import {
     validateIdParam,
     authorizeTeacherAccess,
     authorizeTeacher,
+    authorizeUserAccess,
 } from '../middlewares/validation.middleware';
 
 const router = Router();
@@ -120,6 +121,38 @@ router.get(
     validateIdParam('teacherId'),
     authorizeTeacher,
     teacherController.getTeacher
+);
+
+/**
+ * @swagger
+ * /api/teachers/{userId}:
+ *   get:
+ *     summary: Get teacher profile by user ID
+ *     tags: [Teacher]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: User ID
+ *     responses:
+ *       200:
+ *         description: Teacher profile fetched successfully
+ *       403:
+ *         description: Insufficient permissions
+ *       404:
+ *         description: Teacher profile not found
+ *       500:
+ *         description: Internal server error
+ */
+router.get(
+    '/user/:userId',
+    validateIdParam('userId'),
+    authorizeUserAccess,
+    teacherController.getTeacherByUserId
 );
 
 /**

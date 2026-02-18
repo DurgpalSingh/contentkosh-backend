@@ -1,11 +1,11 @@
-import { Teacher, Prisma, TeacherStatus } from '@prisma/client';
+import { Teacher, Prisma, TeacherStatus, User } from '@prisma/client';
 import { CreateTeacherDto, UpdateTeacherDto } from '../dtos/teacher.dto';
 
 export class TeacherMapper {
   /**
    * Transform teacher data to response format
    */
-  static toResponse(teacher: Teacher): any {
+  static toResponse(teacher: Teacher & { user?: User }): any {
     return {
       id: teacher.id,
       userId: teacher.userId,
@@ -22,7 +22,16 @@ export class TeacherMapper {
       createdAt: teacher.createdAt,
       updatedAt: teacher.updatedAt,
       createdBy: teacher.createdBy,
-      updatedBy: teacher.updatedBy
+      updatedBy: teacher.updatedBy,
+      ...(teacher.user && {
+        user: {
+          id: teacher.user.id,
+          name: teacher.user.name,
+          email: teacher.user.email,
+          mobile: teacher.user.mobile,
+          role: teacher.user.role
+        }
+      })
     };
   }
 

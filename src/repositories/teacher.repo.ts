@@ -5,7 +5,8 @@ const userBasicSelect: Prisma.UserSelect = {
   id: true,
   name: true,
   email: true,
-  mobile: true
+  mobile: true,
+  role: true
 };
 
 const teacherDefaultInclude: Prisma.TeacherInclude = {
