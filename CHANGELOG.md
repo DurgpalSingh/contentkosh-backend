@@ -1,12 +1,32 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
-## Version [1.1.16] - Return only Active users of a business
+## Version [1.1.17] - Return only Active users of a business
 **P.R raised by**  : Shubh404-SE
 **Date** : 2026-02-19
 
 ### Fixed
   -**User Repo**: Now we only return active users.
+
+---
+
+## Version [1.1.16] - Teacher Profile by User ID API
+**P.R raised by**  : Shubh404-SE
+**Date** : 2026-02-18
+
+### Added
+- **Teacher API**:
+  - Added endpoint to fetch teacher profile by user ID:
+    - `GET /api/teachers/user/:userId`
+  - Integrated controller/service/repository flow and route-level access validation.
+
+### Tests
+- **Integration**:
+  - Added route tests for `GET /api/teachers/user/:userId` covering:
+    - success response when teacher exists
+    - `404` when teacher profile is not found for the given user ID
+
+---
 
 ## Version [1.1.15] - Audit Logging & Bug Fixes
 **P.R raised by**  : aaditya-singh-21
