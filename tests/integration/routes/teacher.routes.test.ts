@@ -65,6 +65,7 @@ jest.mock('../../../src/middlewares/validation.middleware', () => ({
     validateIdParam: () => (req: any, res: any, next: any) => { console.log('MOCK validateIdParam called'); next(); },
     authorizeTeacherAccess: () => (req: any, res: any, next: any) => { console.log('MOCK authorizeTeacherAccess called'); next(); },
     authorizeTeacher: () => (req: any, res: any, next: any) => { console.log('MOCK authorizeTeacher called'); next(); },
+    authorizeUserAccess: () => (req: any, res: any, next: any) => { console.log('MOCK authorizeUserAccess called'); next(); },
 }));
 jest.mock('../../../src/utils/logger');
 
@@ -83,6 +84,7 @@ const { validateDto } = require('../../../src/middlewares/validation/dto.middlew
 const teacherServiceInstance = new TeacherService();
 const teacherControllerInstance = new TeacherController(teacherServiceInstance);
 expressRouter.post('/profile', validateDto(require('../../../src/dtos/teacher.dto').CreateTeacherDto), (req: any, res: any, next: any) => teacherControllerInstance.createTeacher(req, res));
+expressRouter.get('/user/:userId', (req: any, res: any, next: any) => teacherControllerInstance.getTeacherByUserId(req, res));
 expressRouter.get('/:teacherId', (req: any, res: any, next: any) => teacherControllerInstance.getTeacher(req, res));
 expressRouter.put('/:teacherId', (req: any, res: any, next: any) => teacherControllerInstance.updateTeacher(req, res));
 
@@ -187,6 +189,27 @@ describe('Teacher Routes', () => {
             (TeacherRepo.findTeacherById as jest.Mock).mockResolvedValue(null);
 
             const res = await request(app).get('/api/teachers/999');
+
+            expect(res.status).toBe(404);
+        });
+    });
+
+    describe('GET /api/teachers/user/:userId', () => {
+        it('should get a teacher by user ID', async () => {
+            const mockTeacher = { id: 11, userId: 7, businessId: 1, status: TeacherStatus.ACTIVE };
+            (TeacherRepo.findTeacherByUserId as jest.Mock).mockResolvedValue(mockTeacher);
+
+            const res = await request(app).get('/api/teachers/user/7');
+
+            expect(res.status).toBe(200);
+            expect(res.body.data).toEqual(expect.objectContaining({ id: 11, userId: 7 }));
+            expect(TeacherRepo.findTeacherByUserId).toHaveBeenCalledWith(7);
+        });
+
+        it('should return 404 if teacher profile for user ID is not found', async () => {
+            (TeacherRepo.findTeacherByUserId as jest.Mock).mockResolvedValue(null);
+
+            const res = await request(app).get('/api/teachers/user/777');
 
             expect(res.status).toBe(404);
         });
