@@ -1,6 +1,13 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## Version [1.1.16] - Return only Active users of a business
+**P.R raised by**  : Shubh404-SE
+**Date** : 2026-02-19
+
+### Fixed
+  -**User Repo**: Now we only return active users.
+
 ## Version [1.1.15] - Audit Logging & Bug Fixes
 **P.R raised by**  : aaditya-singh-21
 **Date** : 2026-02-11

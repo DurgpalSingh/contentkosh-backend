@@ -83,6 +83,7 @@ export async function findByBusinessId(businessId: number, role?: UserRole) {
   const users = await prisma.user.findMany({
     where: {
       businessId,
+      status: UserStatus.ACTIVE,
       ...(role && { role })
     },
     select: {
