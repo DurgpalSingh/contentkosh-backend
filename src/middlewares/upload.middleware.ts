@@ -6,17 +6,73 @@ import { BadRequestError } from '../errors/api.errors';
 import { ContentType } from '@prisma/client';
 
 import { FILE_TYPE_CONFIG } from '../config/file-type';
-import {
-  FILE_EXTENSIONS,
-  IMAGE_EXTENSIONS
-} from '../constants/file.constants';
 
 const BYTES_IN_MB = 1024 * 1024;
 
-const MAX_UPLOAD_SIZE_BYTES = Math.max(
-  FILE_TYPE_CONFIG[ContentType.PDF].maxSizeBytes,
-  FILE_TYPE_CONFIG[ContentType.IMAGE].maxSizeBytes
+type UploadRule = {
+  contentType: ContentType;
+  extensions: string[];
+  allowed: boolean;
+  maxSizeBytes: number;
+};
+
+const configuredRules: UploadRule[] = (
+  Object.entries(FILE_TYPE_CONFIG) as [ContentType, (typeof FILE_TYPE_CONFIG)[ContentType]][]
+).map(([contentType, config]) => ({
+  contentType,
+  extensions: config.extensions.map(ext => ext.toLowerCase()),
+  allowed: config.allowed,
+  maxSizeBytes: config.maxSizeBytes
+}));
+
+const activeRules = configuredRules.filter(rule => rule.allowed);
+
+const extensionToRule = new Map<string, UploadRule>();
+for (const rule of activeRules) {
+  for (const ext of rule.extensions) {
+    extensionToRule.set(ext, rule);
+  }
+}
+
+const maxUploadSizeBytes = Math.max(
+  ...configuredRules.map(rule => rule.maxSizeBytes),
+  BYTES_IN_MB
 );
+
+const formatSizeInMb = (sizeBytes: number): string => {
+  const mb = sizeBytes / BYTES_IN_MB;
+  return Number.isInteger(mb) ? `${mb}MB` : `${mb.toFixed(2)}MB`;
+};
+
+const acceptedExtensions = Array.from(extensionToRule.keys()).sort();
+
+const acceptedExtensionsLabel =
+  acceptedExtensions.length > 0
+    ? acceptedExtensions.join(', ')
+    : 'none';
+
+const limitsByTypeLabel = activeRules
+  .map(rule => `${rule.contentType}: ${formatSizeInMb(rule.maxSizeBytes)}`)
+  .join(', ');
+
+const removeUploadedFile = (filePath?: string): void => {
+  if (!filePath) {
+    return;
+  }
+
+  try {
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+  } catch {
+    // Ignore cleanup errors to avoid masking validation failures.
+  }
+};
+
+const getRuleByOriginalName = (originalname: string): UploadRule | undefined => {
+  const ext = path.extname(originalname).toLowerCase();
+  return extensionToRule.get(ext);
+};
 
 // Ensure upload directory exists
 const uploadDir = process.env.UPLOAD_DIR || 'uploads/content';
@@ -30,7 +86,6 @@ const storage = multer.diskStorage({
     cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
-    // Generate unique filename with timestamp
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
     const ext = path.extname(file.originalname);
     cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
@@ -42,19 +97,18 @@ const fileFilter: multer.Options['fileFilter'] = (
   file,
   cb
 ) => {
-  const ext = path.extname(file.originalname).toLowerCase();
+  const ext = path.extname(file.originalname).toLowerCase() || '(no extension)';
+  const rule = getRuleByOriginalName(file.originalname);
 
-  const isPdf = ext === FILE_EXTENSIONS.PDF;
-  const isImage = IMAGE_EXTENSIONS.includes(ext);
-
-  if (
-    (isPdf && FILE_TYPE_CONFIG[ContentType.PDF].allowed) ||
-    (isImage && FILE_TYPE_CONFIG[ContentType.IMAGE].allowed)
-  ) {
-    cb(null, true);
-  } else {
-    cb(new BadRequestError(`File type .${ext} is not allowed.`));
+  if (!rule) {
+    return cb(
+      new BadRequestError(
+        `File type ${ext} is not accepted. Allowed types: ${acceptedExtensionsLabel}.`
+      )
+    );
   }
+
+  cb(null, true);
 };
 
 // Configure multer
@@ -62,63 +116,74 @@ const upload = multer({
   storage,
   fileFilter,
   limits: {
-    fileSize: MAX_UPLOAD_SIZE_BYTES, // 10MB max (will be validated more specifically in middleware)
+    // Global hard cap. Type-specific limits are validated in validateFileSize.
+    fileSize: maxUploadSizeBytes,
   }
 });
 
-// Middleware to handle single file upload
-export const uploadSingleFile = upload.single('file');
+// Middleware to normalize upload errors
+export const handleUploadError = (error: any, req: Request, res: Response, next: NextFunction) => {
+  if (error instanceof multer.MulterError) {
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      return next(
+        new BadRequestError(
+          `File is too large. Maximum upload size is ${formatSizeInMb(maxUploadSizeBytes)}. ` +
+          `Allowed size by type: ${limitsByTypeLabel}.`
+        )
+      );
+    }
 
-// Middleware to validate file size based on type
+    if (error.code === 'LIMIT_UNEXPECTED_FILE') {
+      return next(new BadRequestError('Unexpected file field. Use field name "file".'));
+    }
+
+    return next(new BadRequestError(`Upload error: ${error.message}`));
+  }
+
+  next(error);
+};
+
+// Middleware to handle single file upload with explicit error bridging
+export const uploadSingleFile = (req: Request, res: Response, next: NextFunction) => {
+  upload.single('file')(req, res, (error: any) => {
+    if (error) {
+      return handleUploadError(error, req, res, next);
+    }
+
+    next();
+  });
+};
+
+// Middleware to validate file size based on resolved content type
 export const validateFileSize = (req: Request, res: Response, next: NextFunction) => {
   if (!req.file) {
     return next(new BadRequestError('No file uploaded'));
   }
 
-  const fileSize = req.file.size;
-  const ext = path.extname(req.file.originalname).toLowerCase();
+  const rule = getRuleByOriginalName(req.file.originalname);
 
-  if (ext === FILE_EXTENSIONS.PDF) {
-    const config = FILE_TYPE_CONFIG[ContentType.PDF];
-
-    if (fileSize > config.maxSizeBytes) {
-      fs.unlinkSync(req.file.path);
-      return next(new BadRequestError(`PDF file size cannot exceed ${config.maxSizeBytes / BYTES_IN_MB}MB`));
-    }
-    // Set content type in request body
-    req.body.type = ContentType.PDF;
-  } else if (IMAGE_EXTENSIONS.includes(ext)) {
-    const config = FILE_TYPE_CONFIG[ContentType.IMAGE];
-
-    if (fileSize > config.maxSizeBytes) {
-      fs.unlinkSync(req.file.path);
-      return next(new BadRequestError(`Image file size cannot exceed ${config.maxSizeBytes / BYTES_IN_MB}MB`));
-    }
-    // Set content type in request body
-    req.body.type = ContentType.IMAGE;
-  } else {
-    // Delete the uploaded file
-    fs.unlinkSync(req.file.path);
-    return next(new BadRequestError('Invalid file type'));
+  if (!rule) {
+    removeUploadedFile(req.file.path);
+    return next(
+      new BadRequestError(
+        `File type is not accepted. Allowed types: ${acceptedExtensionsLabel}.`
+      )
+    );
   }
 
-  // Add file info to request body
+  if (req.file.size > rule.maxSizeBytes) {
+    removeUploadedFile(req.file.path);
+
+    return next(
+      new BadRequestError(
+        `File size cannot exceed ${formatSizeInMb(rule.maxSizeBytes)} for ${rule.contentType} files.`
+      )
+    );
+  }
+
+  req.body.type = rule.contentType;
   req.body.filePath = req.file.path;
   req.body.fileSize = req.file.size;
 
   next();
-};
-
-// Middleware to handle upload errors
-export const handleUploadError = (error: any, req: Request, res: Response, next: NextFunction) => {
-  if (error instanceof multer.MulterError) {
-    if (error.code === 'LIMIT_FILE_SIZE') {
-      return next(new BadRequestError('File size too large'));
-    }
-    if (error.code === 'LIMIT_UNEXPECTED_FILE') {
-      return next(new BadRequestError('Unexpected file field'));
-    }
-    return next(new BadRequestError(`Upload error: ${error.message}`));
-  }
-  next(error);
 };
