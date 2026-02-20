@@ -74,6 +74,14 @@ const getRuleByOriginalName = (originalname: string): UploadRule | undefined => 
   return extensionToRule.get(ext);
 };
 
+const getRejectedUploadMessage = (req: Request): string | undefined => {
+  return (req as any).__uploadRejectedMessage as string | undefined;
+};
+
+const setRejectedUploadMessage = (req: Request, message: string): void => {
+  (req as any).__uploadRejectedMessage = message;
+};
+
 // Ensure upload directory exists
 const uploadDir = process.env.UPLOAD_DIR || 'uploads/content';
 if (!fs.existsSync(uploadDir)) {
@@ -101,11 +109,11 @@ const fileFilter: multer.Options['fileFilter'] = (
   const rule = getRuleByOriginalName(file.originalname);
 
   if (!rule) {
-    return cb(
-      new BadRequestError(
-        `File type ${ext} is not accepted. Allowed types: ${acceptedExtensionsLabel}.`
-      )
+    setRejectedUploadMessage(
+      req as Request,
+      `File type ${ext} is not accepted. Allowed types: ${acceptedExtensionsLabel}.`
     );
+    return cb(null, false);
   }
 
   cb(null, true);
@@ -150,12 +158,22 @@ export const uploadSingleFile = (req: Request, res: Response, next: NextFunction
       return handleUploadError(error, req, res, next);
     }
 
+    const rejectedMessage = getRejectedUploadMessage(req);
+    if (rejectedMessage) {
+      return next(new BadRequestError(rejectedMessage));
+    }
+
     next();
   });
 };
 
 // Middleware to validate file size based on resolved content type
 export const validateFileSize = (req: Request, res: Response, next: NextFunction) => {
+  const rejectedMessage = getRejectedUploadMessage(req);
+  if (rejectedMessage) {
+    return next(new BadRequestError(rejectedMessage));
+  }
+
   if (!req.file) {
     return next(new BadRequestError('No file uploaded'));
   }
