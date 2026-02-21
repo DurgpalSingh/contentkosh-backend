@@ -9,7 +9,7 @@ import { ContentMapper } from '../mappers/content.mapper';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import { FILE_TYPE_CONFIG } from '../config/file-type';
-import { FILE_EXTENSIONS, MIME_TYPES } from '../constants/file.constants';
+import { MIME_TYPES } from '../constants/file.constants';
 
 export class ContentService {
 
@@ -224,23 +224,13 @@ export class ContentService {
     type: ContentType,
     fileName: string
   ): string {
-    if (type === ContentType.PDF) {
-      return MIME_TYPES.PDF;
+    const config = FILE_TYPE_CONFIG[type];
+    if (!config) {
+      return MIME_TYPES.DEFAULT;
     }
 
     const ext = path.extname(fileName).toLowerCase();
-
-    switch (ext) {
-      case FILE_EXTENSIONS.JPG:
-      case FILE_EXTENSIONS.JPEG:
-        return MIME_TYPES.JPEG;
-
-      case FILE_EXTENSIONS.PNG:
-        return MIME_TYPES.PNG;
-
-      default:
-        return MIME_TYPES.DEFAULT;
-    }
+    return config.mimeTypes[ext] || config.defaultMimeType || MIME_TYPES.DEFAULT;
   }
 
   //  Authorize content creation: Only ADMIN, SUPERADMIN, or active TEACHER in the batch
