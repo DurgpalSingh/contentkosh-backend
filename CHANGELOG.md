@@ -1,6 +1,25 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## Version [1.1.18] - Content Upload Middleware Error Handling Improvements
+**P.R raised by**  : Shubh404-SE
+**Date** : 2026-02-20
+
+### Changed
+- **Upload Middleware Refactor** 
+  - Replaced hardcoded PDF/IMAGE branching with config-driven rule resolution from `FILE_TYPE_CONFIG`.
+  - Centralized extension-to-content-type mapping for scalable support of future file types.
+
+### Fixed
+- **Multer Error Handling**:
+  - Improved normalization of multer errors (`LIMIT_FILE_SIZE`, `LIMIT_UNEXPECTED_FILE`) into consistent `BadRequestError` responses.
+- **Connection Reset on Unsupported File Types**:
+  - Updated file rejection flow to avoid throwing directly from `fileFilter`.
+  - Now stores rejection message on request context and returns controlled `400` JSON from middleware pipeline.
+  - Prevents `ERR_CONNECTION_RESET` behavior for unsupported uploads (e.g., `.mp3`, `.mp4`, `.ppt`) and ensures frontend receives backend error message.
+
+---
+
 ## Version [1.1.17] - Teacher Profile by User ID API
 **P.R raised by**  : Shubh404-SE
 **Date** : 2026-02-18
