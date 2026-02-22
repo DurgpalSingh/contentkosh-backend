@@ -20,7 +20,7 @@ const configuredRules: UploadRule[] = (
   Object.entries(FILE_TYPE_CONFIG) as [ContentType, (typeof FILE_TYPE_CONFIG)[ContentType]][]
 ).map(([contentType, config]) => ({
   contentType,
-  extensions: config.extensions.map(ext => ext.toLowerCase()),
+  extensions: config.extensions,
   allowed: config.allowed,
   maxSizeBytes: config.maxSizeBytes
 }));
@@ -129,8 +129,8 @@ const upload = multer({
   }
 });
 
-// Middleware to normalize upload errors
-export const handleUploadError = (error: any, req: Request, res: Response, next: NextFunction) => {
+// Normalize upload-related errors into consistent API errors.
+const normalizeUploadError = (error: any, next: NextFunction) => {
   if (error instanceof multer.MulterError) {
     if (error.code === 'LIMIT_FILE_SIZE') {
       return next(
@@ -155,7 +155,7 @@ export const handleUploadError = (error: any, req: Request, res: Response, next:
 export const uploadSingleFile = (req: Request, res: Response, next: NextFunction) => {
   upload.single('file')(req, res, (error: any) => {
     if (error) {
-      return handleUploadError(error, req, res, next);
+      return normalizeUploadError(error, next);
     }
 
     const rejectedMessage = getRejectedUploadMessage(req);
@@ -169,11 +169,6 @@ export const uploadSingleFile = (req: Request, res: Response, next: NextFunction
 
 // Middleware to validate file size based on resolved content type
 export const validateFileSize = (req: Request, res: Response, next: NextFunction) => {
-  const rejectedMessage = getRejectedUploadMessage(req);
-  if (rejectedMessage) {
-    return next(new BadRequestError(rejectedMessage));
-  }
-
   if (!req.file) {
     return next(new BadRequestError('No file uploaded'));
   }
