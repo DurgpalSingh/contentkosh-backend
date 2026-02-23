@@ -9,6 +9,7 @@ import contentRoutes from './content.routes';
 import teacherRoutes from './teacher.routes';
 import healthRoutes from './health.routes';
 import authRoutes from './auth.routes';
+import dashboardRoutes from './dashboard.routes';
 import { authenticate } from '../middlewares/auth.middleware';
 
 const router = Router();
@@ -26,5 +27,6 @@ router.use('/api/batches', authenticate, batchRoutes);
 router.use('/api/permission', authenticate, permissionRoutes);
 router.use('/api', contentRoutes);
 router.use('/api/teachers', authenticate, teacherRoutes);
+router.use('/api', dashboardRoutes);
 
 export default router; 

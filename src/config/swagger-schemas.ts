@@ -1548,5 +1548,365 @@ export const swaggerSchemas = {
         description: 'Whether there are more contents to fetch'
       }
     }
+  },
+
+  // Dashboard Schemas
+  AdminDashboard: {
+    type: 'object',
+    properties: {
+      stats: {
+        type: 'object',
+        properties: {
+          totalUsers: {
+            type: 'integer',
+            description: 'Total number of active users'
+          },
+          totalTeachers: {
+            type: 'integer',
+            description: 'Total number of active teachers'
+          },
+          totalStudents: {
+            type: 'integer',
+            description: 'Total number of active students'
+          },
+          totalExams: {
+            type: 'integer',
+            description: 'Total number of exams'
+          },
+          totalCourses: {
+            type: 'integer',
+            description: 'Total number of courses'
+          },
+          totalBatches: {
+            type: 'integer',
+            description: 'Total number of batches'
+          },
+          totalContent: {
+            type: 'integer',
+            description: 'Total number of content items'
+          },
+          activeAnnouncements: {
+            type: 'integer',
+            description: 'Number of currently active announcements'
+          }
+        }
+      },
+      recentUsers: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            id: {
+              type: 'integer',
+              description: 'User ID'
+            },
+            name: {
+              type: 'string',
+              description: 'User name'
+            },
+            email: {
+              type: 'string',
+              description: 'User email'
+            },
+            role: {
+              type: 'string',
+              enum: ['ADMIN', 'TEACHER', 'STUDENT', 'USER'],
+              description: 'User role'
+            },
+            createdAt: {
+              type: 'string',
+              format: 'date-time',
+              description: 'User creation timestamp'
+            }
+          }
+        },
+        description: 'Recently created users'
+      },
+      recentAnnouncements: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            id: {
+              type: 'integer',
+              description: 'Announcement ID'
+            },
+            heading: {
+              type: 'string',
+              description: 'Announcement heading'
+            },
+            startDate: {
+              type: 'string',
+              format: 'date-time',
+              description: 'Announcement start date'
+            },
+            endDate: {
+              type: 'string',
+              format: 'date-time',
+              description: 'Announcement end date'
+            }
+          }
+        },
+        description: 'Recent active announcements'
+      },
+      upcomingExams: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            id: {
+              type: 'integer',
+              description: 'Exam ID'
+            },
+            name: {
+              type: 'string',
+              description: 'Exam name'
+            },
+            startDate: {
+              type: 'string',
+              format: 'date-time',
+              description: 'Exam start date'
+            },
+            endDate: {
+              type: 'string',
+              format: 'date-time',
+              description: 'Exam end date'
+            }
+          }
+        },
+        description: 'Upcoming exams'
+      }
+    }
+  },
+  TeacherDashboard: {
+    type: 'object',
+    properties: {
+      stats: {
+        type: 'object',
+        properties: {
+          totalBatches: {
+            type: 'integer',
+            description: 'Total number of batches teacher is associated with'
+          },
+          totalStudents: {
+            type: 'integer',
+            description: 'Total number of students across all batches'
+          },
+          totalContent: {
+            type: 'integer',
+            description: 'Total content uploaded by teacher'
+          },
+          activeAnnouncements: {
+            type: 'integer',
+            description: 'Number of currently active announcements for teachers'
+          }
+        }
+      },
+      myBatches: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            id: {
+              type: 'integer',
+              description: 'Batch ID'
+            },
+            displayName: {
+              type: 'string',
+              description: 'Batch display name'
+            },
+            courseName: {
+              type: 'string',
+              description: 'Course name'
+            },
+            studentCount: {
+              type: 'integer',
+              description: 'Number of students in batch'
+            },
+            isActive: {
+              type: 'boolean',
+              description: 'Whether batch is active'
+            }
+          }
+        },
+        description: 'Batches associated with teacher'
+      },
+      recentAnnouncements: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            id: {
+              type: 'integer',
+              description: 'Announcement ID'
+            },
+            heading: {
+              type: 'string',
+              description: 'Announcement heading'
+            },
+            startDate: {
+              type: 'string',
+              format: 'date-time',
+              description: 'Announcement start date'
+            },
+            endDate: {
+              type: 'string',
+              format: 'date-time',
+              description: 'Announcement end date'
+            }
+          }
+        },
+        description: 'Recent active announcements for teachers'
+      },
+      recentContent: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            id: {
+              type: 'integer',
+              description: 'Content ID'
+            },
+            title: {
+              type: 'string',
+              description: 'Content title'
+            },
+            batchName: {
+              type: 'string',
+              description: 'Batch name'
+            },
+            createdAt: {
+              type: 'string',
+              format: 'date-time',
+              description: 'Content creation timestamp'
+            }
+          }
+        },
+        description: 'Recently uploaded content by teacher'
+      }
+    }
+  },
+  StudentDashboard: {
+    type: 'object',
+    properties: {
+      stats: {
+        type: 'object',
+        properties: {
+          enrolledBatches: {
+            type: 'integer',
+            description: 'Number of batches student is enrolled in'
+          },
+          totalContent: {
+            type: 'integer',
+            description: 'Total content available to student'
+          },
+          activeAnnouncements: {
+            type: 'integer',
+            description: 'Number of currently active announcements for students'
+          },
+          upcomingExams: {
+            type: 'integer',
+            description: 'Number of upcoming exams'
+          }
+        }
+      },
+      myBatches: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            id: {
+              type: 'integer',
+              description: 'Batch ID'
+            },
+            displayName: {
+              type: 'string',
+              description: 'Batch display name'
+            },
+            courseName: {
+              type: 'string',
+              description: 'Course name'
+            },
+            startDate: {
+              type: 'string',
+              format: 'date-time',
+              description: 'Batch start date'
+            },
+            endDate: {
+              type: 'string',
+              format: 'date-time',
+              description: 'Batch end date'
+            },
+            isActive: {
+              type: 'boolean',
+              description: 'Whether batch is active'
+            }
+          }
+        },
+        description: 'Batches student is enrolled in'
+      },
+      recentAnnouncements: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            id: {
+              type: 'integer',
+              description: 'Announcement ID'
+            },
+            heading: {
+              type: 'string',
+              description: 'Announcement heading'
+            },
+            content: {
+              type: 'string',
+              description: 'Announcement content'
+            },
+            startDate: {
+              type: 'string',
+              format: 'date-time',
+              description: 'Announcement start date'
+            },
+            endDate: {
+              type: 'string',
+              format: 'date-time',
+              description: 'Announcement end date'
+            }
+          }
+        },
+        description: 'Recent active announcements for students'
+      },
+      recentContent: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            id: {
+              type: 'integer',
+              description: 'Content ID'
+            },
+            title: {
+              type: 'string',
+              description: 'Content title'
+            },
+            batchName: {
+              type: 'string',
+              description: 'Batch name'
+            },
+            type: {
+              type: 'string',
+              enum: ['PDF', 'IMAGE'],
+              description: 'Content type'
+            },
+            createdAt: {
+              type: 'string',
+              format: 'date-time',
+              description: 'Content creation timestamp'
+            }
+          }
+        },
+        description: 'Recently added content available to student'
+      }
+    }
   }
 };
