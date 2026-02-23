@@ -5,7 +5,7 @@ import { validateIdParam, authorizeContentAccess, authorizeContentCreation } fro
 import { validateDto } from '../middlewares/validation/dto.middleware';
 import { CreateContentDto, UpdateContentDto } from '../dtos/content.dto';
 import { contentController } from '../controllers/content.controller';
-import { uploadSingleFile, validateFileSize, handleUploadError } from '../middlewares/upload.middleware';
+import { uploadSingleFile, validateFileSize } from '../middlewares/upload.middleware';
 
 const router = Router();
 
@@ -66,7 +66,6 @@ router.post(
   validateIdParam('batchId'),
   authorizeContentCreation,
   uploadSingleFile,
-  handleUploadError,
   validateFileSize,
   validateDto(CreateContentDto),
   contentController.createContent
