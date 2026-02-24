@@ -23,7 +23,6 @@ export interface StudentDashboardStats {
     enrolledBatches: number;
     totalContent: number;
     activeAnnouncements: number;
-    upcomingExams: number;
 }
 
 export interface AdminDashboardResponse {
@@ -40,12 +39,6 @@ export interface AdminDashboardResponse {
         heading: string;
         startDate: Date;
         endDate: Date;
-    }>;
-    upcomingExams: Array<{
-        id: number;
-        name: string;
-        startDate: Date | null;
-        endDate: Date | null;
     }>;
 }
 

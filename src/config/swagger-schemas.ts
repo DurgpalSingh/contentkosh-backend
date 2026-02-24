@@ -1648,33 +1648,6 @@ export const swaggerSchemas = {
           }
         },
         description: 'Recent active announcements'
-      },
-      upcomingExams: {
-        type: 'array',
-        items: {
-          type: 'object',
-          properties: {
-            id: {
-              type: 'integer',
-              description: 'Exam ID'
-            },
-            name: {
-              type: 'string',
-              description: 'Exam name'
-            },
-            startDate: {
-              type: 'string',
-              format: 'date-time',
-              description: 'Exam start date'
-            },
-            endDate: {
-              type: 'string',
-              format: 'date-time',
-              description: 'Exam end date'
-            }
-          }
-        },
-        description: 'Upcoming exams'
       }
     }
   },
@@ -1803,10 +1776,6 @@ export const swaggerSchemas = {
           activeAnnouncements: {
             type: 'integer',
             description: 'Number of currently active announcements for students'
-          },
-          upcomingExams: {
-            type: 'integer',
-            description: 'Number of upcoming exams'
           }
         }
       },
