@@ -1,6 +1,9 @@
 import { prisma } from '../config/database';
 import { ContentStatus, UserRole, UserStatus } from '@prisma/client';
 
+const DASHBOARD_PREVIEW_LIMIT = 5;
+const BATCH_PREVIEW_LIMIT = 5;
+
 // Common query for active announcements
 const getActiveAnnouncementsWhere = (businessId: number, visibleTo: 'admins' | 'teachers' | 'students') => {
     const now = new Date();
@@ -17,10 +20,23 @@ const getActiveAnnouncementsWhere = (businessId: number, visibleTo: 'admins' | '
     };
 };
 
+const getTeacherBatchWhere = (businessId: number, userId: number) => ({
+    course: { exam: { businessId } },
+    contents: { some: { uploadedBy: userId } }
+});
+
+const getStudentBatchWhere = (businessId: number, userId: number) => ({
+    course: { exam: { businessId } },
+    batchUsers: {
+        some: {
+            userId,
+            isActive: true
+        }
+    }
+});
+
 // Admin Dashboard Queries
 export async function getAdminStats(businessId: number) {
-    const now = new Date();
-    
     const [
         totalUsers,
         totalTeachers,
@@ -30,7 +46,7 @@ export async function getAdminStats(businessId: number) {
         totalBatches,
         totalContent,
         activeAnnouncements
-    ] = await Promise.all([
+    ] = await prisma.$transaction([
         prisma.user.count({
             where: { businessId, status: UserStatus.ACTIVE }
         }),
@@ -84,7 +100,7 @@ export async function getAdminDashboardData(businessId: number) {
                 createdAt: true
             },
             orderBy: { createdAt: 'desc' },
-            take: 5
+            take: DASHBOARD_PREVIEW_LIMIT
         }),
         prisma.announcement.findMany({
             where: getActiveAnnouncementsWhere(businessId, 'admins'),
@@ -95,7 +111,7 @@ export async function getAdminDashboardData(businessId: number) {
                 endDate: true
             },
             orderBy: { createdAt: 'desc' },
-            take: 5
+            take: DASHBOARD_PREVIEW_LIMIT
         }),
         prisma.exam.findMany({
             where: {
@@ -109,7 +125,7 @@ export async function getAdminDashboardData(businessId: number) {
                 endDate: true
             },
             orderBy: { startDate: 'asc' },
-            take: 5
+            take: DASHBOARD_PREVIEW_LIMIT
         })
     ]);
 
@@ -123,22 +139,15 @@ export async function getAdminDashboardData(businessId: number) {
 
 // Teacher Dashboard Queries
 export async function getTeacherDashboardData(businessId: number, userId: number) {
-    const now = new Date();
-    
-    // Get unique batch IDs where teacher uploaded content
-    const teacherBatches = await prisma.content.findMany({
-        where: {
-            uploadedBy: userId,
-            batch: { course: { exam: { businessId } } }
-        },
-        select: { batchId: true },
-        distinct: ['batchId']
+    const batchWhere = getTeacherBatchWhere(businessId, userId);
+
+    // Fast exit before running heavier dashboard queries
+    const totalBatches = await prisma.batch.count({
+        where: batchWhere
     });
 
-    const batchIds = teacherBatches.map(b => b.batchId);
-
     // If no batches, return empty data
-    if (batchIds.length === 0) {
+    if (totalBatches === 0) {
         return {
             stats: {
                 totalBatches: 0,
@@ -152,15 +161,19 @@ export async function getTeacherDashboardData(businessId: number, userId: number
         };
     }
 
-    const [totalContent, activeAnnouncements, batches, recentAnnouncements, recentContent] = await Promise.all([
+    const [totalContent, activeAnnouncements, batches, uniqueStudents, recentAnnouncements, recentContent] = await prisma.$transaction([
         prisma.content.count({
-            where: { uploadedBy: userId }
+            where: {
+                uploadedBy: userId,
+                status: ContentStatus.ACTIVE,
+                batch: { course: { exam: { businessId } } }
+            }
         }),
         prisma.announcement.count({
             where: getActiveAnnouncementsWhere(businessId, 'teachers')
         }),
         prisma.batch.findMany({
-            where: { id: { in: batchIds } },
+            where: batchWhere,
             select: {
                 id: true,
                 displayName: true,
@@ -177,7 +190,17 @@ export async function getTeacherDashboardData(businessId: number, userId: number
                 }
             },
             orderBy: { createdAt: 'desc' },
-            take: 10
+            take: BATCH_PREVIEW_LIMIT
+        }),
+        prisma.batchUser.groupBy({
+            by: ['userId'],
+            orderBy: {
+                userId: 'asc'
+            },
+            where: {
+                isActive: true,
+                batch: batchWhere
+            }
         }),
         prisma.announcement.findMany({
             where: getActiveAnnouncementsWhere(businessId, 'teachers'),
@@ -188,10 +211,14 @@ export async function getTeacherDashboardData(businessId: number, userId: number
                 endDate: true
             },
             orderBy: { createdAt: 'desc' },
-            take: 5
+            take: DASHBOARD_PREVIEW_LIMIT
         }),
         prisma.content.findMany({
-            where: { uploadedBy: userId, status: ContentStatus.ACTIVE },
+            where: {
+                uploadedBy: userId,
+                status: ContentStatus.ACTIVE,
+                batch: { course: { exam: { businessId } } }
+            },
             select: {
                 id: true,
                 title: true,
@@ -201,18 +228,9 @@ export async function getTeacherDashboardData(businessId: number, userId: number
                 }
             },
             orderBy: { createdAt: 'desc' },
-            take: 5
+            take: DASHBOARD_PREVIEW_LIMIT
         })
     ]);
-
-    // Count unique students across all batches
-    const uniqueStudents = await prisma.batchUser.groupBy({
-        by: ['userId'],
-        where: {
-            batchId: { in: batchIds },
-            isActive: true
-        }
-    });
 
     const formattedBatches = batches.map(batch => ({
         id: batch.id,
@@ -231,7 +249,7 @@ export async function getTeacherDashboardData(businessId: number, userId: number
 
     return {
         stats: {
-            totalBatches: batchIds.length,
+            totalBatches,
             totalStudents: uniqueStudents.length,
             totalContent,
             activeAnnouncements
@@ -245,21 +263,19 @@ export async function getTeacherDashboardData(businessId: number, userId: number
 // Student Dashboard Queries
 export async function getStudentDashboardData(businessId: number, userId: number) {
     const now = new Date();
-    
-    // Get student's enrolled batches
-    const studentBatchUsers = await prisma.batchUser.findMany({
+    const batchWhere = getStudentBatchWhere(businessId, userId);
+
+    // Fast exit before running heavier dashboard queries
+    const enrolledBatches = await prisma.batchUser.count({
         where: {
             userId,
             isActive: true,
             batch: { course: { exam: { businessId } } }
-        },
-        select: { batchId: true }
+        }
     });
 
-    const batchIds = studentBatchUsers.map(b => b.batchId);
-
     // If not enrolled in any batch, return empty data
-    if (batchIds.length === 0) {
+    if (enrolledBatches === 0) {
         return {
             stats: {
                 enrolledBatches: 0,
@@ -273,9 +289,9 @@ export async function getStudentDashboardData(businessId: number, userId: number
         };
     }
 
-    const [totalContent, activeAnnouncements, upcomingExams, batches, recentAnnouncements, recentContent] = await Promise.all([
+    const [totalContent, activeAnnouncements, upcomingExams, batches, recentAnnouncements, recentContent] = await prisma.$transaction([
         prisma.content.count({
-            where: { batchId: { in: batchIds } }
+            where: { batch: batchWhere }
         }),
         prisma.announcement.count({
             where: getActiveAnnouncementsWhere(businessId, 'students')
@@ -287,7 +303,7 @@ export async function getStudentDashboardData(businessId: number, userId: number
             }
         }),
         prisma.batch.findMany({
-            where: { id: { in: batchIds } },
+            where: batchWhere,
             select: {
                 id: true,
                 displayName: true,
@@ -299,7 +315,7 @@ export async function getStudentDashboardData(businessId: number, userId: number
                 }
             },
             orderBy: { createdAt: 'desc' },
-            take: 10
+            take: BATCH_PREVIEW_LIMIT
         }),
         prisma.announcement.findMany({
             where: getActiveAnnouncementsWhere(businessId, 'students'),
@@ -311,10 +327,10 @@ export async function getStudentDashboardData(businessId: number, userId: number
                 endDate: true
             },
             orderBy: { createdAt: 'desc' },
-            take: 5
+            take: DASHBOARD_PREVIEW_LIMIT
         }),
         prisma.content.findMany({
-            where: { batchId: { in: batchIds } },
+            where: { batch: batchWhere },
             select: {
                 id: true,
                 title: true,
@@ -325,7 +341,7 @@ export async function getStudentDashboardData(businessId: number, userId: number
                 }
             },
             orderBy: { createdAt: 'desc' },
-            take: 5
+            take: DASHBOARD_PREVIEW_LIMIT
         })
     ]);
 
@@ -348,7 +364,7 @@ export async function getStudentDashboardData(businessId: number, userId: number
 
     return {
         stats: {
-            enrolledBatches: batchIds.length,
+            enrolledBatches,
             totalContent,
             activeAnnouncements,
             upcomingExams
