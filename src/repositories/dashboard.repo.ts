@@ -84,15 +84,22 @@ const findBatches = <T extends Prisma.BatchSelect>(
         take: BATCH_PREVIEW_LIMIT
     });
 
-const countTeacherUniqueStudents = (batchWhere: Prisma.BatchWhereInput) =>
-    prisma.batchUser.groupBy({
-        by: ['userId'],
-        orderBy: { userId: 'asc' },
+const countTeacherUniqueStudents = async (batchWhere: Prisma.BatchWhereInput) => {
+    const result = await prisma.batchUser.findMany({
         where: {
             isActive: true,
-            batch: batchWhere
-        }
+            batch: batchWhere,
+            user: {
+                role: UserRole.STUDENT,
+                status: UserStatus.ACTIVE
+            }
+        },
+        select: { userId: true },
+        distinct: ['userId']
     });
+
+    return result.length;
+};
 
 // Admin Dashboard Queries
 export async function getAdminStats(businessId: number) {
@@ -200,7 +207,7 @@ export async function getTeacherDashboardData(businessId: number, userId: number
         };
     }
 
-    const [totalContent, activeAnnouncements, batches, uniqueStudents, recentAnnouncements, recentContent] =
+    const [totalContent, activeAnnouncements, batches, recentAnnouncements, recentContent] =
         await prisma.$transaction([
             countContent(contentWhere),
             countActiveAnnouncements(businessId, 'teachers'),
@@ -212,7 +219,6 @@ export async function getTeacherDashboardData(businessId: number, userId: number
                     select: { name: true }
                 },
             }),
-            countTeacherUniqueStudents(batchWhere),
             findRecentAnnouncements(businessId, 'teachers', {
                 id: true,
                 heading: true,
@@ -229,10 +235,12 @@ export async function getTeacherDashboardData(businessId: number, userId: number
             })
         ]);
 
+    const uniqueStudents = await countTeacherUniqueStudents(batchWhere);
+
     return {
         stats: {
             totalBatches,
-            totalStudents: uniqueStudents.length,
+            totalStudents: uniqueStudents,
             totalContent,
             activeAnnouncements
         },
