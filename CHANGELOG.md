@@ -1,6 +1,30 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## Version [1.1.19] - Dashboard API
+**P.R raised by**  : Shubh404-SE
+**Date** : 2026-02-24
+
+### IMPLIMENTED
+- **DASHBOARD API**: get dashboard data according to the users role using single route.
+  
+### Optimizations
+- **Admin Stats Querying**:
+  - Replaced multiple active-user count queries with grouped aggregation by role.
+  - Refactored `dashboard.repo.ts` into reusable query helper functions for repeated patterns.
+  - Shared helper queries across Admin, Teacher, and Student dashboard handlers.
+- **Role Dashboards**:
+  - Continued relation-filter based querying for teacher/student dashboards to avoid large intermediate ID lists.
+
+### Tests
+- **Dashboard Route Integration Tests**:
+  - Added `tests/integration/routes/dashboard.routes.test.ts`.
+  - Covered Admin/Teacher/Student success responses.
+  - Covered `401` unauthorized path when authenticated user context is missing.
+  - Covered `400`/`404`/`403` mapped error responses from service layer. 
+
+---
+
 ## Version [1.1.18] - Content Upload Middleware Error Handling Improvements
 **P.R raised by**  : Shubh404-SE
 **Date** : 2026-02-20
