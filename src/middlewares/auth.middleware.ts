@@ -6,17 +6,21 @@ import { AuthService } from '../services/auth.service';
 import { AuthRequest, IUser } from '../dtos/auth.dto';
 import { UserRole } from '@prisma/client';
 import { ApiError } from '../errors/api.errors';
+import { getAccessTokenFromRequest } from '../utils/authCookies';
+import { config } from '../config/config';
+
+function getBearerToken(req: AuthRequest): string | undefined {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) return undefined;
+    const token = authHeader.split(' ')[1];
+    return token || undefined;
+}
 
 export const authenticate = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
-        const authHeader = req.headers.authorization;
-
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            ApiResponseHandler.unauthorized(res, 'No token provided');
-            return;
-        }
-
-        const token = authHeader.split(' ')[1];
+        const accessTokenFromCookie = getAccessTokenFromRequest(req);
+        const accessTokenFromHeader = config.auth.allowAuthHeaderFallback ? getBearerToken(req) : undefined;
+        const token = accessTokenFromCookie || accessTokenFromHeader;
         if (!token) {
             ApiResponseHandler.unauthorized(res, 'No token provided');
             return;

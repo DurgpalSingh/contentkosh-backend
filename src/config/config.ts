@@ -10,5 +10,18 @@ export const config = {
   server: {
     port: process.env.PORT || 8080,
     nodeEnv: process.env.NODE_ENV || 'development',
-  }
+    frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
+  },
+  auth: {
+    allowAuthHeaderFallback: process.env.AUTH_HEADER_FALLBACK !== 'false',
+  },
+  cookies: {
+    accessCookieName: process.env.ACCESS_COOKIE_NAME || 'ck_access_token',
+    refreshCookieName: process.env.REFRESH_COOKIE_NAME || 'ck_refresh_token',
+    domain: process.env.COOKIE_DOMAIN || undefined,
+    accessCookieMaxAgeMs: process.env.ACCESS_COOKIE_MAX_AGE_MS ? parseInt(process.env.ACCESS_COOKIE_MAX_AGE_MS) : 15 * 60 * 1000,
+    refreshCookieMaxAgeMs: process.env.REFRESH_COOKIE_MAX_AGE_MS ? parseInt(process.env.REFRESH_COOKIE_MAX_AGE_MS) : 7 * 24 * 60 * 60 * 1000,
+    secure: process.env.COOKIE_SECURE ? process.env.COOKIE_SECURE === 'true' : process.env.NODE_ENV === 'production',
+    sameSite: (process.env.COOKIE_SAME_SITE || 'lax').toLowerCase(),
+  },
 };

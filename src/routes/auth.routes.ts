@@ -3,7 +3,7 @@ import { Router } from 'express';
 import { register, login, logout, getProfile, refreshToken } from '../controllers/auth.controller';
 import { authenticate } from '../middlewares/auth.middleware';
 import { validateDto } from '../middlewares/validation/dto.middleware';
-import { RegisterRequest, LoginRequest, RefreshTokenRequest } from '../dtos/auth.dto';
+import { RegisterRequest, LoginRequest } from '../dtos/auth.dto';
 
 const router = Router();
 
@@ -123,7 +123,7 @@ router.post('/login', validateDto(LoginRequest), login);
  *       403:
  *         description: User account is inactive
  */
-router.post('/refresh', validateDto(RefreshTokenRequest), refreshToken);
+router.post('/refresh', refreshToken);
 
 /**
  * @swagger
