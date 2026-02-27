@@ -7,16 +7,12 @@ import { ApiError } from '../errors/api.errors';
 import * as userService from '../services/user.service';
 import { clearAuthCookies, getRefreshTokenFromRequest, setAuthCookies } from '../utils/authCookies';
 
-function toSessionUser(result: Awaited<ReturnType<typeof AuthService.login>>) {
-    return result.user;
-}
-
 export const register = async (req: Request, res: Response) => {
     try {
         const data: RegisterRequest = req.body;
         const result = await AuthService.register(data);
         setAuthCookies(res, result.accessToken, result.refreshToken);
-        ApiResponseHandler.success(res, toSessionUser(result), 'User registered successfully', 201);
+        ApiResponseHandler.success(res, result.user, 'User registered successfully', 201);
     } catch (error: any) {
         if (error instanceof ApiError) {
             ApiResponseHandler.error(res, error.message, error.statusCode);
@@ -31,7 +27,7 @@ export const login = async (req: Request, res: Response) => {
         const data: LoginRequest = req.body;
         const result = await AuthService.login(data);
         setAuthCookies(res, result.accessToken, result.refreshToken);
-        ApiResponseHandler.success(res, toSessionUser(result), 'Login successful');
+        ApiResponseHandler.success(res, result.user, 'Login successful');
     } catch (error: any) {
         if (error instanceof ApiError) {
             ApiResponseHandler.error(res, error.message, error.statusCode);
@@ -51,7 +47,7 @@ export const refreshToken = async (req: Request, res: Response) => {
 
         const result = await AuthService.refreshTokens(refreshTokenValue);
         setAuthCookies(res, result.accessToken, result.refreshToken);
-        ApiResponseHandler.success(res, toSessionUser(result), 'Tokens refreshed successfully');
+        ApiResponseHandler.success(res, result.user, 'Tokens refreshed successfully');
     } catch (error: any) {
         if (error instanceof ApiError) {
             ApiResponseHandler.error(res, error.message, error.statusCode);
