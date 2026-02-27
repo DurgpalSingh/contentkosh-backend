@@ -14,11 +14,8 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - **Auth Controller Flow (Cookie-first)**:
 - **Auth Middleware**:
-  - `authenticate` now validates user session using access token from cookie (`ck_access_token`) only.
+  - `authenticate` now validates user session using cookie (`ck_access_token`) only.
   - Removed unnecessary bearer-token fallback path from middleware for cookie-session architecture.
-- **Server Middleware**:
-  - Ensured `cookie-parser` is active before protected routes so auth cookies are readable.
-  - CORS remains configured with `credentials: true` to support cookie-based cross-origin requests from frontend.
 - **Config Consolidation**:
 
 ---
