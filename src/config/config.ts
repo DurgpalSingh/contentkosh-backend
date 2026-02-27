@@ -12,9 +12,6 @@ export const config = {
     nodeEnv: process.env.NODE_ENV || 'development',
     frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
   },
-  auth: {
-    allowAuthHeaderFallback: process.env.AUTH_HEADER_FALLBACK !== 'false',
-  },
   cookies: {
     accessCookieName: process.env.ACCESS_COOKIE_NAME || 'ck_access_token',
     refreshCookieName: process.env.REFRESH_COOKIE_NAME || 'ck_refresh_token',
