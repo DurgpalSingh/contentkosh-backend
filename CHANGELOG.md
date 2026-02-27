@@ -1,5 +1,31 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.1.22] - CK-87 Cookie Auth Integration
+**P.R raised by**  : Shubh404-SE
+**Date** : 2026-02-27
+
+### Added
+- **Cookie Auth Utilities**:
+  - Centralized cookie helpers in `src/utils/authCookies.ts` for:
+    - setting auth cookies, clearing auth cookies, reading access/refresh cookies from requests
+  - Standardized cookie options (`httpOnly`, `secure`, `sameSite`, `path`, optional `domain`) through shared helper logic.
+  - Access/refresh tokens are no longer handled by frontend JS and stay in HttpOnly cookies.
+
+### Changed
+- **Auth Controller Flow (Cookie-first)**:
+  - `POST /api/auth/login` and `POST /api/auth/signup` now set access + refresh tokens as HttpOnly cookies.
+  - `POST /api/auth/refresh` now reads refresh token from cookie and rotates both cookies on success.
+  - `POST /api/auth/logout` revokes refresh token (if present) and clears both auth cookies.
+- **Auth Middleware**:
+  - `authenticate` now validates user session using access token from cookie (`ck_access_token`) only.
+  - Removed unnecessary bearer-token fallback path from middleware for cookie-session architecture.
+- **Server Middleware**:
+  - Ensured `cookie-parser` is active before protected routes so auth cookies are readable.
+  - CORS remains configured with `credentials: true` to support cookie-based cross-origin requests from frontend.
+- **Config Consolidation**:
+  - Cookie behavior is now fully driven by `config.cookies`:
+
+---
 ## Version [1.1.21] - Doc formate Allowed for content upload
 **P.R raised by**  : Shubh404-SE on **Date** : 2026-03-02
 
@@ -11,15 +37,14 @@ All notable changes to this project will be documented in this file.
   - Updated content route Swagger docs
   - file response content types include DOC/DOCX MIME types 
 ### Tests updated
-
 ---
 ## Version [1.1.20] - Dashboard Inactive Content & Exam Issue Fix
 **P.R raised by**  : Shubh404-SE on **Date** : 2026-02-28
 ### Changed
   - Dashboard queries updated for active content and active exam
   - Added bussines logo to get in response
-
 ---
+
 ## Version [1.1.19] - Dashboard API
 **P.R raised by**  : Shubh404-SE
 **Date** : 2026-02-24
