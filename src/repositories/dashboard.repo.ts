@@ -1,8 +1,7 @@
 import { prisma } from '../config/database';
-import { ContentStatus, Prisma, UserRole, UserStatus } from '@prisma/client';
+import { ContentStatus, ExamStatus, Prisma, UserRole, UserStatus } from '@prisma/client';
 
 const DASHBOARD_PREVIEW_LIMIT = 5;
-const BATCH_PREVIEW_LIMIT = 5;
 
 type AnnouncementAudience = 'admins' | 'teachers' | 'students';
 
@@ -28,16 +27,31 @@ const getActiveAnnouncementsWhere = (
 };
 
 const getTeacherBatchWhere = (businessId: number, userId: number): Prisma.BatchWhereInput => ({
-    course: { exam: { businessId } },
-    contents: { some: { uploadedBy: userId } }
-});
-
-const getStudentBatchWhere = (businessId: number, userId: number): Prisma.BatchWhereInput => ({
-    course: { exam: { businessId } },
+    isActive: true,
+    course: { exam: { businessId, status: ExamStatus.ACTIVE } },
     batchUsers: {
         some: {
             userId,
-            isActive: true
+            isActive: true,
+            user: {
+                role: UserRole.TEACHER,
+                status: UserStatus.ACTIVE
+            }
+        }
+    }
+});
+
+const getStudentBatchWhere = (businessId: number, userId: number): Prisma.BatchWhereInput => ({
+    isActive: true,
+    course: { exam: { businessId, status: ExamStatus.ACTIVE } },
+    batchUsers: {
+        some: {
+            userId,
+            isActive: true,
+            user: {
+                role: UserRole.STUDENT,
+                status: UserStatus.ACTIVE
+            }
         }
     }
 });
@@ -80,8 +94,7 @@ const findBatches = <T extends Prisma.BatchSelect>(
     prisma.batch.findMany({
         where,
         select,
-        orderBy: { createdAt: 'desc' },
-        take: BATCH_PREVIEW_LIMIT
+        orderBy: { createdAt: 'desc' }
     });
 
 const countTeacherUniqueStudents = async (batchWhere: Prisma.BatchWhereInput) => {
@@ -119,16 +132,20 @@ export async function getAdminStats(businessId: number) {
     ] = await prisma.$transaction([
         activeUsersByRolePromise,
         prisma.exam.count({
-            where: { businessId }
+            where: { businessId, status: ExamStatus.ACTIVE }
         }),
         prisma.course.count({
-            where: { exam: { businessId } }
+            where: { exam: { businessId, status: ExamStatus.ACTIVE } }
         }),
         prisma.batch.count({
-            where: { course: { exam: { businessId } } }
+            where: {
+                isActive: true,
+                course: { exam: { businessId, status: ExamStatus.ACTIVE } }
+            }
         }),
         countContent({
-            batch: { course: { exam: { businessId } } }
+            batch: { isActive: true, course: { exam: { businessId, status: ExamStatus.ACTIVE } } },
+            status: ContentStatus.ACTIVE
         }),
         countActiveAnnouncements(businessId, 'admins')
     ]);
@@ -187,9 +204,8 @@ export async function getAdminDashboardData(businessId: number) {
 export async function getTeacherDashboardData(businessId: number, userId: number) {
     const batchWhere = getTeacherBatchWhere(businessId, userId);
     const contentWhere: Prisma.ContentWhereInput = {
-        uploadedBy: userId,
         status: ContentStatus.ACTIVE,
-        batch: { course: { exam: { businessId } } }
+        batch: batchWhere
     };
 
     const totalBatches = await prisma.batch.count({ where: batchWhere });
@@ -253,13 +269,17 @@ export async function getTeacherDashboardData(businessId: number, userId: number
 // Student Dashboard Queries
 export async function getStudentDashboardData(businessId: number, userId: number) {
     const batchWhere = getStudentBatchWhere(businessId, userId);
-    const contentWhere: Prisma.ContentWhereInput = { batch: batchWhere };
+    const contentWhere: Prisma.ContentWhereInput = { batch: batchWhere, status: ContentStatus.ACTIVE };
 
     const enrolledBatches = await prisma.batchUser.count({
         where: {
             userId,
             isActive: true,
-            batch: { course: { exam: { businessId } } }
+            batch: { isActive: true, course: { exam: { businessId, status: ExamStatus.ACTIVE } } },
+            user: {
+                role: UserRole.STUDENT,
+                status: UserStatus.ACTIVE
+            }
         }
     });
 

@@ -74,7 +74,7 @@ export function findPublicById(id: number) {
       businessId: true,
       createdAt: true,
       updatedAt: true,
-      business: { select: { id: true, instituteName: true, slug: true } }
+      business: { select: { id: true, instituteName: true, slug: true, logo: true } }
     }
   });
 }
