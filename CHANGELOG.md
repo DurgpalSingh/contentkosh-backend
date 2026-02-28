@@ -1,6 +1,13 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## Version [1.1.20] - Dashboard Inactive Content & Exam Issue Fix
+**P.R raised by**  : Shubh404-SE on **Date** : 2026-02-28
+### Changed
+  - Dashboard queries updated for active content and active exam
+  - Added bussines logo to get in response
+
+---
 ## Version [1.1.19] - Dashboard API
 **P.R raised by**  : Shubh404-SE
 **Date** : 2026-02-24
