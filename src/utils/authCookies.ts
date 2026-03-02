@@ -3,10 +3,36 @@ import { config } from '../config/config';
 
 type CookieSameSite = 'lax' | 'strict' | 'none';
 
+const COOKIE_SAME_SITE = {
+  LAX: 'lax',
+  STRICT: 'strict',
+  NONE: 'none',
+} as const;
+
+const COOKIE_PATH = '/';
+
+function normalizeSameSite(value: string | undefined): CookieSameSite {
+  const normalizedValue = value?.trim().toLowerCase();
+
+  if (
+    normalizedValue === COOKIE_SAME_SITE.LAX ||
+    normalizedValue === COOKIE_SAME_SITE.STRICT ||
+    normalizedValue === COOKIE_SAME_SITE.NONE
+  ) {
+    return normalizedValue;
+  }
+
+  return COOKIE_SAME_SITE.LAX;
+}
+
 function getCookieSameSite(): CookieSameSite {
-  const sameSite = config.cookies.sameSite;
-  if (sameSite === 'strict' || sameSite === 'none') return sameSite;
-  return 'lax';
+  const sameSite = normalizeSameSite(config.cookies.sameSite);
+
+  if (sameSite === COOKIE_SAME_SITE.NONE && !config.cookies.secure) {
+    throw new Error("Invalid cookie configuration: COOKIE_SAME_SITE='none' requires COOKIE_SECURE=true");
+  }
+
+  return sameSite;
 }
 
 function getBaseCookieOptions(maxAge: number) {
@@ -14,7 +40,7 @@ function getBaseCookieOptions(maxAge: number) {
     httpOnly: true,
     secure: config.cookies.secure,
     sameSite: getCookieSameSite(),
-    path: '/',
+    path: COOKIE_PATH,
     domain: config.cookies.domain,
     maxAge,
   } as const;
@@ -30,7 +56,7 @@ export function clearAuthCookies(res: Response): void {
     httpOnly: true,
     secure: config.cookies.secure,
     sameSite: getCookieSameSite(),
-    path: '/',
+    path: COOKIE_PATH,
     domain: config.cookies.domain,
   } as const;
 
