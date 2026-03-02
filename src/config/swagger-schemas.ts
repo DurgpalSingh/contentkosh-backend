@@ -1391,7 +1391,7 @@ export const swaggerSchemas = {
       },
       type: {
         type: 'string',
-        enum: ['PDF', 'IMAGE'],
+        enum: ['PDF', 'IMAGE', 'DOC'],
         description: 'Type of the content file'
       },
       filePath: {
@@ -1493,7 +1493,7 @@ export const swaggerSchemas = {
       },
       type: {
         type: 'string',
-        enum: ['PDF', 'IMAGE'],
+        enum: ['PDF', 'IMAGE', 'DOC'],
         description: 'Type of the content file (required)'
       },
       filePath: {
@@ -1864,7 +1864,7 @@ export const swaggerSchemas = {
             },
             type: {
               type: 'string',
-              enum: ['PDF', 'IMAGE'],
+              enum: ['PDF', 'IMAGE', 'DOC'],
               description: 'Content type'
             },
             createdAt: {

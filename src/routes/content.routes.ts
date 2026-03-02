@@ -40,7 +40,7 @@ router.use(authenticate);
  *               file:
  *                 type: string
  *                 format: binary
- *                 description: File to upload (PDF or Image)
+ *                 description: File to upload (PDF, Image, or DOC/DOCX)
  *               title:
  *                 type: string
  *                 description: Title of the content
@@ -90,7 +90,7 @@ router.post(
  *         name: type
  *         schema:
  *           type: string
- *           enum: [PDF, IMAGE]
+ *           enum: [PDF, IMAGE, DOC]
  *         description: Filter by content type
  *       - in: query
  *         name: status
@@ -184,6 +184,14 @@ router.get(
  *               type: string
  *               format: binary
  *           image/png:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *           application/msword:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *           application/vnd.openxmlformats-officedocument.wordprocessingml.document:
  *             schema:
  *               type: string
  *               format: binary

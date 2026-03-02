@@ -43,5 +43,19 @@ export const FILE_TYPE_CONFIG: Record<ContentType, {
             [FILE_EXTENSIONS.PNG]: MIME_TYPES.PNG
         },
         defaultMimeType: MIME_TYPES.DEFAULT
+    },
+
+    [ContentType.DOC]: {
+        extensions: [FILE_EXTENSIONS.DOC, FILE_EXTENSIONS.DOCX],
+        allowed: ALLOWED_FILE_TYPES.some(type =>
+            [FILE_FORMATS.DOC, FILE_FORMATS.DOCX].includes(type)
+        ),
+        maxSizeBytes:
+            Number(process.env.MAX_DOC_SIZE_MB || 10) * BYTES_IN_MB,
+        mimeTypes: {
+            [FILE_EXTENSIONS.DOC]: MIME_TYPES.DOC,
+            [FILE_EXTENSIONS.DOCX]: MIME_TYPES.DOCX
+        },
+        defaultMimeType: MIME_TYPES.DEFAULT
     }
 };

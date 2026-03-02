@@ -80,6 +80,19 @@ describe('Content Controller (Comprehensive)', () => {
       expect(ApiResponseHandler.success).toHaveBeenCalled();
     });
 
+    it('creates DOC content successfully', async () => {
+      req.params = { batchId: '1' };
+      req.body = { title: 'Word Doc', type: ContentType.DOC };
+
+      const result = { id: 3, title: 'Word Doc', type: ContentType.DOC };
+      jest
+        .spyOn(ContentService.prototype, 'createContent')
+        .mockResolvedValue(result as any);
+
+      await contentController.createContent(req as any, res as any);
+      expect(ApiResponseHandler.success).toHaveBeenCalled();
+    });
+
     it('returns 400 when title is missing', async () => {
       req.params = { batchId: '1' };
       req.body = {};
