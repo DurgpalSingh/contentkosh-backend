@@ -2,7 +2,7 @@ import request from 'supertest';
 import express from 'express';
 import contentRoutes from '../../../src/routes/content.routes';
 import { errorHandler } from '../../../src/middlewares/error.middleware';
-import { ContentStatus, ContentType } from '@prisma/client';
+import { ContentType } from '@prisma/client';
 
 // Mock ContentService entirely to avoid fs/path validation
 jest.mock('../../../src/services/content.service', () => {
@@ -63,9 +63,12 @@ jest.mock('../../../src/middlewares/upload.middleware', () => ({
         next();
     },
     validateFileSize: (req: any, res: any, next: any) => {
-        req.body.filePath = 'uploads/test-file.pdf';
+        const requestedType = req.body.type || 'PDF';
+        req.body.filePath = requestedType === 'DOC'
+            ? 'uploads/test-file.docx'
+            : 'uploads/test-file.pdf';
         req.body.fileSize = 1024;
-        req.body.type = 'PDF';
+        req.body.type = requestedType;
         next();
     },
     handleUploadError: (err: any, req: any, res: any, next: any) => next(err),
@@ -90,6 +93,14 @@ describe('Content Routes Integration', () => {
             const res = await request(app)
                 .post('/api/batches/1/contents')
                 .send({ title: 'Test Content' });
+
+            expect(res.status).toBe(201);
+        });
+
+        it('should create DOC content successfully', async () => {
+            const res = await request(app)
+                .post('/api/batches/1/contents')
+                .send({ title: 'Test DOC Content', type: ContentType.DOC });
 
             expect(res.status).toBe(201);
         });

@@ -1,5 +1,7 @@
 export const FILE_EXTENSIONS = {
   PDF: '.pdf',
+  DOC: '.doc',
+  DOCX: '.docx',
 
   JPG: '.jpg',
   JPEG: '.jpeg',
@@ -14,6 +16,8 @@ export const IMAGE_EXTENSIONS = [
 
 export const FILE_FORMATS = {
   PDF: 'pdf',
+  DOC: 'doc',
+  DOCX: 'docx',
 
   JPG: 'jpg',
   JPEG: 'jpeg',
@@ -22,6 +26,8 @@ export const FILE_FORMATS = {
 
 export const MIME_TYPES = {
   PDF: 'application/pdf',
+  DOC: 'application/msword',
+  DOCX: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 
   JPEG: 'image/jpeg',
   PNG: 'image/png',

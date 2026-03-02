@@ -1,6 +1,18 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.1.21] - Doc formate Allowed for content upload
+**P.R raised by**  : Shubh404-SE on **Date** : 2026-03-02
 
+### Changed
+  - Added new content type DOC in Prisma enum: schema.prisma
+  - Extended file-type config with ContentType.DOC including:
+    - allowed extensions: .doc, .docx and env-based size limit: 10MB
+  - updated: file-type.ts for doc config
+  - Updated content route Swagger docs
+  - file response content types include DOC/DOCX MIME types 
+### Tests updated
+
+---
 ## Version [1.1.20] - Dashboard Inactive Content & Exam Issue Fix
 **P.R raised by**  : Shubh404-SE on **Date** : 2026-02-28
 ### Changed
