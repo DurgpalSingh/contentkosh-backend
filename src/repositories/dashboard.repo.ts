@@ -204,6 +204,7 @@ export async function getAdminDashboardData(businessId: number) {
 export async function getTeacherDashboardData(businessId: number, userId: number) {
     const batchWhere = getTeacherBatchWhere(businessId, userId);
     const contentWhere: Prisma.ContentWhereInput = {
+        uploadedBy: userId,
         status: ContentStatus.ACTIVE,
         batch: batchWhere
     };

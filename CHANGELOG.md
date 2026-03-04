@@ -1,5 +1,13 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.1.23] - Restrict teacher edit/delete to admin or same teacher
+**P.R raised by**  : Shubh404-SE on **Date** : 2026-03-05
+
+### Change
+  - Updated middleware logic to check content uploadBy with access use-id.
+  - updated edit/delete service to check correct teacher to give access.
+  - updated teacher dashboard content to show only their content count.
+---
 ## Version [1.1.22] - CK-87 Cookie Auth Integration
 **P.R raised by**  : Shubh404-SE
 **Date** : 2026-02-27
