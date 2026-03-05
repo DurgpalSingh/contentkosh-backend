@@ -2,16 +2,17 @@
 import { Request, Response } from 'express';
 import { AuthService } from '../services/auth.service';
 import { ApiResponseHandler } from '../utils/apiResponse';
-import { RegisterRequest, LoginRequest, AuthRequest, RefreshTokenRequest } from '../dtos/auth.dto';
-import { plainToInstance } from 'class-transformer';
+import { RegisterRequest, LoginRequest, AuthRequest } from '../dtos/auth.dto';
 import { ApiError } from '../errors/api.errors';
 import * as userService from '../services/user.service';
+import { clearAuthCookies, getRefreshTokenFromRequest, setAuthCookies } from '../utils/authCookies';
 
 export const register = async (req: Request, res: Response) => {
     try {
         const data: RegisterRequest = req.body;
         const result = await AuthService.register(data);
-        ApiResponseHandler.success(res, result, 'User registered successfully', 201);
+        setAuthCookies(res, result.accessToken, result.refreshToken);
+        ApiResponseHandler.success(res, result.user, 'User registered successfully', 201);
     } catch (error: any) {
         if (error instanceof ApiError) {
             ApiResponseHandler.error(res, error.message, error.statusCode);
@@ -25,7 +26,8 @@ export const login = async (req: Request, res: Response) => {
     try {
         const data: LoginRequest = req.body;
         const result = await AuthService.login(data);
-        ApiResponseHandler.success(res, result, 'Login successful');
+        setAuthCookies(res, result.accessToken, result.refreshToken);
+        ApiResponseHandler.success(res, result.user, 'Login successful');
     } catch (error: any) {
         if (error instanceof ApiError) {
             ApiResponseHandler.error(res, error.message, error.statusCode);
@@ -37,9 +39,15 @@ export const login = async (req: Request, res: Response) => {
 
 export const refreshToken = async (req: Request, res: Response) => {
     try {
-        const data = plainToInstance(RefreshTokenRequest, req.body);
-        const result = await AuthService.refreshTokens(data.refreshToken);
-        ApiResponseHandler.success(res, result, 'Tokens refreshed successfully');
+        const refreshTokenValue = getRefreshTokenFromRequest(req);
+        if (!refreshTokenValue) {
+            ApiResponseHandler.unauthorized(res, 'Refresh token is required');
+            return;
+        }
+
+        const result = await AuthService.refreshTokens(refreshTokenValue);
+        setAuthCookies(res, result.accessToken, result.refreshToken);
+        ApiResponseHandler.success(res, result.user, 'Tokens refreshed successfully');
     } catch (error: any) {
         if (error instanceof ApiError) {
             ApiResponseHandler.error(res, error.message, error.statusCode);
@@ -70,13 +78,15 @@ export const getProfile = async (req: AuthRequest, res: Response) => {
 
 export const logout = async (req: Request, res: Response) => {
     try {
-        const { refreshToken } = req.body;
-        if (refreshToken) {
-            await AuthService.logout(refreshToken);
+        const refreshTokenValue = getRefreshTokenFromRequest(req);
+        if (refreshTokenValue) {
+            await AuthService.logout(refreshTokenValue);
         }
+        clearAuthCookies(res);
         ApiResponseHandler.success(res, null, 'Logout successful');
-    } catch (error: any) {
+    } catch (error) {
         // Always return success for logout - user should be logged out regardless
+        clearAuthCookies(res);
         ApiResponseHandler.success(res, null, 'Logout successful');
     }
 }

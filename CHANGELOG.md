@@ -1,5 +1,24 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.1.22] - CK-87 Cookie Auth Integration
+**P.R raised by**  : Shubh404-SE
+**Date** : 2026-02-27
+
+### Added
+- **Cookie Auth Utilities**:
+  - Centralized cookie helpers in `src/utils/authCookies.ts` for:  
+    - Cookie behavior is now fully driven by `config.cookies`
+    - setting auth cookies, clearing auth cookies, reading access/refresh cookies from requests
+  - Access/refresh tokens are no longer handled by frontend JS and stay in HttpOnly cookies.
+
+### Changed
+- **Auth Controller Flow (Cookie-first)**:
+- **Auth Middleware**:
+  - `authenticate` now validates user session using cookie (`ck_access_token`) only.
+  - Removed unnecessary bearer-token fallback path from middleware for cookie-session architecture.
+- **Config Consolidation**:
+
+---
 ## Version [1.1.21] - Doc formate Allowed for content upload
 **P.R raised by**  : Shubh404-SE on **Date** : 2026-03-02
 
@@ -11,15 +30,14 @@ All notable changes to this project will be documented in this file.
   - Updated content route Swagger docs
   - file response content types include DOC/DOCX MIME types 
 ### Tests updated
-
 ---
 ## Version [1.1.20] - Dashboard Inactive Content & Exam Issue Fix
 **P.R raised by**  : Shubh404-SE on **Date** : 2026-02-28
 ### Changed
   - Dashboard queries updated for active content and active exam
   - Added bussines logo to get in response
-
 ---
+
 ## Version [1.1.19] - Dashboard API
 **P.R raised by**  : Shubh404-SE
 **Date** : 2026-02-24

@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import swaggerUi from 'swagger-ui-express';
 import routes from './routes';
 import compression from 'compression';
+import cookieParser from 'cookie-parser';
 import { errorHandler } from './middlewares/error.middleware';
 import { config } from './config/config';
 import logger from './utils/logger';
@@ -27,7 +28,13 @@ async function start() {
 
     // Middleware
     app.use(compression());
-    app.use(cors());
+    app.use(cors({
+      origin: config.server.frontendUrl,
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization'],
+    }));
+    app.use(cookieParser());
     app.use(express.json());
     app.use(express.urlencoded({ extended: true }));
 

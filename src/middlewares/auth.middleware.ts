@@ -6,17 +6,11 @@ import { AuthService } from '../services/auth.service';
 import { AuthRequest, IUser } from '../dtos/auth.dto';
 import { UserRole } from '@prisma/client';
 import { ApiError } from '../errors/api.errors';
+import { getAccessTokenFromRequest } from '../utils/authCookies';
 
 export const authenticate = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
-        const authHeader = req.headers.authorization;
-
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            ApiResponseHandler.unauthorized(res, 'No token provided');
-            return;
-        }
-
-        const token = authHeader.split(' ')[1];
+        const token = getAccessTokenFromRequest(req);
         if (!token) {
             ApiResponseHandler.unauthorized(res, 'No token provided');
             return;
