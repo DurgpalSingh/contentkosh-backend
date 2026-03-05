@@ -1,8 +1,9 @@
+const DEVELOPMENT_URL = 'http://localhost:3000';
 export const config = {
   jwt: {
     secret: process.env.JWT_SECRET || 'your-secret-key',
     accessTokenExpiresIn: process.env.ACCESS_TOKEN_EXPIRES_IN || '15m',
-    refreshTokenExpiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN ? parseInt(process.env.REFRESH_TOKEN_EXPIRES_IN) : '7d',
+    refreshTokenExpiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || '7d',
     refreshTokenSecret: process.env.REFRESH_TOKEN_SECRET || 'refresh-secret-key',
     // Legacy - kept for backward compatibility during migration
     expiresIn: process.env.JWT_EXPIRES_IN || '24h',
@@ -10,7 +11,7 @@ export const config = {
   server: {
     port: process.env.PORT || 8080,
     nodeEnv: process.env.NODE_ENV || 'development',
-    frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
+    frontendUrl: process.env.FRONTEND_URL || DEVELOPMENT_URL,
   },
   cookies: {
     accessCookieName: process.env.ACCESS_COOKIE_NAME || 'ck_access_token',
