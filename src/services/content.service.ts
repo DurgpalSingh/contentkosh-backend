@@ -77,6 +77,7 @@ export class ContentService {
 
     const where: Prisma.ContentWhereInput = {
       batchId,
+      ...(user.role === UserRole.TEACHER && { uploadedBy: user.id }),
       ...(query.type && { type: query.type }),
       ...(query.status && { status: query.status }),
       ...(query.search && {
@@ -100,10 +101,10 @@ export class ContentService {
       throw new NotFoundError('Content not found');
     }
 
-    // Only allow admins/teachers or the original uploader to update
-    if (user.role !== UserRole.ADMIN &&
-      user.role !== UserRole.TEACHER &&
-      existingContent.uploadedBy !== user.id) {
+    const isPrivilegedUser = user.role === UserRole.ADMIN || user.role === UserRole.SUPERADMIN;
+    const isTeacherOwner = user.role === UserRole.TEACHER && existingContent.uploadedBy === user.id;
+
+    if (!isPrivilegedUser && !isTeacherOwner) {
       throw new ForbiddenError('You can only update content you uploaded');
     }
 
@@ -128,10 +129,10 @@ export class ContentService {
       throw new NotFoundError('Content not found');
     }
 
-    // Only allow admins/teachers or the original uploader to delete
-    if (user.role !== UserRole.ADMIN &&
-      user.role !== UserRole.TEACHER &&
-      existingContent.uploadedBy !== user.id) {
+    const isPrivilegedUser = user.role === UserRole.ADMIN || user.role === UserRole.SUPERADMIN;
+    const isTeacherOwner = user.role === UserRole.TEACHER && existingContent.uploadedBy === user.id;
+
+    if (!isPrivilegedUser && !isTeacherOwner) {
       throw new ForbiddenError('You can only delete content you uploaded');
     }
 
@@ -268,6 +269,11 @@ export class ContentService {
         'You must be an active user in this batch to access content'
       );
     }
+    if (user.role === UserRole.STUDENT || content.uploadedBy === user.id) {
+      return;
+    }
+
+    throw new ForbiddenError('You can only access content you uploaded');
   }
 
   private async batchAccessContext(batchId: number, user: IUser) {
