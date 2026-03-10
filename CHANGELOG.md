@@ -1,5 +1,12 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.1.24] - Student count for each batch in teacher dashboard
+**P.R raised by**  : Shubh404-SE on **Date** : 2026-03-11
+
+### Changes
+  - Improved teacher Dashboard data to get student count for every batch.
+
+---
 ## Version [1.1.23] - Restrict teacher edit/delete to admin or same teacher
 **P.R raised by**  : Shubh404-SE on **Date** : 2026-03-05
 

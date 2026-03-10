@@ -89,12 +89,14 @@ const findRecentContent = <T extends Prisma.ContentSelect>(
 
 const findBatches = <T extends Prisma.BatchSelect>(
     where: Prisma.BatchWhereInput,
-    select: T
+    select: T,
+    take?: number
 ) =>
     prisma.batch.findMany({
         where,
         select,
-        orderBy: { createdAt: 'desc' }
+        orderBy: { createdAt: 'desc' },
+        ...(take ? { take } : {})
     });
 
 const countTeacherUniqueStudents = async (batchWhere: Prisma.BatchWhereInput) => {
@@ -228,14 +230,31 @@ export async function getTeacherDashboardData(businessId: number, userId: number
         await prisma.$transaction([
             countContent(contentWhere),
             countActiveAnnouncements(businessId, 'teachers'),
-            findBatches(batchWhere, {
-                id: true,
-                displayName: true,
-                isActive: true,
-                course: {
-                    select: { name: true }
+            findBatches(
+                batchWhere,
+                {
+                    id: true,
+                    displayName: true,
+                    isActive: true,
+                    course: {
+                        select: { name: true }
+                    },
+                    _count: {
+                        select: {
+                            batchUsers: {
+                                where: {
+                                    isActive: true,
+                                    user: {
+                                        role: UserRole.STUDENT,
+                                        status: UserStatus.ACTIVE
+                                    }
+                                }
+                            }
+                        }
+                    }
                 },
-            }),
+                DASHBOARD_PREVIEW_LIMIT
+            ),
             findRecentAnnouncements(businessId, 'teachers', {
                 id: true,
                 heading: true,
@@ -261,7 +280,13 @@ export async function getTeacherDashboardData(businessId: number, userId: number
             totalContent,
             activeAnnouncements
         },
-        myBatches: batches,
+        myBatches: batches.map((batch) => ({
+            id: batch.id,
+            displayName: batch.displayName,
+            courseName: batch.course?.name ?? '',
+            studentCount: batch._count.batchUsers,
+            isActive: batch.isActive
+        })),
         recentAnnouncements,
         recentContent: recentContent
     };
