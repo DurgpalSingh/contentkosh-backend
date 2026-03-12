@@ -1,5 +1,12 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.1.25] - Student count for each batch card
+**P.R raised by**  : Shubh404-SE on **Date** : 2026-03-12
+
+### Changes
+  - updated Query to get student count for each batch.
+
+---
 ## Version [1.1.24] - Student count for each batch in teacher dashboard
 **P.R raised by**  : Shubh404-SE on **Date** : 2026-03-11
 

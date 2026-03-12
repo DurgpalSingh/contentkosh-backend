@@ -11,6 +11,39 @@ import { BatchMapper } from '../mappers/batch.mapper';
 import { QueryBuilder } from '../utils/queryBuilder';
 
 export class BatchService {
+    private normalizeStudentBatchIncludes(options: any) {
+        if (!options?.include) return options;
+
+        const include = { ...(options.include as Record<string, any>) };
+        let updated = false;
+
+        // If batchUsers are requested on list endpoints, scope them to students only.
+        if (include.batchUsers === true) {
+            delete include.batchUsers;
+            (options as any).includeStudents = true;
+            updated = true;
+        }
+
+        // If _count is requested, scope batchUsers count to students only.
+        if (include._count) {
+            include._count = {
+                select: {
+                    batchUsers: {
+                        where: {
+                            user: { role: UserRole.STUDENT }
+                        }
+                    }
+                }
+            };
+            updated = true;
+        }
+
+        if (updated) {
+            options.include = Object.keys(include).length > 0 ? include : undefined;
+        }
+
+        return options;
+    }
 
     async createBatch(data: CreateBatchDto): Promise<Batch> {
         logger.info('BatchService: Creating new batch', { codeName: data.codeName, courseId: data.courseId });
@@ -56,7 +89,7 @@ export class BatchService {
     async getBatchesByCourse(courseId: number, user: IUser, query: ParsedQs = {}): Promise<Batch[]> {
         logger.info('BatchService: Fetching batches for course', { courseId, userId: user.id, role: user.role });
 
-        const options = QueryBuilder.parse(query);
+        const options = this.normalizeStudentBatchIncludes(QueryBuilder.parse(query));
 
         if (query.active === 'true') {
             options.where = { ...options.where, isActive: true };
@@ -191,7 +224,7 @@ export class BatchService {
     async getAllActiveBatches(user: IUser, query: ParsedQs = {}): Promise<Batch[]> {
         logger.info('BatchService: Fetching all active batches', { userId: user.id, role: user.role });
 
-        const options = QueryBuilder.parse(query);
+        const options = this.normalizeStudentBatchIncludes(QueryBuilder.parse(query));
         // Role-based access validation
         const allowedRoles: UserRole[] = [UserRole.SUPERADMIN, UserRole.ADMIN, UserRole.TEACHER, UserRole.STUDENT];
         if (!allowedRoles.includes(user.role)) {
