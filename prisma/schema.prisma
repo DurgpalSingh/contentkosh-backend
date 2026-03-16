@@ -42,6 +42,7 @@ model User {
   teacher         Teacher?
   createdTeachers Teacher[]        @relation("TeacherCreatedBy")
   updatedTeachers Teacher[]        @relation("TeacherUpdatedBy")
+  testAttempts    TestAttempt[]
 
   @@unique([businessId, email])
   @@unique([businessId, mobile])
@@ -85,6 +86,8 @@ model Business {
   exams         Exam[]
   users         User[]
   teachers      Teacher[]
+  practiceTests PracticeTest[]
+  examTests     ExamTest[]
 
   @@map("business")
 }
@@ -104,6 +107,8 @@ model Batch {
   course     Course      @relation(fields: [courseId], references: [id], onDelete: Cascade)
   batchUsers BatchUser[]
   contents   Content[]
+  practiceTests PracticeTest[]
+  examTests     ExamTest[]
 
   @@index([courseId])
   @@map("batches")
@@ -347,4 +352,166 @@ model ApiAuditLog {
   createdAt      DateTime @default(now()) @map("created_at")
 
   @@map("api_audit_logs")
+}
+
+// -----------------------------
+// LMS Test Module (Practice/Exam)
+// NOTE: enum-like fields are stored as Int (see src/constants/test-enums.ts)
+// -----------------------------
+
+model PracticeTest {
+  id          String  @id @default(cuid()) @map("id")
+  businessId  Int     @map("business_id")
+  batchId     Int     @map("batch_id")
+  name        String  @map("name")
+  description String? @map("description")
+  status      Int     @default(0) @map("status") // 0=DRAFT, 1=PUBLISHED
+
+  defaultMarksPerQuestion Float   @default(1) @map("default_marks_per_question")
+  showExplanations        Boolean @default(true) @map("show_explanations")
+  shuffleQuestions        Boolean @default(true) @map("shuffle_questions")
+  shuffleOptions          Boolean @default(true) @map("shuffle_options")
+
+  createdBy Int   @map("created_by")
+  updatedBy Int?  @map("updated_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  batch    Batch    @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  questions TestQuestion[]
+  attempts  TestAttempt[]
+
+  @@index([businessId, status])
+  @@index([batchId, status])
+  @@map("practice_tests")
+}
+
+model ExamTest {
+  id          String  @id @default(cuid()) @map("id")
+  businessId  Int     @map("business_id")
+  batchId     Int     @map("batch_id")
+  name        String  @map("name")
+  description String? @map("description")
+  status      Int     @default(0) @map("status") // 0=DRAFT, 1=PUBLISHED
+
+  startAt        DateTime @map("start_at")
+  deadlineAt     DateTime @map("deadline_at")
+  durationMinutes Int     @map("duration_minutes")
+
+  defaultMarksPerQuestion  Float @default(1) @map("default_marks_per_question")
+  negativeMarksPerQuestion Float @default(0) @map("negative_marks_per_question")
+  resultVisibility         Int   @default(0) @map("result_visibility") // 0=AFTER_DEADLINE, 1=HIDDEN
+  shuffleQuestions         Boolean @default(true) @map("shuffle_questions")
+  shuffleOptions           Boolean @default(true) @map("shuffle_options")
+
+  createdBy Int   @map("created_by")
+  updatedBy Int?  @map("updated_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  batch    Batch    @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  questions TestQuestion[]
+  attempts  TestAttempt[]
+
+  @@index([businessId, status])
+  @@index([batchId, status])
+  @@map("exam_tests")
+}
+
+model TestQuestion {
+  id             String  @id @default(cuid()) @map("id")
+  practiceTestId String? @map("practice_test_id")
+  examTestId     String? @map("exam_test_id")
+
+  type                Int     @map("type") // 0..4
+  text                String  @map("text")
+  correctTextAnswer   String? @map("correct_text_answer")
+  correctOptionIdsAnswers String[] @default([]) @map("correct_option_ids_answers")
+  explanation         String? @map("explanation")
+  mediaUrl            String? @map("media_url")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  practiceTest PracticeTest? @relation(fields: [practiceTestId], references: [id], onDelete: Cascade)
+  examTest     ExamTest?     @relation(fields: [examTestId], references: [id], onDelete: Cascade)
+  options      TestOption[]
+  answers      TestAttemptAnswer[]
+
+  @@index([practiceTestId])
+  @@index([examTestId])
+  @@map("test_questions")
+}
+
+model TestOption {
+  id         String  @id @default(cuid()) @map("id")
+  questionId String  @map("question_id")
+  text       String  @map("text")
+  mediaUrl   String? @map("media_url")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  question TestQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([questionId])
+  @@map("test_options")
+}
+
+model TestAttempt {
+  id             String  @id @default(cuid()) @map("id")
+  practiceTestId String? @map("practice_test_id")
+  examTestId     String? @map("exam_test_id")
+  userId         Int     @map("user_id")
+
+  status      Int      @default(0) @map("status") // 0=IN_PROGRESS, 1=SUBMITTED, 2=AUTO_SUBMITTED, 3=EXPIRED
+  startedAt   DateTime @map("started_at")
+  submittedAt DateTime? @map("submitted_at")
+
+  score      Float? @map("score")
+  totalScore Float? @map("total_score")
+  percentage Float? @map("percentage")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  practiceTest PracticeTest? @relation(fields: [practiceTestId], references: [id], onDelete: Cascade)
+  examTest     ExamTest?     @relation(fields: [examTestId], references: [id], onDelete: Cascade)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  answers      TestAttemptAnswer[]
+
+  @@index([practiceTestId, userId])
+  @@index([examTestId, userId])
+  @@index([userId])
+  @@map("test_attempts")
+}
+
+model TestAttemptAnswer {
+  id        String @id @default(cuid()) @map("id")
+  attemptId String @map("attempt_id")
+  questionId String @map("question_id")
+
+  selectedOptionIds String[] @default([]) @map("selected_option_ids")
+  textAnswer        String?  @map("text_answer")
+  isCorrect         Boolean? @map("is_correct")
+  obtainedMarks     Float?   @map("obtained_marks")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  attempt  TestAttempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question TestQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([attemptId, questionId], map: "uq_attempt_question")
+  @@index([attemptId])
+  @@index([questionId])
+  @@map("test_attempt_answers")
 }

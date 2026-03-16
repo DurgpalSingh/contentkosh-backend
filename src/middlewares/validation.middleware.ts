@@ -26,6 +26,20 @@ export const validateIdParam = (paramName: string = 'id') => {
     };
 };
 
+export const validateStringIdParam = (paramName: string) => {
+    return (req: AuthRequest, res: Response, next: NextFunction) => {
+        const value = req.params[paramName];
+        if (typeof value !== 'string' || value.trim().length === 0) {
+            return ApiResponseHandler.badRequest(res, `Invalid ${paramName}: must be a non-empty string`);
+        }
+        // Prisma `cuid()` is typically url-safe; keep validation intentionally permissive.
+        if (value.length > 128) {
+            return ApiResponseHandler.badRequest(res, `Invalid ${paramName}: too long`);
+        }
+        next();
+    };
+};
+
 export const authorizeExamAccess = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
         const id = Number(req.params.id || req.params.examId);
