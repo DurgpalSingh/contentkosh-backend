@@ -6,6 +6,19 @@ import { authorize } from '../middlewares/auth.middleware';
 import { UserRole } from '@prisma/client';
 import { validateDto } from '../middlewares/validation/dto.middleware';
 import { CreateBusinessDto, UpdateBusinessDto } from '../dtos/business.dto';
+import { authorizeBusinessAccess, validateIdParam, validateStringIdParam } from '../middlewares/validation.middleware';
+import {
+  CreateExamTestDto,
+  CreatePracticeTestDto,
+  CreateQuestionDto,
+  PublishExamTestRequestDto,
+  PublishPracticeTestRequestDto,
+  UpdateExamTestDto,
+  UpdatePracticeTestDto,
+  UpdateQuestionDto,
+} from '../dtos/test.dto';
+import { practiceTestController } from '../controllers/practice-test.controller';
+import { examTestController } from '../controllers/exam-test.controller';
 
 const router = Router();
 
@@ -296,6 +309,192 @@ router.get('/:businessId/exams', authorize(), getExamsByBusiness);
 router.get('/:businessId/exams/:id', getExam);
 router.put('/:businessId/exams/:id', authorize(UserRole.ADMIN), validateDto(UpdateExamDto, true), updateExam);
 router.delete('/:businessId/exams/:id', authorize(UserRole.ADMIN), deleteExam);
+
+// ==================== LMS PRACTICE TEST ROUTES ====================
+router.post(
+  '/:businessId/practice-tests',
+  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  validateIdParam('businessId'),
+  authorizeBusinessAccess,
+  validateDto(CreatePracticeTestDto),
+  practiceTestController.create,
+);
+
+router.get(
+  '/:businessId/practice-tests',
+  authorize(),
+  validateIdParam('businessId'),
+  authorizeBusinessAccess,
+  practiceTestController.list,
+);
+
+router.get(
+  '/:businessId/practice-tests/:practiceTestId',
+  authorize(),
+  validateIdParam('businessId'),
+  authorizeBusinessAccess,
+  validateStringIdParam('practiceTestId'),
+  practiceTestController.get,
+);
+
+router.put(
+  '/:businessId/practice-tests/:practiceTestId',
+  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  validateIdParam('businessId'),
+  authorizeBusinessAccess,
+  validateStringIdParam('practiceTestId'),
+  validateDto(UpdatePracticeTestDto, true),
+  practiceTestController.update,
+);
+
+router.delete(
+  '/:businessId/practice-tests/:practiceTestId',
+  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  validateIdParam('businessId'),
+  authorizeBusinessAccess,
+  validateStringIdParam('practiceTestId'),
+  practiceTestController.remove,
+);
+
+router.post(
+  '/:businessId/practice-tests/publish',
+  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  validateIdParam('businessId'),
+  authorizeBusinessAccess,
+  validateDto(PublishPracticeTestRequestDto),
+  practiceTestController.publish,
+);
+
+router.get(
+  '/:businessId/practice-tests/:practiceTestId/questions',
+  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  validateIdParam('businessId'),
+  authorizeBusinessAccess,
+  validateStringIdParam('practiceTestId'),
+  practiceTestController.listQuestions,
+);
+
+router.post(
+  '/:businessId/practice-tests/:practiceTestId/questions',
+  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  validateIdParam('businessId'),
+  authorizeBusinessAccess,
+  validateStringIdParam('practiceTestId'),
+  validateDto(CreateQuestionDto),
+  practiceTestController.createQuestion,
+);
+
+router.put(
+  '/:businessId/practice-tests/questions/:questionId',
+  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  validateIdParam('businessId'),
+  authorizeBusinessAccess,
+  validateStringIdParam('questionId'),
+  validateDto(UpdateQuestionDto, true),
+  practiceTestController.updateQuestion,
+);
+
+router.delete(
+  '/:businessId/practice-tests/questions/:questionId',
+  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  validateIdParam('businessId'),
+  authorizeBusinessAccess,
+  validateStringIdParam('questionId'),
+  practiceTestController.deleteQuestion,
+);
+
+// ==================== LMS EXAM TEST ROUTES ====================
+router.post(
+  '/:businessId/exam-tests',
+  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  validateIdParam('businessId'),
+  authorizeBusinessAccess,
+  validateDto(CreateExamTestDto),
+  examTestController.create,
+);
+
+router.get(
+  '/:businessId/exam-tests',
+  authorize(),
+  validateIdParam('businessId'),
+  authorizeBusinessAccess,
+  examTestController.list,
+);
+
+router.get(
+  '/:businessId/exam-tests/:examTestId',
+  authorize(),
+  validateIdParam('businessId'),
+  authorizeBusinessAccess,
+  validateStringIdParam('examTestId'),
+  examTestController.get,
+);
+
+router.put(
+  '/:businessId/exam-tests/:examTestId',
+  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  validateIdParam('businessId'),
+  authorizeBusinessAccess,
+  validateStringIdParam('examTestId'),
+  validateDto(UpdateExamTestDto, true),
+  examTestController.update,
+);
+
+router.delete(
+  '/:businessId/exam-tests/:examTestId',
+  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  validateIdParam('businessId'),
+  authorizeBusinessAccess,
+  validateStringIdParam('examTestId'),
+  examTestController.remove,
+);
+
+router.post(
+  '/:businessId/exam-tests/publish',
+  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  validateIdParam('businessId'),
+  authorizeBusinessAccess,
+  validateDto(PublishExamTestRequestDto),
+  examTestController.publish,
+);
+
+router.get(
+  '/:businessId/exam-tests/:examTestId/questions',
+  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  validateIdParam('businessId'),
+  authorizeBusinessAccess,
+  validateStringIdParam('examTestId'),
+  examTestController.listQuestions,
+);
+
+router.post(
+  '/:businessId/exam-tests/:examTestId/questions',
+  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  validateIdParam('businessId'),
+  authorizeBusinessAccess,
+  validateStringIdParam('examTestId'),
+  validateDto(CreateQuestionDto),
+  examTestController.createQuestion,
+);
+
+router.put(
+  '/:businessId/exam-tests/questions/:questionId',
+  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  validateIdParam('businessId'),
+  authorizeBusinessAccess,
+  validateStringIdParam('questionId'),
+  validateDto(UpdateQuestionDto, true),
+  examTestController.updateQuestion,
+);
+
+router.delete(
+  '/:businessId/exam-tests/questions/:questionId',
+  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  validateIdParam('businessId'),
+  authorizeBusinessAccess,
+  validateStringIdParam('questionId'),
+  examTestController.deleteQuestion,
+);
 
 // ==================== BUSINESS ROUTES ====================
 
