@@ -142,15 +142,23 @@ export class AuthService {
   static async login(data: LoginRequest): Promise<AuthResponse> {
   logger.info(`Login attempt for email: ${data.email}`);
   try {
-    const user = await userRepo.findByEmailWithBusinesses(data.email);
+    const users = (await userRepo.findAllByEmail(data.email));
 
-    if (!user) {
+    if (users.length === 0) {
       logger.warn(`Login failed: User not found for email ${data.email}`);
       throw new AuthError('Invalid email or password');
     }
 
-    const isMatch = await this.verifyPassword(data.password, user.password);
-    if (!isMatch) {
+    let user = null as (typeof users)[number] | null;
+    for (const candidate of users) {
+      const isMatch = await this.verifyPassword(data.password, candidate.password);
+      if (isMatch) {
+        user = candidate;
+        break;
+      }
+    }
+
+    if (!user) {
       logger.warn(`Login failed: Invalid password for email ${data.email}`);
       throw new AuthError('Invalid email or password');
     }

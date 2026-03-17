@@ -18,10 +18,10 @@ export const createUserForBusiness = async (businessId: number, userData: Create
         throw new NotFoundError('Business not found');
     }
 
-    // Check if user exists
-    const existingUser = await userRepo.findByEmail(userData.email);
+    // Check if user exists within this business (email must be unique per business)
+    const existingUser = await userRepo.findByBusinessAndEmail(businessId, userData.email);
     if (existingUser) {
-        throw new AlreadyExistsError('User with this email already exists');
+        throw new AlreadyExistsError('User with this email already exists in this business');
     }
 
 

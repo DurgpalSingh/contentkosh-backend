@@ -40,6 +40,23 @@ export function findByEmail(email: string) {
   return prisma.user.findFirst({ where: { email: email.toLowerCase().trim() } });
 }
 
+export function findAllByEmail(email: string) {
+  return prisma.user.findMany({
+    where: { email: email.toLowerCase().trim() },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      password: true,
+      role: true,
+      status: true,
+      businessId: true,
+      createdAt: true,
+      updatedAt: true
+    }
+  });
+}
+
 export function findByBusinessAndEmail(businessId: number, email: string) {
   return prisma.user.findUnique({
     where: {
