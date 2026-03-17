@@ -1,5 +1,11 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.1.26] - Slug check API
+**P.R raised by**  : Shubh404-SE on **Date** : 2026-03-12
+
+### Added
+  - added a new api to check if slug already exist or not.
+---
 ## Version [1.1.25] - Student count for each batch card
 **P.R raised by**  : Shubh404-SE on **Date** : 2026-03-12
 

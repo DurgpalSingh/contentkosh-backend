@@ -75,6 +75,21 @@ export const getBusinessBySlug = async (req: Request, res: Response, next: NextF
   }
 };
 
+export const checkBusinessSlug = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { slug } = req.params;
+    logger.info(`Checking business slug availability: ${slug}`);
+    if (!slug) {
+      throw new BadRequestError('Slug is required');
+    }
+    const exists = await BusinessService.checkSlugExists(slug);
+    ApiResponseHandler.success(res, { exists }, 'Slug check successful');
+  } catch (error) {
+    logger.error(`Error checking business slug ${req.params.slug}: ${error}`);
+    next(error);
+  }
+};
+
 export const updateBusiness = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const id = getBusinessIdFromRequest(req);

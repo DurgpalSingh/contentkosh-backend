@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import userRoutes from './user.routes';
 import businessRoutes from './business.routes';
+import publicBusinessRoutes from './business.public.routes';
 import examRoutes from './exam.routes';
 import announcementRoutes from './announcement.routes';
 import batchRoutes from './batch.routes';
@@ -16,6 +17,8 @@ const router = Router();
 
 // Health check route '/health'
 router.use(healthRoutes);
+
+router.use('/api/business', publicBusinessRoutes);
 
 // API routes
 router.use('/api/auth', authRoutes);
