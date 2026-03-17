@@ -1,5 +1,14 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.1.27] - user allowed in multiple business
+**P.R raised by**  : Shubh404-SE on **Date** : 2026-03-17
+
+### Changed
+  - Fixed business-scoped email uniqueness check when creating a user for a business.
+  - fatch all users by email, Verify password against each, Return the matching user from the correct business.
+  - service Checks businessId + email uniqueness.
+
+---
 ## Version [1.1.26] - Slug check API
 **P.R raised by**  : Shubh404-SE on **Date** : 2026-03-12
 
