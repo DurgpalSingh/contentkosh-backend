@@ -1,7 +1,7 @@
 import { UserRole, UserStatus } from '@prisma/client';
 import * as userRepo from '../repositories/user.repo';
 import * as businessRepo from '../repositories/business.repo';
-import { NotFoundError, ForbiddenError, AlreadyExistsError, BadRequestError } from '../errors/api.errors';
+import { NotFoundError, ForbiddenError, AlreadyExistsError } from '../errors/api.errors';
 import { IUser } from '../dtos/auth.dto';
 import { CreateUserDto, UpdateUserDto } from '../dtos/user.dto';
 import { AuthService } from './auth.service';
@@ -25,13 +25,7 @@ export const createUserForBusiness = async (businessId: number, userData: Create
     }
 
     // If email exists in other businesses, enforce different password
-    const sameEmailUsers = await userRepo.findAllByEmail(userData.email);
-    for (const user of sameEmailUsers) {
-        const isSamePassword = await AuthService.verifyPassword(userData.password, user.password);
-        if (isSamePassword) {
-            throw new BadRequestError('Password must be different for the same email in another business');
-        }
-    }
+    await AuthService.ensurePasswordNotReusedForEmail(userData.email, userData.password);
 
 
     // Build create object, only including mobile if defined

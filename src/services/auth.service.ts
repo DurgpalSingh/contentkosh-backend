@@ -11,6 +11,16 @@ import { UserStatus, UserRole } from '@prisma/client';
 import { AuthError, ForbiddenError, BadRequestError } from '../errors/api.errors';
 
 export class AuthService {
+  static async ensurePasswordNotReusedForEmail(email: string, password: string): Promise<void> {
+    const existingUsers = await userRepo.findAllByEmail(email);
+    for (const user of existingUsers) {
+      const isSamePassword = await this.verifyPassword(password, user.password);
+      if (isSamePassword) {
+        throw new BadRequestError('Password must be different for the same email in another business');
+      }
+    }
+  }
+
   static async hashPassword(password: string): Promise<string> {
     const saltRounds = 10;
     try {
@@ -97,13 +107,7 @@ export class AuthService {
   static async register(data: RegisterRequest): Promise<AuthResponse> {
     logger.info(`Registering new user: ${data.email}`);
     try {
-      const existingUsers = await userRepo.findAllByEmail(data.email);
-      for (const user of existingUsers) {
-        const isSamePassword = await this.verifyPassword(data.password, user.password);
-        if (isSamePassword) {
-          throw new BadRequestError('Password must be different for the same email in another business');
-        }
-      }
+      await this.ensurePasswordNotReusedForEmail(data.email, data.password);
 
       const hashedPassword = await this.hashPassword(data.password);
 
