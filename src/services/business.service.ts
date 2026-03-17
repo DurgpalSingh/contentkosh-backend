@@ -42,6 +42,11 @@ export class BusinessService {
         return business;
     }
 
+    static async checkSlugExists(slug: string) {
+        const business = await businessRepo.findBusinessBySlug(slug);
+        return Boolean(business);
+    }
+
     static async updateBusiness(id: number, data: businessRepo.BusinessUpdateInput) {
         // Check existence
         const existing = await businessRepo.findBusinessById(id);
