@@ -97,6 +97,14 @@ export class AuthService {
   static async register(data: RegisterRequest): Promise<AuthResponse> {
     logger.info(`Registering new user: ${data.email}`);
     try {
+      const existingUsers = await userRepo.findAllByEmail(data.email);
+      for (const user of existingUsers) {
+        const isSamePassword = await this.verifyPassword(data.password, user.password);
+        if (isSamePassword) {
+          throw new AuthError('Password must be different for the same email in another business');
+        }
+      }
+
       const hashedPassword = await this.hashPassword(data.password);
 
     // Note: Creating user without businessId initially. 
