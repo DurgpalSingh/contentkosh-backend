@@ -8,7 +8,7 @@ import logger from '../utils/logger';
 import * as userRepo from '../repositories/user.repo';
 import * as refreshTokenRepo from '../repositories/refreshToken.repo';
 import { UserStatus, UserRole } from '@prisma/client';
-import { AuthError, ForbiddenError } from '../errors/api.errors';
+import { AuthError, ForbiddenError, BadRequestError } from '../errors/api.errors';
 
 export class AuthService {
   static async hashPassword(password: string): Promise<string> {
@@ -101,7 +101,7 @@ export class AuthService {
       for (const user of existingUsers) {
         const isSamePassword = await this.verifyPassword(data.password, user.password);
         if (isSamePassword) {
-          throw new AuthError('Password must be different for the same email in another business');
+          throw new BadRequestError('Password must be different for the same email in another business');
         }
       }
 
