@@ -8,7 +8,7 @@ import logger from '../utils/logger';
 import * as userRepo from '../repositories/user.repo';
 import * as refreshTokenRepo from '../repositories/refreshToken.repo';
 import { UserStatus, UserRole } from '@prisma/client';
-import { AuthError, ForbiddenError } from '../errors/api.errors';
+import { AlreadyExistsError, AuthError, ForbiddenError } from '../errors/api.errors';
 
 export class AuthService {
   static async hashPassword(password: string): Promise<string> {
@@ -96,6 +96,11 @@ export class AuthService {
 
   static async register(data: RegisterRequest): Promise<AuthResponse> {
     logger.info(`Registering new user: ${data.email}`);
+    const existingUser = await userRepo.findByEmail(data.email);
+    if (existingUser) {
+      logger.warn(`Registration failed: User with email ${data.email} already exists`);
+      throw new AlreadyExistsError('User with this email already exists');
+    }
     try {
       const hashedPassword = await this.hashPassword(data.password);
 

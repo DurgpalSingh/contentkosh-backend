@@ -1,5 +1,12 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.1.27] - user allowed in multiple business
+**P.R raised by**  : Shubh404-SE on **Date** : 2026-03-17
+
+### Changed
+  - Email is unique in all business, can't register with existing email.
+
+---
 ## Version [1.1.26] - Slug check API
 **P.R raised by**  : Shubh404-SE on **Date** : 2026-03-12
 
