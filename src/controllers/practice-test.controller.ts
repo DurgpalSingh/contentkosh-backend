@@ -6,8 +6,10 @@ import { BadRequestError, NotFoundError } from '../errors/api.errors';
 import { PracticeTestService } from '../services/practice-test.service';
 import { TestMapper } from '../mappers/test.mapper';
 import { UserRole } from '@prisma/client';
+import { TestAttemptService } from '../services/test-attempt.service';
 
 const service = new PracticeTestService();
+const attemptService = new TestAttemptService();
 
 function getBusinessId(req: Request): number {
   const businessId = Number(req.params.businessId);
@@ -207,6 +209,89 @@ export const practiceTestController = {
       if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
       logger.error(`Error deleting practice question: ${e.message}`);
       return ApiResponseHandler.serverError(res, 'Failed to delete question');
+    }
+  },
+
+  async startAttempt(req: AuthRequest, res: Response) {
+    try {
+      const businessId = getBusinessId(req);
+      if (!enforceBusinessScope(req, res, businessId)) return;
+      const user = req.user;
+      if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
+
+      const practiceTestId: string | undefined = req.body.practiceTestId;
+      if (!practiceTestId) return ApiResponseHandler.badRequest(res, 'practiceTestId is required');
+
+      const started = await attemptService.startPracticeAttempt(businessId, { id: user.id, role: user.role }, practiceTestId);
+      return ApiResponseHandler.success(
+        res,
+        {
+          attemptId: started.attemptId,
+          startedAt: started.startedAt,
+          test: TestMapper.practiceTest(started.test),
+          questions: started.questions.map(TestMapper.question),
+        },
+        'Practice attempt started successfully',
+        201,
+      );
+    } catch (e: any) {
+      if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
+      if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
+      logger.error(`Error starting practice attempt: ${e.message}`);
+      return ApiResponseHandler.serverError(res, 'Failed to start practice attempt');
+    }
+  },
+
+  async getAttempt(req: AuthRequest, res: Response) {
+    try {
+      const businessId = getBusinessId(req);
+      if (!enforceBusinessScope(req, res, businessId)) return;
+      const user = req.user;
+      if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
+      const attemptId = req.params.attemptId;
+      if (!attemptId) return ApiResponseHandler.badRequest(res, 'attemptId is required');
+
+      const details = await attemptService.getPracticeAttemptDetails(businessId, { id: user.id, role: user.role }, attemptId);
+      return ApiResponseHandler.success(
+        res,
+        {
+          attempt: details.attempt,
+          test: TestMapper.practiceTest(details.test),
+          questions: details.questions.map(TestMapper.question),
+          answers: details.answers,
+          revealResults: details.revealResults,
+        },
+        'Practice attempt fetched successfully',
+      );
+    } catch (e: any) {
+      if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
+      if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
+      logger.error(`Error fetching practice attempt: ${e.message}`);
+      return ApiResponseHandler.serverError(res, 'Failed to fetch practice attempt');
+    }
+  },
+
+  async submitAttempt(req: AuthRequest, res: Response) {
+    try {
+      const businessId = getBusinessId(req);
+      if (!enforceBusinessScope(req, res, businessId)) return;
+      const user = req.user;
+      if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
+      const attemptId = req.params.attemptId;
+      if (!attemptId) return ApiResponseHandler.badRequest(res, 'attemptId is required');
+
+      const result = await attemptService.submitPracticeAttempt(
+        businessId,
+        { id: user.id, role: user.role },
+        attemptId,
+        Array.isArray(req.body.answers) ? req.body.answers : [],
+      );
+      return ApiResponseHandler.success(res, result, 'Practice attempt submitted successfully');
+    } catch (e: any) {
+      if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
+      if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
+      logger.error(`Error submitting practice attempt: ${e.message}`);
+      return ApiResponseHandler.serverError(res, 'Failed to submit practice attempt');
     }
   },
 };

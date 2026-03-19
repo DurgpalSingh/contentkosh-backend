@@ -25,7 +25,7 @@ export interface TestAttemptFindOptions {
   include?: Prisma.TestAttemptInclude;
 }
 
-export function createTestAttempt(data: Prisma.TestAttemptUncheckedCreateInput) {
+export function createTestAttempt(data: Prisma.TestAttemptUncheckedCreateInput): Promise<any> {
   return prisma.testAttempt.create({
     data,
     select: attemptSelect,
@@ -35,7 +35,7 @@ export function createTestAttempt(data: Prisma.TestAttemptUncheckedCreateInput) 
 export function findTestAttemptById(
   id: string,
   options: TestAttemptFindOptions = {},
-) {
+): Promise<any> {
   const query: any = { where: { id } };
 
   if (options.select) query.select = options.select;
@@ -49,7 +49,7 @@ export function findPracticeAttemptsByUser(
   practiceTestId: string,
   userId: number,
   options: TestAttemptFindOptions = {},
-) {
+): Promise<any> {
   const query: Prisma.TestAttemptFindManyArgs = {
     where: { practiceTestId, userId, ...(options.where ?? {}) },
     orderBy: options.orderBy ?? { startedAt: 'desc' },
@@ -69,7 +69,7 @@ export function findExamAttemptsByUser(
   examTestId: string,
   userId: number,
   options: TestAttemptFindOptions = {},
-) {
+): Promise<any> {
   const query: Prisma.TestAttemptFindManyArgs = {
     where: { examTestId, userId, ...(options.where ?? {}) },
     orderBy: options.orderBy ?? { startedAt: 'desc' },
@@ -88,11 +88,52 @@ export function findExamAttemptsByUser(
 export function updateTestAttempt(
   id: string,
   data: Prisma.TestAttemptUncheckedUpdateInput,
-) {
+): Promise<any> {
   return prisma.testAttempt.update({
     where: { id },
     data,
     select: attemptSelect,
+  });
+}
+
+export async function upsertAttemptAnswersAndFinalize(params: {
+  attemptId: string;
+  evaluated: Array<{
+    questionId: string;
+    selectedOptionIds: string[];
+    textAnswer: string | null;
+    isCorrect: boolean | null;
+    obtainedMarks: number | null;
+  }>;
+  attemptUpdate: Prisma.TestAttemptUncheckedUpdateInput;
+}) {
+  const { attemptId, evaluated, attemptUpdate } = params;
+
+  await prisma.$transaction(async (tx) => {
+    for (const e of evaluated) {
+      await tx.testAttemptAnswer.upsert({
+        where: { attemptId_questionId: { attemptId, questionId: e.questionId } },
+        create: {
+          attemptId,
+          questionId: e.questionId,
+          selectedOptionIds: e.selectedOptionIds,
+          textAnswer: e.textAnswer,
+          isCorrect: e.isCorrect,
+          obtainedMarks: e.obtainedMarks,
+        },
+        update: {
+          selectedOptionIds: e.selectedOptionIds,
+          textAnswer: e.textAnswer,
+          isCorrect: e.isCorrect,
+          obtainedMarks: e.obtainedMarks,
+        },
+      });
+    }
+
+    await tx.testAttempt.update({
+      where: { id: attemptId },
+      data: attemptUpdate,
+    });
   });
 }
 

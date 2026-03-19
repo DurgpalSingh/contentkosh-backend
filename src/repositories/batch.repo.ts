@@ -377,3 +377,11 @@ export function applyBatchAccessFilters(
 
   return next;
 }
+
+export async function isActiveUserInBatch(userId: number, batchId: number): Promise<boolean> {
+  const membership = await prisma.batchUser.findFirst({
+    where: { userId, batchId, isActive: true },
+    select: { id: true },
+  });
+  return Boolean(membership);
+}

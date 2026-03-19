@@ -6,8 +6,10 @@ import { BadRequestError, NotFoundError } from '../errors/api.errors';
 import { ExamTestService } from '../services/exam-test.service';
 import { TestMapper } from '../mappers/test.mapper';
 import { UserRole } from '@prisma/client';
+import { TestAttemptService } from '../services/test-attempt.service';
 
 const service = new ExamTestService();
+const attemptService = new TestAttemptService();
 
 function getBusinessId(req: Request): number {
   const businessId = Number(req.params.businessId);
@@ -207,6 +209,90 @@ export const examTestController = {
       if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
       logger.error(`Error deleting exam question: ${e.message}`);
       return ApiResponseHandler.serverError(res, 'Failed to delete question');
+    }
+  },
+
+  async startAttempt(req: AuthRequest, res: Response) {
+    try {
+      const businessId = getBusinessId(req);
+      if (!enforceBusinessScope(req, res, businessId)) return;
+      const user = req.user;
+      if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
+
+      const examTestId: string | undefined = req.body.examTestId;
+      if (!examTestId) return ApiResponseHandler.badRequest(res, 'examTestId is required');
+
+      const started = await attemptService.startExamAttempt(businessId, { id: user.id, role: user.role }, examTestId);
+      return ApiResponseHandler.success(
+        res,
+        {
+          attemptId: started.attemptId,
+          startedAt: started.startedAt,
+          test: TestMapper.examTest(started.test),
+          questions: started.questions.map(TestMapper.question),
+        },
+        'Exam attempt started successfully',
+        201,
+      );
+    } catch (e: any) {
+      if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
+      if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
+      logger.error(`Error starting exam attempt: ${e.message}`);
+      return ApiResponseHandler.serverError(res, 'Failed to start exam attempt');
+    }
+  },
+
+  async getAttempt(req: AuthRequest, res: Response) {
+    try {
+      const businessId = getBusinessId(req);
+      if (!enforceBusinessScope(req, res, businessId)) return;
+      const user = req.user;
+      if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
+      const attemptId = req.params.attemptId;
+      if (!attemptId) return ApiResponseHandler.badRequest(res, 'attemptId is required');
+
+      const details = await attemptService.getExamAttemptDetails(businessId, { id: user.id, role: user.role }, attemptId);
+      return ApiResponseHandler.success(
+        res,
+        {
+          attempt: details.attempt,
+          test: TestMapper.examTest(details.test),
+          questions: details.questions.map(TestMapper.question),
+          answers: details.answers,
+          revealResults: details.revealResults,
+          effectiveEndAt: details.effectiveEndAt,
+        },
+        'Exam attempt fetched successfully',
+      );
+    } catch (e: any) {
+      if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
+      if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
+      logger.error(`Error fetching exam attempt: ${e.message}`);
+      return ApiResponseHandler.serverError(res, 'Failed to fetch exam attempt');
+    }
+  },
+
+  async submitAttempt(req: AuthRequest, res: Response) {
+    try {
+      const businessId = getBusinessId(req);
+      if (!enforceBusinessScope(req, res, businessId)) return;
+      const user = req.user;
+      if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
+      const attemptId = req.params.attemptId;
+      if (!attemptId) return ApiResponseHandler.badRequest(res, 'attemptId is required');
+
+      const result = await attemptService.submitExamAttempt(
+        businessId,
+        { id: user.id, role: user.role },
+        attemptId,
+        Array.isArray(req.body.answers) ? req.body.answers : [],
+      );
+      return ApiResponseHandler.success(res, result, 'Exam attempt submitted successfully');
+    } catch (e: any) {
+      if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
+      if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
+      logger.error(`Error submitting exam attempt: ${e.message}`);
+      return ApiResponseHandler.serverError(res, 'Failed to submit exam attempt');
     }
   },
 };

@@ -13,6 +13,9 @@ import {
   CreateQuestionDto,
   PublishExamTestRequestDto,
   PublishPracticeTestRequestDto,
+  StartExamAttemptRequestDto,
+  StartPracticeAttemptRequestDto,
+  SubmitAttemptRequestDto,
   UpdateExamTestDto,
   UpdatePracticeTestDto,
   UpdateQuestionDto,
@@ -494,6 +497,57 @@ router.delete(
   authorizeBusinessAccess,
   validateStringIdParam('questionId'),
   examTestController.deleteQuestion,
+);
+
+// ==================== LMS ATTEMPT ROUTES (STUDENT) ====================
+router.post(
+  '/:businessId/practice-tests/attempts',
+  validateIdParam('businessId'),
+  authorizeBusinessAccess,
+  validateDto(StartPracticeAttemptRequestDto),
+  practiceTestController.startAttempt,
+);
+
+router.get(
+  '/:businessId/practice-tests/attempts/:attemptId',
+  validateIdParam('businessId'),
+  authorizeBusinessAccess,
+  validateStringIdParam('attemptId'),
+  practiceTestController.getAttempt,
+);
+
+router.post(
+  '/:businessId/practice-tests/attempts/:attemptId/submit',
+  validateIdParam('businessId'),
+  authorizeBusinessAccess,
+  validateStringIdParam('attemptId'),
+  validateDto(SubmitAttemptRequestDto),
+  practiceTestController.submitAttempt,
+);
+
+router.post(
+  '/:businessId/exam-tests/attempts',
+  validateIdParam('businessId'),
+  authorizeBusinessAccess,
+  validateDto(StartExamAttemptRequestDto),
+  examTestController.startAttempt,
+);
+
+router.get(
+  '/:businessId/exam-tests/attempts/:attemptId',
+  validateIdParam('businessId'),
+  authorizeBusinessAccess,
+  validateStringIdParam('attemptId'),
+  examTestController.getAttempt,
+);
+
+router.post(
+  '/:businessId/exam-tests/attempts/:attemptId/submit',
+  validateIdParam('businessId'),
+  authorizeBusinessAccess,
+  validateStringIdParam('attemptId'),
+  validateDto(SubmitAttemptRequestDto),
+  examTestController.submitAttempt,
 );
 
 // ==================== BUSINESS ROUTES ====================

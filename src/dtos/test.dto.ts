@@ -303,3 +303,37 @@ export class UpdateQuestionDto {
   correctOptionIdsAnswers?: string[];
 }
 
+export class StartPracticeAttemptRequestDto {
+  @IsString()
+  @IsNotEmpty()
+  practiceTestId!: string;
+}
+
+export class StartExamAttemptRequestDto {
+  @IsString()
+  @IsNotEmpty()
+  examTestId!: string;
+}
+
+export class SubmitAttemptAnswerDto {
+  @IsString()
+  @IsNotEmpty()
+  questionId!: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  selectedOptionIds?: string[];
+
+  @IsOptional()
+  @IsString()
+  textAnswer?: string;
+}
+
+export class SubmitAttemptRequestDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SubmitAttemptAnswerDto)
+  answers!: SubmitAttemptAnswerDto[];
+}
+
