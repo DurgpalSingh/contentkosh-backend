@@ -2,9 +2,11 @@ import { BadRequestError, NotFoundError } from '../errors/api.errors';
 import * as practiceRepo from '../repositories/practice-test.repo';
 import * as questionRepo from '../repositories/test-question.repo';
 import { TestStatus, QuestionType } from '../constants/test-enums';
+import logger from '../utils/logger';
 
 export class PracticeTestService {
   async create(businessId: number, dto: any, userId: number) {
+    logger.info(`[practice-test] create businessId=${businessId} userId=${userId} batchId=${dto?.batchId}`);
     const created = await practiceRepo.createPracticeTest({
       businessId,
       batchId: dto.batchId,
@@ -21,6 +23,7 @@ export class PracticeTestService {
   }
 
   async list(businessId: number, query: { status?: number; batchId?: number }) {
+    logger.info(`[practice-test] list businessId=${businessId} status=${query?.status ?? 'any'} batchId=${query?.batchId ?? 'any'}`);
     const where: any = {};
     if (query.status !== undefined) where.status = query.status;
     if (query.batchId !== undefined) where.batchId = query.batchId;
@@ -28,12 +31,14 @@ export class PracticeTestService {
   }
 
   async get(businessId: number, practiceTestId: string) {
+    logger.info(`[practice-test] get businessId=${businessId} practiceTestId=${practiceTestId}`);
     const t = await practiceRepo.findPracticeTestById(businessId, practiceTestId);
     if (!t) throw new NotFoundError('Practice test not found');
     return t;
   }
 
   async update(businessId: number, practiceTestId: string, dto: any, userId: number) {
+    logger.info(`[practice-test] update businessId=${businessId} practiceTestId=${practiceTestId} userId=${userId}`);
     const updated = await practiceRepo.updatePracticeTest(businessId, practiceTestId, {
       ...(dto.batchId !== undefined ? { batchId: dto.batchId } : {}),
       ...(dto.name !== undefined ? { name: dto.name } : {}),
@@ -50,12 +55,14 @@ export class PracticeTestService {
   }
 
   async remove(businessId: number, practiceTestId: string) {
+    logger.info(`[practice-test] remove businessId=${businessId} practiceTestId=${practiceTestId}`);
     const r = await practiceRepo.deletePracticeTest(businessId, practiceTestId);
     if (!r.count) throw new NotFoundError('Practice test not found');
     return;
   }
 
   async publish(businessId: number, practiceTestId: string, userId: number) {
+    logger.info(`[practice-test] publish businessId=${businessId} practiceTestId=${practiceTestId} userId=${userId}`);
     const existing = await this.get(businessId, practiceTestId);
     if (existing.status !== TestStatus.DRAFT) {
       throw new BadRequestError('Only draft tests can be published');
@@ -73,6 +80,7 @@ export class PracticeTestService {
   }
 
   async listQuestions(businessId: number, practiceTestId: string) {
+    logger.info(`[practice-test] listQuestions businessId=${businessId} practiceTestId=${practiceTestId}`);
     // Ensure parent exists
     await this.get(businessId, practiceTestId);
     return questionRepo.listPracticeTestQuestions(businessId, practiceTestId);
@@ -81,7 +89,7 @@ export class PracticeTestService {
   private validateQuestionPayload(payload: {
     type: number;
     correctTextAnswer?: string | null;
-    correctOptionIdsAnswers?: string[];
+    correctOptionIdsAnswers?: Array<string | number>;
     options?: Array<{ text: string; mediaUrl?: string | null }>;
   }) {
     const isMcq = payload.type === QuestionType.SINGLE_CHOICE || payload.type === QuestionType.MULTIPLE_CHOICE;
@@ -104,6 +112,7 @@ export class PracticeTestService {
   }
 
   async createQuestion(businessId: number, practiceTestId: string, dto: any) {
+    logger.info(`[practice-test] createQuestion businessId=${businessId} practiceTestId=${practiceTestId} type=${dto?.type}`);
     const hasAttempts = await questionRepo.hasAttemptsForPracticeTest(businessId, practiceTestId);
     if (hasAttempts) throw new BadRequestError('Cannot modify questions after attempts have started');
 
@@ -114,13 +123,13 @@ export class PracticeTestService {
       options: dto.options?.map((o: any) => ({ text: o.text, mediaUrl: o.mediaUrl ?? null })) ?? [],
     });
 
-    const created = await questionRepo.createPracticeTestQuestion(businessId, practiceTestId, {
+    const created = await questionRepo.createPracticeTestQuestionResolvingCorrect(businessId, practiceTestId, {
       type: dto.type,
       text: dto.questionText,
       mediaUrl: dto.mediaUrl ?? null,
       explanation: dto.explanation ?? null,
       correctTextAnswer: dto.correctTextAnswer ?? null,
-      correctOptionIdsAnswers: dto.correctOptionIdsAnswers ?? [],
+      correctOptionRefs: dto.correctOptionIdsAnswers ?? [],
       options: dto.options?.map((o: any) => ({ text: o.text, mediaUrl: o.mediaUrl ?? null })) ?? [],
     });
 

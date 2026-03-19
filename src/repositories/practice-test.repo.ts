@@ -89,3 +89,22 @@ export function deletePracticeTest(businessId: number, id: string) {
   });
 }
 
+export function findPublishedPracticeTestsForStudent(businessId: number, userId: number) {
+  return prisma.practiceTest.findMany({
+    where: {
+      businessId,
+      status: 1,
+      batch: {
+        batchUsers: {
+          some: {
+            userId,
+            isActive: true,
+          },
+        },
+      },
+    },
+    select: practiceTestSelect,
+    orderBy: { createdAt: 'desc' },
+  });
+}
+

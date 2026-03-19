@@ -93,3 +93,22 @@ export function deleteExamTest(businessId: number, id: string) {
   });
 }
 
+export function findPublishedExamTestsForStudent(businessId: number, userId: number) {
+  return prisma.examTest.findMany({
+    where: {
+      businessId,
+      status: 1,
+      batch: {
+        batchUsers: {
+          some: {
+            userId,
+            isActive: true,
+          },
+        },
+      },
+    },
+    select: examTestSelect,
+    orderBy: { createdAt: 'desc' },
+  });
+}
+

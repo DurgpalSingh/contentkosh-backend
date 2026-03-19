@@ -406,6 +406,13 @@ router.delete(
   practiceTestController.deleteQuestion,
 );
 
+router.get(
+  '/:businessId/practice-tests/available',
+  validateIdParam('businessId'),
+  authorizeBusinessAccess,
+  practiceTestController.available,
+);
+
 // ==================== LMS EXAM TEST ROUTES ====================
 router.post(
   '/:businessId/exam-tests',
@@ -497,6 +504,13 @@ router.delete(
   authorizeBusinessAccess,
   validateStringIdParam('questionId'),
   examTestController.deleteQuestion,
+);
+
+router.get(
+  '/:businessId/exam-tests/available',
+  validateIdParam('businessId'),
+  authorizeBusinessAccess,
+  examTestController.available,
 );
 
 // ==================== LMS ATTEMPT ROUTES (STUDENT) ====================

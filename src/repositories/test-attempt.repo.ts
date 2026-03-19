@@ -96,6 +96,32 @@ export function updateTestAttempt(
   });
 }
 
+export async function getPracticeAttemptStats(practiceTestId: string, userId: number) {
+  const agg = await prisma.testAttempt.aggregate({
+    where: { practiceTestId, userId },
+    _count: { _all: true },
+    _max: { startedAt: true, score: true },
+  });
+  return {
+    attemptCount: agg._count._all ?? 0,
+    lastAttemptAt: agg._max.startedAt ?? null,
+    bestScore: agg._max.score ?? null,
+  };
+}
+
+export async function getExamAttemptStats(examTestId: string, userId: number) {
+  const agg = await prisma.testAttempt.aggregate({
+    where: { examTestId, userId },
+    _count: { _all: true },
+    _max: { startedAt: true, score: true },
+  });
+  return {
+    attemptCount: agg._count._all ?? 0,
+    lastAttemptAt: agg._max.startedAt ?? null,
+    bestScore: agg._max.score ?? null,
+  };
+}
+
 export async function upsertAttemptAnswersAndFinalize(params: {
   attemptId: string;
   evaluated: Array<{

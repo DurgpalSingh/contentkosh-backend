@@ -203,7 +203,7 @@ export const examTestController = {
       if (!enforceBusinessScope(req, res, businessId)) return;
       if (!questionId) return ApiResponseHandler.badRequest(res, 'questionId is required');
       await service.deleteQuestion(businessId, questionId);
-      return ApiResponseHandler.success(res, null, 'Question deleted successfully', 204);
+      return ApiResponseHandler.success(res, { id: questionId }, 'Question deleted successfully', 200);
     } catch (e: any) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
       if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
@@ -239,6 +239,22 @@ export const examTestController = {
       if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
       logger.error(`Error starting exam attempt: ${e.message}`);
       return ApiResponseHandler.serverError(res, 'Failed to start exam attempt');
+    }
+  },
+
+  async available(req: AuthRequest, res: Response) {
+    try {
+      const businessId = getBusinessId(req);
+      if (!enforceBusinessScope(req, res, businessId)) return;
+      const user = req.user;
+      if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
+
+      const list = await attemptService.listAvailableExamTests(businessId, { id: user.id, role: user.role });
+      return ApiResponseHandler.success(res, list, 'Available exam tests fetched successfully');
+    } catch (e: any) {
+      if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
+      logger.error(`Error fetching available exam tests: ${e.message}`);
+      return ApiResponseHandler.serverError(res, 'Failed to fetch available exam tests');
     }
   },
 

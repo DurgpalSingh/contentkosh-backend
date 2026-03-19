@@ -6,6 +6,7 @@ import logger from '../utils/logger';
 
 export class ExamTestService {
   async create(businessId: number, dto: any, userId: number) {
+    logger.info(`[exam-test] create businessId=${businessId} userId=${userId} batchId=${dto?.batchId}`);
     const startAt = new Date(dto.startAt);
     const deadlineAt = new Date(dto.deadlineAt);
     if (!(deadlineAt > startAt)) {
@@ -32,7 +33,7 @@ export class ExamTestService {
   }
 
   async list(businessId: number, query: { status?: number; batchId?: number }) {
-    logger.info(`Listing exam tests for business ${businessId}`);
+    logger.info(`[exam-test] list businessId=${businessId} status=${query?.status ?? 'any'} batchId=${query?.batchId ?? 'any'}`);
     const where: any = {};
     if (query.status !== undefined) where.status = query.status;
     if (query.batchId !== undefined) where.batchId = query.batchId;
@@ -40,12 +41,14 @@ export class ExamTestService {
   }
 
   async get(businessId: number, examTestId: string) {
+    logger.info(`[exam-test] get businessId=${businessId} examTestId=${examTestId}`);
     const t = await examRepo.findExamTestById(businessId, examTestId);
     if (!t) throw new NotFoundError('Exam test not found');
     return t;
   }
 
   async update(businessId: number, examTestId: string, dto: any, userId: number) {
+    logger.info(`[exam-test] update businessId=${businessId} examTestId=${examTestId} userId=${userId}`);
     const existing = await this.get(businessId, examTestId);
 
     const startAt = dto.startAt !== undefined ? new Date(dto.startAt) : existing.startAt;
@@ -74,12 +77,14 @@ export class ExamTestService {
   }
 
   async remove(businessId: number, examTestId: string) {
+    logger.info(`[exam-test] remove businessId=${businessId} examTestId=${examTestId}`);
     const r = await examRepo.deleteExamTest(businessId, examTestId);
     if (!r.count) throw new NotFoundError('Exam test not found');
     return;
   }
 
   async publish(businessId: number, examTestId: string, userId: number) {
+    logger.info(`[exam-test] publish businessId=${businessId} examTestId=${examTestId} userId=${userId}`);
     const existing = await this.get(businessId, examTestId);
     if (existing.status !== TestStatus.DRAFT) {
       throw new BadRequestError('Only draft tests can be published');
@@ -103,6 +108,7 @@ export class ExamTestService {
   }
 
   async listQuestions(businessId: number, examTestId: string) {
+    logger.info(`[exam-test] listQuestions businessId=${businessId} examTestId=${examTestId}`);
     await this.get(businessId, examTestId);
     return questionRepo.listExamTestQuestions(businessId, examTestId);
   }
@@ -110,7 +116,7 @@ export class ExamTestService {
   private validateQuestionPayload(payload: {
     type: number;
     correctTextAnswer?: string | null;
-    correctOptionIdsAnswers?: string[];
+    correctOptionIdsAnswers?: Array<string | number>;
     options?: Array<{ text: string; mediaUrl?: string | null }>;
   }) {
     const isMcq = payload.type === QuestionType.SINGLE_CHOICE || payload.type === QuestionType.MULTIPLE_CHOICE;
@@ -133,6 +139,7 @@ export class ExamTestService {
   }
 
   async createQuestion(businessId: number, examTestId: string, dto: any) {
+    logger.info(`[exam-test] createQuestion businessId=${businessId} examTestId=${examTestId} type=${dto?.type}`);
     const hasAttempts = await questionRepo.hasAttemptsForExamTest(businessId, examTestId);
     if (hasAttempts) throw new BadRequestError('Cannot modify questions after attempts have started');
 
@@ -143,13 +150,13 @@ export class ExamTestService {
       options: dto.options?.map((o: any) => ({ text: o.text, mediaUrl: o.mediaUrl ?? null })) ?? [],
     });
 
-    const created = await questionRepo.createExamTestQuestion(businessId, examTestId, {
+    const created = await questionRepo.createExamTestQuestionResolvingCorrect(businessId, examTestId, {
       type: dto.type,
       text: dto.questionText,
       mediaUrl: dto.mediaUrl ?? null,
       explanation: dto.explanation ?? null,
       correctTextAnswer: dto.correctTextAnswer ?? null,
-      correctOptionIdsAnswers: dto.correctOptionIdsAnswers ?? [],
+      correctOptionRefs: dto.correctOptionIdsAnswers ?? [],
       options: dto.options?.map((o: any) => ({ text: o.text, mediaUrl: o.mediaUrl ?? null })) ?? [],
     });
     if (!created) throw new NotFoundError('Exam test not found');

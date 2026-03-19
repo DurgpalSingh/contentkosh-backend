@@ -1,6 +1,6 @@
 import { UserRole } from '@prisma/client';
 import { BadRequestError, NotFoundError } from '../errors/api.errors';
-import { AttemptStatus, QuestionType, ResultVisibilityExam, TestStatus } from '../constants/test-enums';
+import { AttemptStatus, LockedReason, QuestionType, ResultVisibilityExam, TestStatus } from '../constants/test-enums';
 import logger from '../utils/logger';
 import * as attemptRepo from '../repositories/test-attempt.repo';
 import * as practiceRepo from '../repositories/practice-test.repo';
@@ -136,8 +136,13 @@ export class TestAttemptService {
     await assertStudentInBatch(user.id, test.batchId);
 
     const now = new Date();
-    if (now < test.startAt) throw new BadRequestError('Exam has not started yet');
-    if (now > test.deadlineAt) throw new BadRequestError('Exam deadline has passed');
+    const nowMs = now.getTime();
+    const startAtMs = new Date(test.startAt).getTime();
+    const deadlineAtMs = new Date(test.deadlineAt).getTime();
+    logger.info(`[test-attempt] exam timing now=${now.toISOString()} startAt=${new Date(test.startAt).toISOString()} deadlineAt=${new Date(test.deadlineAt).toISOString()}`);
+    // 1s tolerance to avoid clock drift/jitter
+    if (nowMs + 1000 < startAtMs) throw new BadRequestError('Exam has not started yet');
+    if (nowMs > deadlineAtMs) throw new BadRequestError('Exam deadline has passed');
 
     const existingAttempts = await attemptRepo.findExamAttemptsByUser(examTestId, user.id, {
       where: { status: { in: [AttemptStatus.IN_PROGRESS, AttemptStatus.SUBMITTED, AttemptStatus.AUTO_SUBMITTED] } as any },
@@ -453,6 +458,76 @@ export class TestAttemptService {
       ...(reveal ? { score, totalScore, percentage, answers: updatedAttempt?.answers?.map(mapAnswer) ?? [] } : { answers: [] }),
       effectiveEndAt: effectiveEnd,
     };
+  }
+
+  async listAvailablePracticeTests(businessId: number, user: { id: number; role: UserRole }) {
+    if (user.role !== UserRole.STUDENT) throw new BadRequestError('Only students can access available tests');
+    logger.info(`[test-attempt] listAvailablePracticeTests businessId=${businessId} userId=${user.id}`);
+    const tests = await practiceRepo.findPublishedPracticeTestsForStudent(businessId, user.id);
+
+    const out = [];
+    for (const t of tests) {
+      const stats = await attemptRepo.getPracticeAttemptStats(t.id, user.id);
+      out.push({
+        practiceTestId: t.id,
+        batchId: t.batchId,
+        name: t.name,
+        description: t.description ?? null,
+        canAttempt: true,
+        attemptCount: stats.attemptCount,
+        bestScore: stats.bestScore,
+        lastAttemptAt: stats.lastAttemptAt,
+      });
+    }
+    return out;
+  }
+
+  async listAvailableExamTests(businessId: number, user: { id: number; role: UserRole }) {
+    if (user.role !== UserRole.STUDENT) throw new BadRequestError('Only students can access available tests');
+    logger.info(`[test-attempt] listAvailableExamTests businessId=${businessId} userId=${user.id}`);
+    const tests = await examRepo.findPublishedExamTestsForStudent(businessId, user.id);
+
+    const now = new Date();
+    const nowMs = now.getTime();
+
+    const out = [];
+    for (const t of tests) {
+      const stats = await attemptRepo.getExamAttemptStats(t.id, user.id);
+
+      let canAttempt = true;
+      let lockedReason: number | null = null;
+
+      const startAtMs = new Date(t.startAt).getTime();
+      const deadlineAtMs = new Date(t.deadlineAt).getTime();
+
+      if (nowMs + 1000 < startAtMs) {
+        canAttempt = false;
+        lockedReason = LockedReason.NOT_STARTED;
+      } else if (nowMs > deadlineAtMs) {
+        canAttempt = false;
+        lockedReason = LockedReason.DEADLINE_PASSED;
+      } else if (stats.attemptCount > 0) {
+        canAttempt = false;
+        lockedReason = LockedReason.ALREADY_ATTEMPTED;
+      }
+
+      out.push({
+        examTestId: t.id,
+        batchId: t.batchId,
+        name: t.name,
+        description: t.description ?? null,
+        startAt: t.startAt,
+        deadlineAt: t.deadlineAt,
+        durationMinutes: t.durationMinutes,
+        canAttempt,
+        lockedReason,
+        hasAttempt: stats.attemptCount > 0,
+        attemptsUsed: stats.attemptCount,
+        bestScore: stats.bestScore,
+        lastAttemptAt: stats.lastAttemptAt,
+      });
+    }
+    return out;
   }
 }
 

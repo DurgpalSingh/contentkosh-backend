@@ -106,6 +106,92 @@ export async function createPracticeTestQuestion(
   });
 }
 
+function resolveCorrectOptionIds(params: {
+  options: Array<{ id: string }>;
+  correctRefs: Array<string | number>;
+}): string[] {
+  const { options, correctRefs } = params;
+  if (!correctRefs.length) return [];
+
+  const allNumeric = correctRefs.every((r) => typeof r === 'number' || (typeof r === 'string' && /^\d+$/.test(r)));
+  if (!allNumeric) {
+    // assume already option ids
+    return correctRefs.map(String);
+  }
+
+  const nums = correctRefs.map((r) => Number(r));
+  const looksOneBased = nums.every((n) => Number.isInteger(n) && n >= 1) && !nums.includes(0);
+  const idxs = nums.map((n) => (looksOneBased ? n - 1 : n));
+
+  const resolved: string[] = [];
+  for (const idx of idxs) {
+    const opt = options[idx];
+    if (!opt) continue;
+    resolved.push(opt.id);
+  }
+  return resolved;
+}
+
+export async function createPracticeTestQuestionResolvingCorrect(
+  businessId: number,
+  practiceTestId: string,
+  data: {
+    type: number;
+    text: string;
+    mediaUrl?: string | null;
+    explanation?: string | null;
+    correctTextAnswer?: string | null;
+    correctOptionRefs?: Array<string | number>;
+    options?: Array<{ text: string; mediaUrl?: string | null }>;
+  },
+) {
+  const parent = await prisma.practiceTest.findFirst({
+    where: { id: practiceTestId, businessId },
+    select: { id: true },
+  });
+  if (!parent) return null;
+
+  return prisma.$transaction(async (tx) => {
+    const created = await tx.testQuestion.create({
+      data: {
+        practiceTest: { connect: { id: practiceTestId } },
+        type: data.type,
+        text: data.text,
+        mediaUrl: data.mediaUrl ?? null,
+        explanation: data.explanation ?? null,
+        correctTextAnswer: data.correctTextAnswer ?? null,
+        correctOptionIdsAnswers: [],
+        ...(data.options?.length
+          ? {
+              options: {
+                create: data.options.map((o) => ({
+                  text: o.text,
+                  mediaUrl: o.mediaUrl ?? null,
+                })),
+              },
+            }
+          : {}),
+      },
+      select: questionSelect,
+    });
+
+    const correctOptionIdsAnswers = resolveCorrectOptionIds({
+      options: created.options ?? [],
+      correctRefs: data.correctOptionRefs ?? [],
+    });
+
+    if (correctOptionIdsAnswers.length) {
+      return tx.testQuestion.update({
+        where: { id: created.id },
+        data: { correctOptionIdsAnswers },
+        select: questionSelect,
+      });
+    }
+
+    return created;
+  });
+}
+
 export async function createExamTestQuestion(
   businessId: number,
   examTestId: string,
@@ -147,6 +233,66 @@ export async function createExamTestQuestion(
   return prisma.testQuestion.create({
     data: createData,
     select: questionSelect,
+  });
+}
+
+export async function createExamTestQuestionResolvingCorrect(
+  businessId: number,
+  examTestId: string,
+  data: {
+    type: number;
+    text: string;
+    mediaUrl?: string | null;
+    explanation?: string | null;
+    correctTextAnswer?: string | null;
+    correctOptionRefs?: Array<string | number>;
+    options?: Array<{ text: string; mediaUrl?: string | null }>;
+  },
+) {
+  const parent = await prisma.examTest.findFirst({
+    where: { id: examTestId, businessId },
+    select: { id: true },
+  });
+  if (!parent) return null;
+
+  return prisma.$transaction(async (tx) => {
+    const created = await tx.testQuestion.create({
+      data: {
+        examTest: { connect: { id: examTestId } },
+        type: data.type,
+        text: data.text,
+        mediaUrl: data.mediaUrl ?? null,
+        explanation: data.explanation ?? null,
+        correctTextAnswer: data.correctTextAnswer ?? null,
+        correctOptionIdsAnswers: [],
+        ...(data.options?.length
+          ? {
+              options: {
+                create: data.options.map((o) => ({
+                  text: o.text,
+                  mediaUrl: o.mediaUrl ?? null,
+                })),
+              },
+            }
+          : {}),
+      },
+      select: questionSelect,
+    });
+
+    const correctOptionIdsAnswers = resolveCorrectOptionIds({
+      options: created.options ?? [],
+      correctRefs: data.correctOptionRefs ?? [],
+    });
+
+    if (correctOptionIdsAnswers.length) {
+      return tx.testQuestion.update({
+        where: { id: created.id },
+        data: { correctOptionIdsAnswers },
+        select: questionSelect,
+      });
+    }
+
+    return created;
   });
 }
 

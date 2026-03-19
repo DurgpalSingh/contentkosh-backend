@@ -263,8 +263,7 @@ export class CreateQuestionDto {
   @ValidateIf((o) => o.type === 0 || o.type === 1)
   @IsArray()
   @ArrayMinSize(1)
-  @IsString({ each: true })
-  correctOptionIdsAnswers?: string[];
+  correctOptionIdsAnswers?: Array<string | number>;
 }
 
 export class UpdateQuestionDto {
@@ -299,8 +298,7 @@ export class UpdateQuestionDto {
 
   @IsOptional()
   @IsArray()
-  @IsString({ each: true })
-  correctOptionIdsAnswers?: string[];
+  correctOptionIdsAnswers?: Array<string | number>;
 }
 
 export class StartPracticeAttemptRequestDto {
