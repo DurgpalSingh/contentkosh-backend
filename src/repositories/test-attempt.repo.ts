@@ -236,3 +236,157 @@ export async function upsertAttemptAnswersAndFinalize(params: {
   });
 }
 
+export async function getPracticeTestAnalyticsAttempts(
+  practiceTestId: string,
+  attemptStatuses: number[],
+) {
+  if (!attemptStatuses.length) return [];
+  return prisma.testAttempt.findMany({
+    where: {
+      practiceTestId,
+      status: { in: attemptStatuses },
+    },
+    orderBy: { startedAt: 'desc' },
+    select: {
+      id: true,
+      userId: true,
+      status: true,
+      startedAt: true,
+      submittedAt: true,
+      score: true,
+      totalScore: true,
+      percentage: true,
+    },
+  });
+}
+
+export async function getExamTestAnalyticsAttempts(
+  examTestId: string,
+  attemptStatuses: number[],
+) {
+  if (!attemptStatuses.length) return [];
+  return prisma.testAttempt.findMany({
+    where: {
+      examTestId,
+      status: { in: attemptStatuses },
+    },
+    orderBy: { startedAt: 'desc' },
+    select: {
+      id: true,
+      userId: true,
+      status: true,
+      startedAt: true,
+      submittedAt: true,
+      score: true,
+      totalScore: true,
+      percentage: true,
+    },
+  });
+}
+
+export async function getPracticeTestQuestionIds(practiceTestId: string) {
+  const rows = await prisma.testQuestion.findMany({
+    where: { practiceTestId },
+    select: { id: true },
+    orderBy: { createdAt: 'asc' },
+  });
+  return rows.map((r) => r.id);
+}
+
+export async function getExamTestQuestionIds(examTestId: string) {
+  const rows = await prisma.testQuestion.findMany({
+    where: { examTestId },
+    select: { id: true },
+    orderBy: { createdAt: 'asc' },
+  });
+  return rows.map((r) => r.id);
+}
+
+export async function getPracticeTestCorrectCountsByQuestion(
+  practiceTestId: string,
+  attemptStatuses: number[],
+) {
+  if (!attemptStatuses.length) return [];
+  const rows = await prisma.testAttemptAnswer.groupBy({
+    by: ['questionId'],
+    where: {
+      isCorrect: true,
+      attempt: {
+        practiceTestId,
+        status: { in: attemptStatuses },
+      },
+    },
+    _count: { _all: true },
+  });
+  return rows.map((r) => ({ questionId: r.questionId, correctCount: r._count._all ?? 0 }));
+}
+
+export async function getExamTestCorrectCountsByQuestion(
+  examTestId: string,
+  attemptStatuses: number[],
+) {
+  if (!attemptStatuses.length) return [];
+  const rows = await prisma.testAttemptAnswer.groupBy({
+    by: ['questionId'],
+    where: {
+      isCorrect: true,
+      attempt: {
+        examTestId,
+        status: { in: attemptStatuses },
+      },
+    },
+    _count: { _all: true },
+  });
+  return rows.map((r) => ({ questionId: r.questionId, correctCount: r._count._all ?? 0 }));
+}
+
+export async function getPracticeTestAnalyticsAttemptsForExport(
+  practiceTestId: string,
+  attemptStatuses: number[],
+) {
+  if (!attemptStatuses.length) return [];
+  return prisma.testAttempt.findMany({
+    where: {
+      practiceTestId,
+      status: { in: attemptStatuses },
+    },
+    orderBy: { startedAt: 'desc' },
+    select: {
+      id: true,
+      userId: true,
+      status: true,
+      startedAt: true,
+      submittedAt: true,
+      score: true,
+      totalScore: true,
+      percentage: true,
+      user: { select: { name: true, email: true } },
+    },
+  });
+}
+
+export async function getExamTestAnalyticsAttemptsForExport(
+  examTestId: string,
+  attemptStatuses: number[],
+) {
+  if (!attemptStatuses.length) return [];
+  return prisma.testAttempt.findMany({
+    where: {
+      examTestId,
+      status: { in: attemptStatuses },
+    },
+    orderBy: { startedAt: 'desc' },
+    select: {
+      id: true,
+      userId: true,
+      status: true,
+      startedAt: true,
+      submittedAt: true,
+      score: true,
+      totalScore: true,
+      percentage: true,
+      user: { select: { name: true, email: true } },
+    },
+  });
+}
+

@@ -414,6 +414,25 @@ router.delete(
   practiceTestController.deleteQuestion,
 );
 
+// ==================== PRACTICE ANALYTICS ====================
+router.get(
+  '/:businessId/practice-tests/:practiceTestId/analytics',
+  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  validateIdParam('businessId'),
+  authorizeBusinessAccess,
+  validateStringIdParam('practiceTestId'),
+  practiceTestController.analytics,
+);
+
+router.get(
+  '/:businessId/practice-tests/:practiceTestId/analytics/export',
+  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  validateIdParam('businessId'),
+  authorizeBusinessAccess,
+  validateStringIdParam('practiceTestId'),
+  practiceTestController.exportAnalytics,
+);
+
 // ==================== LMS EXAM TEST ROUTES ====================
 router.post(
   '/:businessId/exam-tests',
@@ -513,6 +532,25 @@ router.delete(
   authorizeBusinessAccess,
   validateStringIdParam('questionId'),
   examTestController.deleteQuestion,
+);
+
+// ==================== EXAM ANALYTICS ====================
+router.get(
+  '/:businessId/exam-tests/:examTestId/analytics',
+  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  validateIdParam('businessId'),
+  authorizeBusinessAccess,
+  validateStringIdParam('examTestId'),
+  examTestController.analytics,
+);
+
+router.get(
+  '/:businessId/exam-tests/:examTestId/analytics/export',
+  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  validateIdParam('businessId'),
+  authorizeBusinessAccess,
+  validateStringIdParam('examTestId'),
+  examTestController.exportAnalytics,
 );
 
 // ==================== LMS ATTEMPT ROUTES (STUDENT) ====================

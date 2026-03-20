@@ -321,5 +321,49 @@ export const examTestController = {
       return ApiResponseHandler.serverError(res, 'Failed to submit exam attempt');
     }
   },
+
+  async analytics(req: AuthRequest, res: Response) {
+    try {
+      const businessId = getBusinessId(req);
+      
+      const user = req.user;
+      if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
+
+      const examTestId = req.params.examTestId;
+      if (!examTestId) return ApiResponseHandler.badRequest(res, 'examTestId is required');
+
+      const analytics = await attemptService.getExamTestAnalytics(businessId, { id: user.id, role: user.role }, examTestId);
+      return ApiResponseHandler.success(res, analytics, 'Exam test analytics fetched successfully');
+    } catch (e: unknown) {
+      if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
+      if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
+      const message = e instanceof Error ? e.message : 'Unknown error';
+      logger.error(`Error fetching exam test analytics: ${message}`);
+      return ApiResponseHandler.serverError(res, 'Failed to fetch exam test analytics');
+    }
+  },
+
+  async exportAnalytics(req: AuthRequest, res: Response) {
+    try {
+      const businessId = getBusinessId(req);
+      
+      const user = req.user;
+      if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
+
+      const examTestId = req.params.examTestId;
+      if (!examTestId) return ApiResponseHandler.badRequest(res, 'examTestId is required');
+
+      const csv = await attemptService.exportExamTestAnalyticsCSV(businessId, { id: user.id, role: user.role }, examTestId);
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="exam-test-${examTestId}-analytics.csv"`);
+      return res.status(200).send(csv);
+    } catch (e: unknown) {
+      if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
+      if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
+      const message = e instanceof Error ? e.message : 'Unknown error';
+      logger.error(`Error exporting exam test analytics: ${message}`);
+      return ApiResponseHandler.serverError(res, 'Failed to export exam test analytics');
+    }
+  },
 };
 

@@ -1,5 +1,5 @@
 import { Prisma, UserRole, ExamTest, PracticeTest, TestAttempt, TestAttemptAnswer, TestOption, TestQuestion } from '@prisma/client';
-import { BadRequestError, NotFoundError } from '../errors/api.errors';
+import { BadRequestError, ForbiddenError, NotFoundError } from '../errors/api.errors';
 import { AttemptStatus, LockedReason, QuestionType, ResultVisibilityExam, TestStatus } from '../constants/test-enums';
 import logger from '../utils/logger';
 import * as attemptRepo from '../repositories/test-attempt.repo';
@@ -70,6 +70,15 @@ function normalizeNumeric(s: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+function csvEscape(value: unknown): string {
+  const s = value === null || value === undefined ? '' : String(value);
+  // Wrap values containing special chars in quotes and escape embedded quotes.
+  if (/[",\n\r]/.test(s)) {
+    return `"${s.replace(/"/g, '""')}"`;
+  }
+  return s;
+}
+
 async function assertStudentInBatch(userId: number, batchId: number) {
   const ok = await batchUserRepo.isActiveUserInBatch(userId, batchId);
   if (!ok) {
@@ -112,6 +121,11 @@ function hasExamStarted(now: Date, startAt: Date): boolean {
 }
 
 export class TestAttemptService {
+  private assertTeacherOrAdmin(user: { id: number; role: UserRole }) {
+    const ok = user.role === UserRole.ADMIN || user.role === UserRole.TEACHER || user.role === UserRole.SUPERADMIN;
+    if (!ok) throw new ForbiddenError('Forbidden');
+  }
+
   async startPracticeAttempt(businessId: number, user: { id: number; role: UserRole }, practiceTestId: string) {
     if (user.role !== UserRole.STUDENT) throw new BadRequestError('Only students can start attempts');
     logger.info(`[test-attempt] startPracticeAttempt businessId=${businessId} userId=${user.id} practiceTestId=${practiceTestId}`);
@@ -720,6 +734,225 @@ export class TestAttemptService {
         lastAttemptAt: stats.lastAttemptAt,
       };
     });
+  }
+
+  async getPracticeTestAnalytics(
+    businessId: number,
+    user: { id: number; role: UserRole },
+    practiceTestId: string,
+  ) {
+    logger.info(
+      `[test-attempt] getPracticeTestAnalytics businessId=${businessId} userId=${user.id} role=${user.role} practiceTestId=${practiceTestId}`,
+    );
+
+    this.assertTeacherOrAdmin(user);
+
+    const test = await practiceRepo.findPracticeTestById(businessId, practiceTestId);
+    if (!test) throw new NotFoundError('Practice test not found');
+    if (user.role === UserRole.TEACHER) {
+      const ok = await batchUserRepo.isActiveUserInBatch(user.id, test.batchId);
+      if (!ok) throw new NotFoundError('Practice test not found');
+    }
+
+    const attemptStatuses = [AttemptStatus.SUBMITTED, AttemptStatus.AUTO_SUBMITTED];
+    const attempts = await attemptRepo.getPracticeTestAnalyticsAttempts(practiceTestId, attemptStatuses);
+    const totalAttempts = attempts.length;
+
+    const questionIds = await attemptRepo.getPracticeTestQuestionIds(practiceTestId);
+    const correctCountsRows = await attemptRepo.getPracticeTestCorrectCountsByQuestion(practiceTestId, attemptStatuses);
+    const correctCounts = new Map(correctCountsRows.map((r) => [r.questionId, r.correctCount]));
+
+    const scores = attempts.map((a) => a.score ?? 0);
+    const percentages = attempts.map((a) => a.percentage ?? 0);
+
+    const sum = (arr: number[]) => arr.reduce((s, v) => s + v, 0);
+    const averageScore = totalAttempts ? sum(scores) / totalAttempts : 0;
+    const averagePercentage = totalAttempts ? sum(percentages) / totalAttempts : 0;
+    const highestScore = totalAttempts ? Math.max(...scores) : 0;
+    const lowestScore = totalAttempts ? Math.min(...scores) : 0;
+
+    // No explicit passing threshold was defined in the plan/swagger; use 50% as the default "pass" line.
+    const PASS_THRESHOLD_PERCENT = 50;
+    const passCount = attempts.filter((a) => (a.percentage ?? 0) >= PASS_THRESHOLD_PERCENT).length;
+    const passRate = totalAttempts ? (passCount / totalAttempts) * 100 : 0;
+
+    const questionStats = questionIds.map((questionId) => {
+      const correctCount = correctCounts.get(questionId) ?? 0;
+      const accuracy = totalAttempts ? (correctCount / totalAttempts) * 100 : 0;
+      return {
+        questionId,
+        correctCount,
+        totalAttempts,
+        accuracy,
+      };
+    });
+
+    return {
+      totalAttempts,
+      averageScore,
+      averagePercentage,
+      passRate,
+      highestScore,
+      lowestScore,
+      attempts: attempts.map((a) => ({
+        attemptId: a.id,
+        userId: String(a.userId),
+        status: a.status,
+        startedAt: a.startedAt,
+        submittedAt: a.submittedAt,
+        score: a.score ?? 0,
+        totalScore: a.totalScore ?? 0,
+        percentage: a.percentage ?? 0,
+      })),
+      questionStats,
+    };
+  }
+
+  async exportPracticeTestAnalyticsCSV(
+    businessId: number,
+    user: { id: number; role: UserRole },
+    practiceTestId: string,
+  ) {
+    logger.info(
+      `[test-attempt] exportPracticeTestAnalyticsCSV businessId=${businessId} userId=${user.id} role=${user.role} practiceTestId=${practiceTestId}`,
+    );
+
+    this.assertTeacherOrAdmin(user);
+
+    const test = await practiceRepo.findPracticeTestById(businessId, practiceTestId);
+    if (!test) throw new NotFoundError('Practice test not found');
+    if (user.role === UserRole.TEACHER) {
+      const ok = await batchUserRepo.isActiveUserInBatch(user.id, test.batchId);
+      if (!ok) throw new NotFoundError('Practice test not found');
+    }
+
+    const attemptStatuses = [AttemptStatus.SUBMITTED, AttemptStatus.AUTO_SUBMITTED];
+    const attempts = await attemptRepo.getPracticeTestAnalyticsAttemptsForExport(practiceTestId, attemptStatuses);
+
+    const header = ['attemptId', 'userId', 'userName', 'userEmail', 'status', 'score', 'totalScore', 'percentage', 'startedAt', 'submittedAt'];
+    const rows = attempts.map((a) => [
+      a.id,
+      String(a.userId),
+      a.user?.name ?? '',
+      a.user?.email ?? '',
+      a.status,
+      a.score ?? 0,
+      a.totalScore ?? 0,
+      a.percentage ?? 0,
+      a.startedAt?.toISOString?.() ?? '',
+      a.submittedAt?.toISOString?.() ?? '',
+    ]);
+
+    return [header.join(','), ...rows.map((r) => r.map(csvEscape).join(','))].join('\n');
+  }
+
+  async getExamTestAnalytics(
+    businessId: number,
+    user: { id: number; role: UserRole },
+    examTestId: string,
+  ) {
+    logger.info(
+      `[test-attempt] getExamTestAnalytics businessId=${businessId} userId=${user.id} role=${user.role} examTestId=${examTestId}`,
+    );
+
+    this.assertTeacherOrAdmin(user);
+
+    const test = await examRepo.findExamTestById(businessId, examTestId);
+    if (!test) throw new NotFoundError('Exam test not found');
+    if (user.role === UserRole.TEACHER) {
+      const ok = await batchUserRepo.isActiveUserInBatch(user.id, test.batchId);
+      if (!ok) throw new NotFoundError('Exam test not found');
+    }
+
+    const attemptStatuses = [AttemptStatus.SUBMITTED, AttemptStatus.AUTO_SUBMITTED];
+    const attempts = await attemptRepo.getExamTestAnalyticsAttempts(examTestId, attemptStatuses);
+    const totalAttempts = attempts.length;
+
+    const questionIds = await attemptRepo.getExamTestQuestionIds(examTestId);
+    const correctCountsRows = await attemptRepo.getExamTestCorrectCountsByQuestion(examTestId, attemptStatuses);
+    const correctCounts = new Map(correctCountsRows.map((r) => [r.questionId, r.correctCount]));
+
+    const scores = attempts.map((a) => a.score ?? 0);
+    const percentages = attempts.map((a) => a.percentage ?? 0);
+
+    const sum = (arr: number[]) => arr.reduce((s, v) => s + v, 0);
+    const averageScore = totalAttempts ? sum(scores) / totalAttempts : 0;
+    const averagePercentage = totalAttempts ? sum(percentages) / totalAttempts : 0;
+    const highestScore = totalAttempts ? Math.max(...scores) : 0;
+    const lowestScore = totalAttempts ? Math.min(...scores) : 0;
+
+    const PASS_THRESHOLD_PERCENT = 50;
+    const passCount = attempts.filter((a) => (a.percentage ?? 0) >= PASS_THRESHOLD_PERCENT).length;
+    const passRate = totalAttempts ? (passCount / totalAttempts) * 100 : 0;
+
+    const questionStats = questionIds.map((questionId) => {
+      const correctCount = correctCounts.get(questionId) ?? 0;
+      const accuracy = totalAttempts ? (correctCount / totalAttempts) * 100 : 0;
+      return {
+        questionId,
+        correctCount,
+        totalAttempts,
+        accuracy,
+      };
+    });
+
+    return {
+      totalAttempts,
+      averageScore,
+      averagePercentage,
+      passRate,
+      highestScore,
+      lowestScore,
+      attempts: attempts.map((a) => ({
+        attemptId: a.id,
+        userId: String(a.userId),
+        status: a.status,
+        startedAt: a.startedAt,
+        submittedAt: a.submittedAt,
+        score: a.score ?? 0,
+        totalScore: a.totalScore ?? 0,
+        percentage: a.percentage ?? 0,
+      })),
+      questionStats,
+    };
+  }
+
+  async exportExamTestAnalyticsCSV(
+    businessId: number,
+    user: { id: number; role: UserRole },
+    examTestId: string,
+  ) {
+    logger.info(
+      `[test-attempt] exportExamTestAnalyticsCSV businessId=${businessId} userId=${user.id} role=${user.role} examTestId=${examTestId}`,
+    );
+
+    this.assertTeacherOrAdmin(user);
+
+    const test = await examRepo.findExamTestById(businessId, examTestId);
+    if (!test) throw new NotFoundError('Exam test not found');
+    if (user.role === UserRole.TEACHER) {
+      const ok = await batchUserRepo.isActiveUserInBatch(user.id, test.batchId);
+      if (!ok) throw new NotFoundError('Exam test not found');
+    }
+
+    const attemptStatuses = [AttemptStatus.SUBMITTED, AttemptStatus.AUTO_SUBMITTED];
+    const attempts = await attemptRepo.getExamTestAnalyticsAttemptsForExport(examTestId, attemptStatuses);
+
+    const header = ['attemptId', 'userId', 'userName', 'userEmail', 'status', 'score', 'totalScore', 'percentage', 'startedAt', 'submittedAt'];
+    const rows = attempts.map((a) => [
+      a.id,
+      String(a.userId),
+      a.user?.name ?? '',
+      a.user?.email ?? '',
+      a.status,
+      a.score ?? 0,
+      a.totalScore ?? 0,
+      a.percentage ?? 0,
+      a.startedAt?.toISOString?.() ?? '',
+      a.submittedAt?.toISOString?.() ?? '',
+    ]);
+
+    return [header.join(','), ...rows.map((r) => r.map(csvEscape).join(','))].join('\n');
   }
 }
 
