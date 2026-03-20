@@ -5,8 +5,21 @@ import * as batchRepo from '../repositories/batch.repo';
 import { TestStatus, QuestionType } from '../constants/test-enums';
 import logger from '../utils/logger';
 import { CreatePracticeTestDto, CreateQuestionDto, UpdatePracticeTestDto, UpdateQuestionDto } from '../dtos/test.dto';
+import { UserRole } from '@prisma/client';
 
 export class PracticeTestService {
+  private isElevated(role: UserRole) {
+    return role === UserRole.ADMIN || role === UserRole.SUPERADMIN;
+  }
+
+  private async assertTeacherInBatch(userId: number, batchId: number) {
+    const ok = await batchRepo.isActiveUserInBatch(userId, batchId);
+    if (!ok) {
+      logger.warn(`[practice-test] teacher not in batch userId=${userId} batchId=${batchId}`);
+      throw new NotFoundError('Practice test not found');
+    }
+  }
+
   private async assertBatchBelongsToBusiness(businessId: number, batchId: number) {
     const batchBusinessId = await batchRepo.findBatchBusinessId(batchId);
     if (!batchBusinessId) {
@@ -19,9 +32,25 @@ export class PracticeTestService {
     }
   }
 
-  async create(businessId: number, dto: CreatePracticeTestDto, userId: number) {
-    logger.info(`[practice-test] create businessId=${businessId} userId=${userId} batchId=${dto?.batchId}`);
+  private async getWithAccess(
+    businessId: number,
+    practiceTestId: string,
+    user: { id: number; role: UserRole },
+  ) {
+    const t =
+      this.isElevated(user.role)
+        ? await practiceRepo.findPracticeTestById(businessId, practiceTestId)
+        : await practiceRepo.findPracticeTestByIdForUser(businessId, practiceTestId, user.id);
+    if (!t) throw new NotFoundError('Practice test not found');
+    return t;
+  }
+
+  async create(businessId: number, dto: CreatePracticeTestDto, user: { id: number; role: UserRole }) {
+    logger.info(`[practice-test] create businessId=${businessId} userId=${user.id} batchId=${dto?.batchId}`);
     await this.assertBatchBelongsToBusiness(businessId, dto.batchId);
+    if (user.role === UserRole.TEACHER) {
+      await this.assertTeacherInBatch(user.id, dto.batchId);
+    }
     const created = await practiceRepo.createPracticeTest({
       businessId,
       batchId: dto.batchId,
@@ -32,30 +61,44 @@ export class PracticeTestService {
       showExplanations: dto.showExplanations ?? true,
       shuffleQuestions: dto.shuffleQuestions ?? true,
       shuffleOptions: dto.shuffleOptions ?? true,
-      createdBy: userId,
+      createdBy: user.id,
     });
     return created;
   }
 
-  async list(businessId: number, query: { status?: number; batchId?: number }) {
-    logger.info(`[practice-test] list businessId=${businessId} status=${query?.status ?? 'any'} batchId=${query?.batchId ?? 'any'}`);
+  async list(businessId: number, query: { status?: number; batchId?: number }, user: { id: number; role: UserRole }) {
+    logger.info(
+      `[practice-test] list businessId=${businessId} userId=${user.id} role=${user.role} status=${query?.status ?? 'any'} batchId=${query?.batchId ?? 'any'}`,
+    );
     const where: { status?: number; batchId?: number } = {};
     if (query.status !== undefined) where.status = query.status;
     if (query.batchId !== undefined) where.batchId = query.batchId;
+    if (!this.isElevated(user.role)) {
+      return practiceRepo.findPracticeTestsByBusinessIdForUser(businessId, user.id, { where });
+    }
     return practiceRepo.findPracticeTestsByBusinessId(businessId, { where });
   }
 
-  async get(businessId: number, practiceTestId: string) {
-    logger.info(`[practice-test] get businessId=${businessId} practiceTestId=${practiceTestId}`);
-    const t = await practiceRepo.findPracticeTestById(businessId, practiceTestId);
-    if (!t) throw new NotFoundError('Practice test not found');
-    return t;
+  async get(businessId: number, practiceTestId: string, user: { id: number; role: UserRole }) {
+    logger.info(
+      `[practice-test] get businessId=${businessId} practiceTestId=${practiceTestId} userId=${user.id} role=${user.role}`,
+    );
+    return this.getWithAccess(businessId, practiceTestId, user);
   }
 
-  async update(businessId: number, practiceTestId: string, dto: UpdatePracticeTestDto, userId: number) {
-    logger.info(`[practice-test] update businessId=${businessId} practiceTestId=${practiceTestId} userId=${userId}`);
+  async update(
+    businessId: number,
+    practiceTestId: string,
+    dto: UpdatePracticeTestDto,
+    user: { id: number; role: UserRole },
+  ) {
+    logger.info(`[practice-test] update businessId=${businessId} practiceTestId=${practiceTestId} userId=${user.id}`);
+    const existing = await this.getWithAccess(businessId, practiceTestId, user);
     if (dto.batchId !== undefined) {
       await this.assertBatchBelongsToBusiness(businessId, dto.batchId);
+      if (user.role === UserRole.TEACHER) {
+        await this.assertTeacherInBatch(user.id, dto.batchId);
+      }
     }
     const updated = await practiceRepo.updatePracticeTest(businessId, practiceTestId, {
       ...(dto.batchId !== undefined ? { batchId: dto.batchId } : {}),
@@ -66,23 +109,33 @@ export class PracticeTestService {
       ...(dto.showExplanations !== undefined ? { showExplanations: dto.showExplanations } : {}),
       ...(dto.shuffleQuestions !== undefined ? { shuffleQuestions: dto.shuffleQuestions } : {}),
       ...(dto.shuffleOptions !== undefined ? { shuffleOptions: dto.shuffleOptions } : {}),
-      updatedBy: userId,
+      updatedBy: user.id,
     });
     if (!updated) throw new NotFoundError('Practice test not found');
+    if (user.role === UserRole.TEACHER) {
+      await this.assertTeacherInBatch(user.id, updated.batchId);
+    }
     return updated;
   }
 
-  async remove(businessId: number, practiceTestId: string) {
-    logger.info(`[practice-test] remove businessId=${businessId} practiceTestId=${practiceTestId}`);
+  async remove(businessId: number, practiceTestId: string, user: { id: number; role: UserRole }) {
+    logger.info(`[practice-test] remove businessId=${businessId} practiceTestId=${practiceTestId} userId=${user.id}`);
+    const existing = await this.getWithAccess(businessId, practiceTestId, user);
+    if (user.role === UserRole.TEACHER) {
+      await this.assertTeacherInBatch(user.id, existing.batchId);
+    }
     const r = await practiceRepo.deletePracticeTest(businessId, practiceTestId);
     if (!r.count) throw new NotFoundError('Practice test not found');
     return;
   }
 
-  async publish(businessId: number, practiceTestId: string, userId: number) {
-    logger.info(`[practice-test] publish businessId=${businessId} practiceTestId=${practiceTestId} userId=${userId}`);
-    const existing = await this.get(businessId, practiceTestId);
+  async publish(businessId: number, practiceTestId: string, user: { id: number; role: UserRole }) {
+    logger.info(`[practice-test] publish businessId=${businessId} practiceTestId=${practiceTestId} userId=${user.id}`);
+    const existing = await this.getWithAccess(businessId, practiceTestId, user);
     await this.assertBatchBelongsToBusiness(businessId, existing.batchId);
+    if (user.role === UserRole.TEACHER) {
+      await this.assertTeacherInBatch(user.id, existing.batchId);
+    }
     if (existing.status !== TestStatus.DRAFT) {
       throw new BadRequestError('Only draft tests can be published');
     }
@@ -92,16 +145,18 @@ export class PracticeTestService {
     }
     const updated = await practiceRepo.updatePracticeTest(businessId, practiceTestId, {
       status: TestStatus.PUBLISHED,
-      updatedBy: userId,
+      updatedBy: user.id,
     });
     if (!updated) throw new NotFoundError('Practice test not found');
     return updated;
   }
 
-  async listQuestions(businessId: number, practiceTestId: string) {
-    logger.info(`[practice-test] listQuestions businessId=${businessId} practiceTestId=${practiceTestId}`);
-    // Ensure parent exists
-    await this.get(businessId, practiceTestId);
+  async listQuestions(businessId: number, practiceTestId: string, user: { id: number; role: UserRole }) {
+    logger.info(`[practice-test] listQuestions businessId=${businessId} practiceTestId=${practiceTestId} userId=${user.id}`);
+    const test = await this.getWithAccess(businessId, practiceTestId, user);
+    if (user.role === UserRole.TEACHER) {
+      await this.assertTeacherInBatch(user.id, test.batchId);
+    }
     return questionRepo.listPracticeTestQuestions(businessId, practiceTestId);
   }
 
@@ -130,8 +185,19 @@ export class PracticeTestService {
     }
   }
 
-  async createQuestion(businessId: number, practiceTestId: string, dto: CreateQuestionDto) {
-    logger.info(`[practice-test] createQuestion businessId=${businessId} practiceTestId=${practiceTestId} type=${dto?.type}`);
+  async createQuestion(
+    businessId: number,
+    practiceTestId: string,
+    dto: CreateQuestionDto,
+    user: { id: number; role: UserRole },
+  ) {
+    logger.info(
+      `[practice-test] createQuestion businessId=${businessId} practiceTestId=${practiceTestId} type=${dto?.type} userId=${user.id}`,
+    );
+    const test = await this.getWithAccess(businessId, practiceTestId, user);
+    if (user.role === UserRole.TEACHER) {
+      await this.assertTeacherInBatch(user.id, test.batchId);
+    }
     const hasAttempts = await questionRepo.hasAttemptsForPracticeTest(businessId, practiceTestId);
     if (hasAttempts) throw new BadRequestError('Cannot modify questions after attempts have started');
 
@@ -156,12 +222,16 @@ export class PracticeTestService {
     return created;
   }
 
-  async updateQuestion(businessId: number, questionId: string, dto: UpdateQuestionDto) {
+  async updateQuestion(businessId: number, questionId: string, dto: UpdateQuestionDto, user: { id: number; role: UserRole }) {
     const existing = await questionRepo.findQuestionById(businessId, questionId);
     if (!existing) throw new NotFoundError('Question not found');
 
     const testId = existing.practiceTestId;
     if (!testId) throw new BadRequestError('Question does not belong to a practice test');
+    const test = await this.getWithAccess(businessId, testId, user);
+    if (user.role === UserRole.TEACHER) {
+      await this.assertTeacherInBatch(user.id, test.batchId);
+    }
 
     const hasAttempts = await questionRepo.hasAttemptsForPracticeTest(businessId, testId);
     if (hasAttempts) throw new BadRequestError('Cannot modify questions after attempts have started');
@@ -201,11 +271,15 @@ export class PracticeTestService {
     return updated;
   }
 
-  async deleteQuestion(businessId: number, questionId: string) {
+  async deleteQuestion(businessId: number, questionId: string, user: { id: number; role: UserRole }) {
     const existing = await questionRepo.findQuestionById(businessId, questionId);
     if (!existing) throw new NotFoundError('Question not found');
     const testId = existing.practiceTestId;
     if (!testId) throw new BadRequestError('Question does not belong to a practice test');
+    const test = await this.getWithAccess(businessId, testId, user);
+    if (user.role === UserRole.TEACHER) {
+      await this.assertTeacherInBatch(user.id, test.batchId);
+    }
 
     const hasAttempts = await questionRepo.hasAttemptsForPracticeTest(businessId, testId);
     if (hasAttempts) throw new BadRequestError('Cannot modify questions after attempts have started');

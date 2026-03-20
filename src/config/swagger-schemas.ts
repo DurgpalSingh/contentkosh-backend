@@ -1994,6 +1994,7 @@ export const swaggerSchemas = {
       totalMarks: { type: 'number', minimum: 0 },
       defaultMarksPerQuestion: { type: 'number', minimum: 0 },
       canAttempt: { type: 'boolean' },
+      attemptId: { type: 'string', minLength: 1, maxLength: 50 },
       attemptCount: { type: 'integer', minimum: 0 },
       bestScore: { type: 'number', minimum: 0 },
       lastAttemptAt: { type: 'string', format: 'date-time' }
@@ -2022,6 +2023,7 @@ export const swaggerSchemas = {
       attemptsAllowed: { type: 'integer', minimum: 1 },
       attemptsUsed: { type: 'integer', minimum: 0 },
       hasAttempt: { type: 'boolean' },
+      attemptId: { type: 'string', minLength: 1, maxLength: 50 },
       lastAttemptAt: { type: 'string', format: 'date-time' }
     }
   },

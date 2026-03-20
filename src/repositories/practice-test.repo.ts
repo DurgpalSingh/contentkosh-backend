@@ -53,6 +53,31 @@ export function findPracticeTestById(
   return prisma.practiceTest.findFirst(query);
 }
 
+export function findPracticeTestByIdForUser(
+  businessId: number,
+  id: string,
+  userId: number,
+  options: PracticeTestFindOptions = {},
+) {
+  const query: any = {
+    where: {
+      id,
+      businessId,
+      batch: {
+        batchUsers: {
+          some: { userId, isActive: true },
+        },
+      },
+    },
+  };
+
+  if (options.select) query.select = options.select;
+  else if (options.include) query.include = options.include;
+  else query.select = practiceTestSelect;
+
+  return prisma.practiceTest.findFirst(query);
+}
+
 export function findPracticeTestsByBusinessId(
   businessId: number,
   options: PracticeTestFindOptions = {},
@@ -60,6 +85,34 @@ export function findPracticeTestsByBusinessId(
   const query: Prisma.PracticeTestFindManyArgs = {
     where: {
       businessId,
+      ...(options.where ?? {}),
+    },
+    orderBy: options.orderBy ?? { createdAt: 'desc' },
+  };
+
+  if (options.skip !== undefined) query.skip = options.skip;
+  if (options.take !== undefined) query.take = options.take;
+
+  if (options.select) query.select = options.select;
+  else if (options.include) query.include = options.include;
+  else (query as any).select = practiceTestSelect;
+
+  return prisma.practiceTest.findMany(query);
+}
+
+export function findPracticeTestsByBusinessIdForUser(
+  businessId: number,
+  userId: number,
+  options: PracticeTestFindOptions = {},
+) {
+  const query: Prisma.PracticeTestFindManyArgs = {
+    where: {
+      businessId,
+      batch: {
+        batchUsers: {
+          some: { userId, isActive: true },
+        },
+      },
       ...(options.where ?? {}),
     },
     orderBy: options.orderBy ?? { createdAt: 'desc' },
@@ -97,9 +150,11 @@ export function deletePracticeTest(businessId: number, id: string) {
 export function findPublishedPracticeTestsForStudent(businessId: number, userId: number) {
   return prisma.practiceTest.findMany({
     where: {
-      businessId,
       status: 1,
       batch: {
+        course: {
+          exam: { businessId },
+        },
         batchUsers: {
           some: {
             userId,

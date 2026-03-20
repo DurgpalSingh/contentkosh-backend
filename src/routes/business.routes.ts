@@ -325,6 +325,7 @@ router.post(
 
 router.get(
   '/:businessId/practice-tests',
+  authorize(UserRole.ADMIN, UserRole.TEACHER),
   authorize(),
   validateIdParam('businessId'),
   authorizeBusinessAccess,
@@ -425,6 +426,7 @@ router.post(
 
 router.get(
   '/:businessId/exam-tests',
+  authorize(UserRole.ADMIN, UserRole.TEACHER),
   authorize(),
   validateIdParam('businessId'),
   authorizeBusinessAccess,

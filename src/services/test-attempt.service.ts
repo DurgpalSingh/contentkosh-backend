@@ -629,12 +629,13 @@ export class TestAttemptService {
     );
 
     return tests.map((t) => {
-      const stats = statsByTestId.get(t.id) ?? { attemptCount: 0, bestScore: null, lastAttemptAt: null };
+      const stats = statsByTestId.get(t.id) ?? { attemptCount: 0, bestScore: null, lastAttemptAt: null, lastAttemptId: null };
       const totalQuestions = t._count?.questions ?? 0;
       const totalMarks = totalQuestions * Number(t.defaultMarksPerQuestion ?? 0);
+      const hasAttempt = stats.attemptCount > 0;
       return {
         id: t.id,
-        businessId: t.businessId,
+        businessId,
         batchId: t.batchId,
         name: t.name,
         description: t.description ?? null,
@@ -643,9 +644,14 @@ export class TestAttemptService {
         totalMarks,
         defaultMarksPerQuestion: t.defaultMarksPerQuestion,
         canAttempt: true,
-        attemptCount: stats.attemptCount,
-        bestScore: stats.bestScore,
-        lastAttemptAt: stats.lastAttemptAt,
+        ...(hasAttempt
+          ? {
+              attemptId: stats.lastAttemptId ?? null,
+              attemptCount: stats.attemptCount,
+              bestScore: stats.bestScore,
+              lastAttemptAt: stats.lastAttemptAt,
+            }
+          : {}),
       };
     });
   }
@@ -667,7 +673,7 @@ export class TestAttemptService {
     );
 
     return tests.map((t) => {
-      const stats = statsByTestId.get(t.id) ?? { attemptCount: 0, bestScore: null, lastAttemptAt: null };
+      const stats = statsByTestId.get(t.id) ?? { attemptCount: 0, bestScore: null, lastAttemptAt: null, lastAttemptId: null };
       const attemptsAllowed = 1;
       const attemptsUsed = stats.attemptCount;
       const hasAttempt = attemptsUsed > 0;
@@ -692,7 +698,7 @@ export class TestAttemptService {
 
       return {
         id: t.id,
-        businessId: t.businessId,
+        businessId,
         batchId: t.batchId,
         name: t.name,
         description: t.description ?? null,
@@ -710,6 +716,7 @@ export class TestAttemptService {
         attemptsAllowed,
         attemptsUsed,
         hasAttempt,
+        ...(hasAttempt ? { attemptId: stats.lastAttemptId ?? null } : {}),
         lastAttemptAt: stats.lastAttemptAt,
       };
     });

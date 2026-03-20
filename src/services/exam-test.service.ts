@@ -5,8 +5,21 @@ import * as batchRepo from '../repositories/batch.repo';
 import { TestStatus, QuestionType, ResultVisibilityExam } from '../constants/test-enums';
 import logger from '../utils/logger';
 import { CreateExamTestDto, CreateQuestionDto, UpdateExamTestDto, UpdateQuestionDto } from '../dtos/test.dto';
+import { UserRole } from '@prisma/client';
 
 export class ExamTestService {
+  private isElevated(role: UserRole) {
+    return role === UserRole.ADMIN || role === UserRole.SUPERADMIN;
+  }
+
+  private async assertTeacherInBatch(userId: number, batchId: number) {
+    const ok = await batchRepo.isActiveUserInBatch(userId, batchId);
+    if (!ok) {
+      logger.warn(`[exam-test] teacher not in batch userId=${userId} batchId=${batchId}`);
+      throw new NotFoundError('Exam test not found');
+    }
+  }
+
   private async assertBatchBelongsToBusiness(businessId: number, batchId: number) {
     const batchBusinessId = await batchRepo.findBatchBusinessId(batchId);
     if (!batchBusinessId) {
@@ -19,9 +32,25 @@ export class ExamTestService {
     }
   }
 
-  async create(businessId: number, dto: CreateExamTestDto, userId: number) {
-    logger.info(`[exam-test] create businessId=${businessId} userId=${userId} batchId=${dto?.batchId}`);
+  private async getWithAccess(
+    businessId: number,
+    examTestId: string,
+    user: { id: number; role: UserRole },
+  ) {
+    const t =
+      this.isElevated(user.role)
+        ? await examRepo.findExamTestById(businessId, examTestId)
+        : await examRepo.findExamTestByIdForUser(businessId, examTestId, user.id);
+    if (!t) throw new NotFoundError('Exam test not found');
+    return t;
+  }
+
+  async create(businessId: number, dto: CreateExamTestDto, user: { id: number; role: UserRole }) {
+    logger.info(`[exam-test] create businessId=${businessId} userId=${user.id} batchId=${dto?.batchId}`);
     await this.assertBatchBelongsToBusiness(businessId, dto.batchId);
+    if (user.role === UserRole.TEACHER) {
+      await this.assertTeacherInBatch(user.id, dto.batchId);
+    }
     const startAt = new Date(dto.startAt);
     const deadlineAt = new Date(dto.deadlineAt);
     if (!(deadlineAt > startAt)) {
@@ -42,32 +71,43 @@ export class ExamTestService {
       resultVisibility: dto.resultVisibility ?? ResultVisibilityExam.AFTER_DEADLINE,
       shuffleQuestions: dto.shuffleQuestions ?? true,
       shuffleOptions: dto.shuffleOptions ?? true,
-      createdBy: userId,
+      createdBy: user.id,
     });
     return created;
   }
 
-  async list(businessId: number, query: { status?: number; batchId?: number }) {
-    logger.info(`[exam-test] list businessId=${businessId} status=${query?.status ?? 'any'} batchId=${query?.batchId ?? 'any'}`);
+  async list(businessId: number, query: { status?: number; batchId?: number }, user: { id: number; role: UserRole }) {
+    logger.info(
+      `[exam-test] list businessId=${businessId} userId=${user.id} role=${user.role} status=${query?.status ?? 'any'} batchId=${query?.batchId ?? 'any'}`,
+    );
     const where: { status?: number; batchId?: number } = {};
     if (query.status !== undefined) where.status = query.status;
     if (query.batchId !== undefined) where.batchId = query.batchId;
+    if (!this.isElevated(user.role)) {
+      return examRepo.findExamTestsByBusinessIdForUser(businessId, user.id, { where });
+    }
     return examRepo.findExamTestsByBusinessId(businessId, { where });
   }
 
-  async get(businessId: number, examTestId: string) {
-    logger.info(`[exam-test] get businessId=${businessId} examTestId=${examTestId}`);
-    const t = await examRepo.findExamTestById(businessId, examTestId);
-    if (!t) throw new NotFoundError('Exam test not found');
-    return t;
+  async get(businessId: number, examTestId: string, user: { id: number; role: UserRole }) {
+    logger.info(`[exam-test] get businessId=${businessId} examTestId=${examTestId} userId=${user.id} role=${user.role}`);
+    return this.getWithAccess(businessId, examTestId, user);
   }
 
-  async update(businessId: number, examTestId: string, dto: UpdateExamTestDto, userId: number) {
-    logger.info(`[exam-test] update businessId=${businessId} examTestId=${examTestId} userId=${userId}`);
-    const existing = await this.get(businessId, examTestId);
+  async update(
+    businessId: number,
+    examTestId: string,
+    dto: UpdateExamTestDto,
+    user: { id: number; role: UserRole },
+  ) {
+    logger.info(`[exam-test] update businessId=${businessId} examTestId=${examTestId} userId=${user.id}`);
+    const existing = await this.getWithAccess(businessId, examTestId, user);
 
     if (dto.batchId !== undefined) {
       await this.assertBatchBelongsToBusiness(businessId, dto.batchId);
+      if (user.role === UserRole.TEACHER) {
+        await this.assertTeacherInBatch(user.id, dto.batchId);
+      }
     }
 
     const startAt = dto.startAt !== undefined ? new Date(dto.startAt) : existing.startAt;
@@ -89,23 +129,33 @@ export class ExamTestService {
       ...(dto.resultVisibility !== undefined ? { resultVisibility: dto.resultVisibility } : {}),
       ...(dto.shuffleQuestions !== undefined ? { shuffleQuestions: dto.shuffleQuestions } : {}),
       ...(dto.shuffleOptions !== undefined ? { shuffleOptions: dto.shuffleOptions } : {}),
-      updatedBy: userId,
+      updatedBy: user.id,
     });
     if (!updated) throw new NotFoundError('Exam test not found');
+    if (user.role === UserRole.TEACHER) {
+      await this.assertTeacherInBatch(user.id, updated.batchId);
+    }
     return updated;
   }
 
-  async remove(businessId: number, examTestId: string) {
-    logger.info(`[exam-test] remove businessId=${businessId} examTestId=${examTestId}`);
+  async remove(businessId: number, examTestId: string, user: { id: number; role: UserRole }) {
+    logger.info(`[exam-test] remove businessId=${businessId} examTestId=${examTestId} userId=${user.id}`);
+    const existing = await this.getWithAccess(businessId, examTestId, user);
+    if (user.role === UserRole.TEACHER) {
+      await this.assertTeacherInBatch(user.id, existing.batchId);
+    }
     const r = await examRepo.deleteExamTest(businessId, examTestId);
     if (!r.count) throw new NotFoundError('Exam test not found');
     return;
   }
 
-  async publish(businessId: number, examTestId: string, userId: number) {
-    logger.info(`[exam-test] publish businessId=${businessId} examTestId=${examTestId} userId=${userId}`);
-    const existing = await this.get(businessId, examTestId);
+  async publish(businessId: number, examTestId: string, user: { id: number; role: UserRole }) {
+    logger.info(`[exam-test] publish businessId=${businessId} examTestId=${examTestId} userId=${user.id}`);
+    const existing = await this.getWithAccess(businessId, examTestId, user);
     await this.assertBatchBelongsToBusiness(businessId, existing.batchId);
+    if (user.role === UserRole.TEACHER) {
+      await this.assertTeacherInBatch(user.id, existing.batchId);
+    }
     if (existing.status !== TestStatus.DRAFT) {
       throw new BadRequestError('Only draft tests can be published');
     }
@@ -121,15 +171,18 @@ export class ExamTestService {
     }
     const updated = await examRepo.updateExamTest(businessId, examTestId, {
       status: TestStatus.PUBLISHED,
-      updatedBy: userId,
+      updatedBy: user.id,
     });
     if (!updated) throw new NotFoundError('Exam test not found');
     return updated;
   }
 
-  async listQuestions(businessId: number, examTestId: string) {
-    logger.info(`[exam-test] listQuestions businessId=${businessId} examTestId=${examTestId}`);
-    await this.get(businessId, examTestId);
+  async listQuestions(businessId: number, examTestId: string, user: { id: number; role: UserRole }) {
+    logger.info(`[exam-test] listQuestions businessId=${businessId} examTestId=${examTestId} userId=${user.id}`);
+    const test = await this.getWithAccess(businessId, examTestId, user);
+    if (user.role === UserRole.TEACHER) {
+      await this.assertTeacherInBatch(user.id, test.batchId);
+    }
     return questionRepo.listExamTestQuestions(businessId, examTestId);
   }
 
@@ -158,8 +211,19 @@ export class ExamTestService {
     }
   }
 
-  async createQuestion(businessId: number, examTestId: string, dto: CreateQuestionDto) {
-    logger.info(`[exam-test] createQuestion businessId=${businessId} examTestId=${examTestId} type=${dto?.type}`);
+  async createQuestion(
+    businessId: number,
+    examTestId: string,
+    dto: CreateQuestionDto,
+    user: { id: number; role: UserRole },
+  ) {
+    logger.info(
+      `[exam-test] createQuestion businessId=${businessId} examTestId=${examTestId} type=${dto?.type} userId=${user.id}`,
+    );
+    const test = await this.getWithAccess(businessId, examTestId, user);
+    if (user.role === UserRole.TEACHER) {
+      await this.assertTeacherInBatch(user.id, test.batchId);
+    }
     const hasAttempts = await questionRepo.hasAttemptsForExamTest(businessId, examTestId);
     if (hasAttempts) throw new BadRequestError('Cannot modify questions after attempts have started');
 
@@ -183,12 +247,16 @@ export class ExamTestService {
     return created;
   }
 
-  async updateQuestion(businessId: number, questionId: string, dto: UpdateQuestionDto) {
+  async updateQuestion(businessId: number, questionId: string, dto: UpdateQuestionDto, user: { id: number; role: UserRole }) {
     const existing = await questionRepo.findQuestionById(businessId, questionId);
     if (!existing) throw new NotFoundError('Question not found');
 
     const testId = existing.examTestId;
     if (!testId) throw new BadRequestError('Question does not belong to an exam test');
+    const test = await this.getWithAccess(businessId, testId, user);
+    if (user.role === UserRole.TEACHER) {
+      await this.assertTeacherInBatch(user.id, test.batchId);
+    }
 
     const hasAttempts = await questionRepo.hasAttemptsForExamTest(businessId, testId);
     if (hasAttempts) throw new BadRequestError('Cannot modify questions after attempts have started');
@@ -228,11 +296,15 @@ export class ExamTestService {
     return updated;
   }
 
-  async deleteQuestion(businessId: number, questionId: string) {
+  async deleteQuestion(businessId: number, questionId: string, user: { id: number; role: UserRole }) {
     const existing = await questionRepo.findQuestionById(businessId, questionId);
     if (!existing) throw new NotFoundError('Question not found');
     const testId = existing.examTestId;
     if (!testId) throw new BadRequestError('Question does not belong to an exam test');
+    const test = await this.getWithAccess(businessId, testId, user);
+    if (user.role === UserRole.TEACHER) {
+      await this.assertTeacherInBatch(user.id, test.batchId);
+    }
 
     const hasAttempts = await questionRepo.hasAttemptsForExamTest(businessId, testId);
     if (hasAttempts) throw new BadRequestError('Cannot modify questions after attempts have started');
