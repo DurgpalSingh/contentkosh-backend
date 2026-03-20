@@ -1,23 +1,13 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import logger from '../utils/logger';
 import { ApiResponseHandler } from '../utils/apiResponse';
 import { AuthRequest } from '../dtos/auth.dto';
 import { BadRequestError, NotFoundError } from '../errors/api.errors';
-import { ExamTestService } from '../services/exam-test.service';
+import { examTestService as service } from '../services/exam-test.service';
 import { TestMapper } from '../mappers/test.mapper';
-import { UserRole } from '@prisma/client';
-import { TestAttemptService } from '../services/test-attempt.service';
-
-const service = new ExamTestService();
-const attemptService = new TestAttemptService();
-
-function getBusinessId(req: Request): number {
-  const businessId = Number(req.params.businessId);
-  if (!businessId || !Number.isInteger(businessId)) {
-    throw new BadRequestError('Invalid businessId');
-  }
-  return businessId;
-}
+import { PublishExamTestRequestDto } from '../dtos/test.dto';
+import { testAttemptService as attemptService } from '../services/test-attempt.service';
+import { getBusinessId } from '../utils/request.utils';
 
 
 export const examTestController = {
@@ -133,7 +123,7 @@ export const examTestController = {
       const user = req.user;
       if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
 
-      const examTestId: string | undefined = req.body.examTestId;
+      const examTestId: string | undefined = (req.body as PublishExamTestRequestDto).examTestId;
       if (!examTestId) return ApiResponseHandler.badRequest(res, 'examTestId is required');
       const updated = await service.publish(businessId, examTestId, { id: user.id, role: user.role });
       return ApiResponseHandler.success(res, TestMapper.examTest(updated), 'Exam test published successfully');
@@ -290,10 +280,11 @@ export const examTestController = {
         },
         'Exam attempt fetched successfully',
       );
-    } catch (e: any) {
+    } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
       if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
-      logger.error(`Error fetching exam attempt: ${e.message}`);
+      const message = e instanceof Error ? e.message : 'Unknown error';
+      logger.error(`Error fetching exam attempt: ${message}`);
       return ApiResponseHandler.serverError(res, 'Failed to fetch exam attempt');
     }
   },
@@ -314,10 +305,11 @@ export const examTestController = {
         Array.isArray(req.body.answers) ? req.body.answers : [],
       );
       return ApiResponseHandler.success(res, result, 'Exam attempt submitted successfully');
-    } catch (e: any) {
+    } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
       if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
-      logger.error(`Error submitting exam attempt: ${e.message}`);
+      const message = e instanceof Error ? e.message : 'Unknown error';
+      logger.error(`Error submitting exam attempt: ${message}`);
       return ApiResponseHandler.serverError(res, 'Failed to submit exam attempt');
     }
   },

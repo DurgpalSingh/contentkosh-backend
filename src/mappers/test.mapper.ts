@@ -1,3 +1,5 @@
+import { TestStatus } from '../constants/test-enums';
+
 export type PracticeTestResponse = {
   id: string;
   businessId: number;
@@ -5,10 +7,12 @@ export type PracticeTestResponse = {
   name: string;
   description?: string | null;
   status: number;
+  isPublished: boolean;
   defaultMarksPerQuestion: number;
   showExplanations: boolean;
   shuffleQuestions: boolean;
   shuffleOptions: boolean;
+  questionCount: number;
   totalQuestions: number;
   totalMarks: number;
   createdBy: number;
@@ -24,6 +28,7 @@ export type ExamTestResponse = {
   name: string;
   description?: string | null;
   status: number;
+  isPublished: boolean;
   startAt: Date;
   deadlineAt: Date;
   durationMinutes: number;
@@ -32,6 +37,7 @@ export type ExamTestResponse = {
   resultVisibility: number;
   shuffleQuestions: boolean;
   shuffleOptions: boolean;
+  questionCount: number;
   totalQuestions: number;
   totalMarks: number;
   createdBy: number;
@@ -130,10 +136,12 @@ export const TestMapper = {
       name: t.name,
       description: t.description ?? null,
       status: t.status,
+      isPublished: t.status === TestStatus.PUBLISHED,
       defaultMarksPerQuestion: t.defaultMarksPerQuestion,
       showExplanations: t.showExplanations,
       shuffleQuestions: t.shuffleQuestions,
       shuffleOptions: t.shuffleOptions,
+      questionCount: totalQuestions,
       totalQuestions,
       totalMarks,
       createdBy: t.createdBy,
@@ -172,6 +180,7 @@ export const TestMapper = {
       name: t.name,
       description: t.description ?? null,
       status: t.status,
+      isPublished: t.status === TestStatus.PUBLISHED,
       startAt: t.startAt,
       deadlineAt: t.deadlineAt,
       durationMinutes: t.durationMinutes,
@@ -180,6 +189,7 @@ export const TestMapper = {
       resultVisibility: t.resultVisibility,
       shuffleQuestions: t.shuffleQuestions,
       shuffleOptions: t.shuffleOptions,
+      questionCount: totalQuestions,
       totalQuestions,
       totalMarks,
       createdBy: t.createdBy,

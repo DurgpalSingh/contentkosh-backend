@@ -1,23 +1,12 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import logger from '../utils/logger';
 import { ApiResponseHandler } from '../utils/apiResponse';
 import { AuthRequest } from '../dtos/auth.dto';
 import { BadRequestError, NotFoundError } from '../errors/api.errors';
-import { PracticeTestService } from '../services/practice-test.service';
+import { practiceTestService as service } from '../services/practice-test.service';
 import { TestMapper } from '../mappers/test.mapper';
-import { UserRole } from '@prisma/client';
-import { TestAttemptService } from '../services/test-attempt.service';
-
-const service = new PracticeTestService();
-const attemptService = new TestAttemptService();
-
-function getBusinessId(req: Request): number {
-  const businessId = Number(req.params.businessId);
-  if (!businessId || !Number.isInteger(businessId)) {
-    throw new BadRequestError('Invalid businessId');
-  }
-  return businessId;
-}
+import { testAttemptService as attemptService } from '../services/test-attempt.service';
+import { getBusinessId } from '../utils/request.utils';
 
 export const practiceTestController = {
   async create(req: AuthRequest, res: Response) {

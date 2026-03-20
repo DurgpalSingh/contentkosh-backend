@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
+import { TestStatus } from '../constants/test-enums';
 
 const practiceTestSelect = {
   id: true,
@@ -44,7 +45,7 @@ export function findPracticeTestById(
   id: string,
   options: PracticeTestFindOptions = {},
 ) {
-  const query: any = { where: { id, businessId } };
+  const query: Prisma.PracticeTestFindFirstArgs = { where: { id, businessId } };
 
   if (options.select) query.select = options.select;
   else if (options.include) query.include = options.include;
@@ -59,7 +60,7 @@ export function findPracticeTestByIdForUser(
   userId: number,
   options: PracticeTestFindOptions = {},
 ) {
-  const query: any = {
+  const query: Prisma.PracticeTestFindFirstArgs = {
     where: {
       id,
       businessId,
@@ -95,7 +96,7 @@ export function findPracticeTestsByBusinessId(
 
   if (options.select) query.select = options.select;
   else if (options.include) query.include = options.include;
-  else (query as any).select = practiceTestSelect;
+  else query.select = practiceTestSelect as Prisma.PracticeTestSelect;
 
   return prisma.practiceTest.findMany(query);
 }
@@ -123,7 +124,7 @@ export function findPracticeTestsByBusinessIdForUser(
 
   if (options.select) query.select = options.select;
   else if (options.include) query.include = options.include;
-  else (query as any).select = practiceTestSelect;
+  else query.select = practiceTestSelect as Prisma.PracticeTestSelect;
 
   return prisma.practiceTest.findMany(query);
 }
@@ -133,12 +134,11 @@ export function updatePracticeTest(
   id: string,
   data: Prisma.PracticeTestUncheckedUpdateInput,
 ) {
-  return prisma.practiceTest
-    .updateMany({
-      where: { id, businessId },
-      data,
-    })
-    .then(async (r) => (r.count ? findPracticeTestById(businessId, id) : null));
+  return prisma.practiceTest.update({
+    where: { id, businessId },
+    data,
+    select: practiceTestSelect,
+  });
 }
 
 export function deletePracticeTest(businessId: number, id: string) {
@@ -150,11 +150,9 @@ export function deletePracticeTest(businessId: number, id: string) {
 export function findPublishedPracticeTestsForStudent(businessId: number, userId: number) {
   return prisma.practiceTest.findMany({
     where: {
-      status: 1,
+      businessId,
+      status: TestStatus.PUBLISHED,
       batch: {
-        course: {
-          exam: { businessId },
-        },
         batchUsers: {
           some: {
             userId,

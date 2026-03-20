@@ -1,35 +1,16 @@
 import { BadRequestError, NotFoundError } from '../errors/api.errors';
 import * as examRepo from '../repositories/exam-test.repo';
 import * as questionRepo from '../repositories/test-question.repo';
-import * as batchRepo from '../repositories/batch.repo';
-import { TestStatus, QuestionType, ResultVisibilityExam } from '../constants/test-enums';
+import { TestStatus, ResultVisibilityExam } from '../constants/test-enums';
 import logger from '../utils/logger';
 import { CreateExamTestDto, CreateQuestionDto, UpdateExamTestDto, UpdateQuestionDto } from '../dtos/test.dto';
 import { UserRole } from '@prisma/client';
+import { validateQuestionPayload } from '../utils/question-validation.utils';
+import { assertTeacherInBatch, assertBatchBelongsToBusiness } from '../utils/test-access.utils';
 
 export class ExamTestService {
   private isElevated(role: UserRole) {
     return role === UserRole.ADMIN || role === UserRole.SUPERADMIN;
-  }
-
-  private async assertTeacherInBatch(userId: number, batchId: number) {
-    const ok = await batchRepo.isActiveUserInBatch(userId, batchId);
-    if (!ok) {
-      logger.warn(`[exam-test] teacher not in batch userId=${userId} batchId=${batchId}`);
-      throw new NotFoundError('Exam test not found');
-    }
-  }
-
-  private async assertBatchBelongsToBusiness(businessId: number, batchId: number) {
-    const batchBusinessId = await batchRepo.findBatchBusinessId(batchId);
-    if (!batchBusinessId) {
-      logger.warn(`[exam-test] invalid batchId=${batchId} businessId=${businessId}`);
-      throw new BadRequestError('Batch not found');
-    }
-    if (batchBusinessId !== businessId) {
-      logger.warn(`[exam-test] batch business mismatch businessId=${businessId} batchId=${batchId} batchBusinessId=${batchBusinessId}`);
-      throw new BadRequestError('Batch does not belong to this business');
-    }
   }
 
   private async getWithAccess(
@@ -47,9 +28,9 @@ export class ExamTestService {
 
   async create(businessId: number, dto: CreateExamTestDto, user: { id: number; role: UserRole }) {
     logger.info(`[exam-test] create businessId=${businessId} userId=${user.id} batchId=${dto?.batchId}`);
-    await this.assertBatchBelongsToBusiness(businessId, dto.batchId);
+    await assertBatchBelongsToBusiness(businessId, dto.batchId);
     if (user.role === UserRole.TEACHER) {
-      await this.assertTeacherInBatch(user.id, dto.batchId);
+      await assertTeacherInBatch(user.id, dto.batchId);
     }
     const startAt = new Date(dto.startAt);
     const deadlineAt = new Date(dto.deadlineAt);
@@ -104,9 +85,9 @@ export class ExamTestService {
     const existing = await this.getWithAccess(businessId, examTestId, user);
 
     if (dto.batchId !== undefined) {
-      await this.assertBatchBelongsToBusiness(businessId, dto.batchId);
+      await assertBatchBelongsToBusiness(businessId, dto.batchId);
       if (user.role === UserRole.TEACHER) {
-        await this.assertTeacherInBatch(user.id, dto.batchId);
+        await assertTeacherInBatch(user.id, dto.batchId);
       }
     }
 
@@ -133,7 +114,7 @@ export class ExamTestService {
     });
     if (!updated) throw new NotFoundError('Exam test not found');
     if (user.role === UserRole.TEACHER) {
-      await this.assertTeacherInBatch(user.id, updated.batchId);
+      await assertTeacherInBatch(user.id, updated.batchId);
     }
     return updated;
   }
@@ -142,7 +123,7 @@ export class ExamTestService {
     logger.info(`[exam-test] remove businessId=${businessId} examTestId=${examTestId} userId=${user.id}`);
     const existing = await this.getWithAccess(businessId, examTestId, user);
     if (user.role === UserRole.TEACHER) {
-      await this.assertTeacherInBatch(user.id, existing.batchId);
+      await assertTeacherInBatch(user.id, existing.batchId);
     }
     const r = await examRepo.deleteExamTest(businessId, examTestId);
     if (!r.count) throw new NotFoundError('Exam test not found');
@@ -152,9 +133,9 @@ export class ExamTestService {
   async publish(businessId: number, examTestId: string, user: { id: number; role: UserRole }) {
     logger.info(`[exam-test] publish businessId=${businessId} examTestId=${examTestId} userId=${user.id}`);
     const existing = await this.getWithAccess(businessId, examTestId, user);
-    await this.assertBatchBelongsToBusiness(businessId, existing.batchId);
+    await assertBatchBelongsToBusiness(businessId, existing.batchId);
     if (user.role === UserRole.TEACHER) {
-      await this.assertTeacherInBatch(user.id, existing.batchId);
+      await assertTeacherInBatch(user.id, existing.batchId);
     }
     if (existing.status !== TestStatus.DRAFT) {
       throw new BadRequestError('Only draft tests can be published');
@@ -181,34 +162,9 @@ export class ExamTestService {
     logger.info(`[exam-test] listQuestions businessId=${businessId} examTestId=${examTestId} userId=${user.id}`);
     const test = await this.getWithAccess(businessId, examTestId, user);
     if (user.role === UserRole.TEACHER) {
-      await this.assertTeacherInBatch(user.id, test.batchId);
+      await assertTeacherInBatch(user.id, test.batchId);
     }
     return questionRepo.listExamTestQuestions(businessId, examTestId);
-  }
-
-  private validateQuestionPayload(payload: {
-    type: number;
-    correctTextAnswer?: string | null;
-    correctOptionIdsAnswers?: Array<string | number>;
-    options?: Array<{ text: string; mediaUrl?: string | null }>;
-  }) {
-    const isMcq = payload.type === QuestionType.SINGLE_CHOICE || payload.type === QuestionType.MULTIPLE_CHOICE;
-    const isText = payload.type === QuestionType.TRUE_FALSE || payload.type === QuestionType.NUMERICAL || payload.type === QuestionType.FILL_IN_THE_BLANK;
-
-    if (isMcq) {
-      if (!payload.options?.length || payload.options.length < 2) {
-        throw new BadRequestError('Options are required for MCQ question types');
-      }
-      if (!payload.correctOptionIdsAnswers?.length) {
-        throw new BadRequestError('correctOptionIdsAnswers is required for MCQ question types');
-      }
-    }
-
-    if (isText) {
-      if (!payload.correctTextAnswer || payload.correctTextAnswer.trim().length === 0) {
-        throw new BadRequestError('correctTextAnswer is required for this question type');
-      }
-    }
   }
 
   async createQuestion(
@@ -222,12 +178,12 @@ export class ExamTestService {
     );
     const test = await this.getWithAccess(businessId, examTestId, user);
     if (user.role === UserRole.TEACHER) {
-      await this.assertTeacherInBatch(user.id, test.batchId);
+      await assertTeacherInBatch(user.id, test.batchId);
     }
     const hasAttempts = await questionRepo.hasAttemptsForExamTest(businessId, examTestId);
     if (hasAttempts) throw new BadRequestError('Cannot modify questions after attempts have started');
 
-    this.validateQuestionPayload({
+    validateQuestionPayload({
       type: dto.type,
       correctTextAnswer: dto.correctTextAnswer ?? null,
       correctOptionIdsAnswers: dto.correctOptionIdsAnswers ?? [],
@@ -255,7 +211,7 @@ export class ExamTestService {
     if (!testId) throw new BadRequestError('Question does not belong to an exam test');
     const test = await this.getWithAccess(businessId, testId, user);
     if (user.role === UserRole.TEACHER) {
-      await this.assertTeacherInBatch(user.id, test.batchId);
+      await assertTeacherInBatch(user.id, test.batchId);
     }
 
     const hasAttempts = await questionRepo.hasAttemptsForExamTest(businessId, testId);
@@ -273,7 +229,7 @@ export class ExamTestService {
     const correctOptionIdsAnswers = correctOptionIdsAnswersRaw.map((v) => String(v));
     const correctTextAnswer = dto.correctTextAnswer ?? existing.correctTextAnswer ?? null;
 
-    this.validateQuestionPayload({
+    validateQuestionPayload({
       type: newType,
       correctTextAnswer,
       correctOptionIdsAnswers,
@@ -303,7 +259,7 @@ export class ExamTestService {
     if (!testId) throw new BadRequestError('Question does not belong to an exam test');
     const test = await this.getWithAccess(businessId, testId, user);
     if (user.role === UserRole.TEACHER) {
-      await this.assertTeacherInBatch(user.id, test.batchId);
+      await assertTeacherInBatch(user.id, test.batchId);
     }
 
     const hasAttempts = await questionRepo.hasAttemptsForExamTest(businessId, testId);
@@ -313,3 +269,5 @@ export class ExamTestService {
   }
 }
 
+
+export const examTestService = new ExamTestService();

@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
+import { TestStatus } from '../constants/test-enums';
 
 const examTestSelect = {
   id: true,
@@ -48,7 +49,7 @@ export function findExamTestById(
   id: string,
   options: ExamTestFindOptions = {},
 ) {
-  const query: any = { where: { id, businessId } };
+  const query: Prisma.ExamTestFindFirstArgs = { where: { id, businessId } };
 
   if (options.select) query.select = options.select;
   else if (options.include) query.include = options.include;
@@ -63,7 +64,7 @@ export function findExamTestByIdForUser(
   userId: number,
   options: ExamTestFindOptions = {},
 ) {
-  const query: any = {
+  const query: Prisma.ExamTestFindFirstArgs = {
     where: {
       id,
       businessId,
@@ -99,7 +100,7 @@ export function findExamTestsByBusinessId(
 
   if (options.select) query.select = options.select;
   else if (options.include) query.include = options.include;
-  else (query as any).select = examTestSelect;
+  else query.select = examTestSelect as Prisma.ExamTestSelect;
 
   return prisma.examTest.findMany(query);
 }
@@ -127,22 +128,17 @@ export function findExamTestsByBusinessIdForUser(
 
   if (options.select) query.select = options.select;
   else if (options.include) query.include = options.include;
-  else (query as any).select = examTestSelect;
+  else query.select = examTestSelect as Prisma.ExamTestSelect;
 
   return prisma.examTest.findMany(query);
 }
 
-export function updateExamTest(
-  businessId: number,
-  id: string,
-  data: Prisma.ExamTestUncheckedUpdateInput,
-) {
-  return prisma.examTest
-    .updateMany({
-      where: { id, businessId },
-      data,
-    })
-    .then(async (r) => (r.count ? findExamTestById(businessId, id) : null));
+export function updateExamTest(businessId: number, id: string, data: Prisma.ExamTestUncheckedUpdateInput) {
+  return prisma.examTest.update({
+    where: { id, businessId },
+    data,
+    select: examTestSelect,
+  });
 }
 
 export function deleteExamTest(businessId: number, id: string) {
@@ -154,17 +150,10 @@ export function deleteExamTest(businessId: number, id: string) {
 export function findPublishedExamTestsForStudent(businessId: number, userId: number) {
   return prisma.examTest.findMany({
     where: {
-      status: 1,
+      businessId,
+      status: TestStatus.PUBLISHED,
       batch: {
-        course: {
-          exam: { businessId },
-        },
-        batchUsers: {
-          some: {
-            userId,
-            isActive: true,
-          },
-        },
+        batchUsers: { some: { userId, isActive: true } },
       },
     },
     select: examTestSelect,

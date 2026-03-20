@@ -29,13 +29,23 @@ export function createTestAttempt(data: Prisma.TestAttemptUncheckedCreateInput):
   });
 }
 
-export function findTestAttemptById<T extends Omit<Prisma.TestAttemptFindUniqueArgs, 'where'>>(
+export function findTestAttemptById(
   id: string,
-  options?: T,
-): Promise<Prisma.TestAttemptGetPayload<{ where: { id: string } } & T> | null> {
-  const query: Prisma.TestAttemptFindUniqueArgs = { where: { id }, ...(options ?? {}) };
-  if (!query.select && !query.include) query.select = attemptSelect;
-  return prisma.testAttempt.findUnique(query) as Promise<Prisma.TestAttemptGetPayload<{ where: { id: string } } & T> | null>;
+  args: { include: Prisma.TestAttemptInclude },
+): Promise<Prisma.TestAttemptGetPayload<{ include: Prisma.TestAttemptInclude }> | null>;
+export function findTestAttemptById(
+  id: string,
+  args?: { select?: Prisma.TestAttemptSelect },
+): Promise<TestAttemptRecord | null>;
+export function findTestAttemptById(
+  id: string,
+  args: { include?: Prisma.TestAttemptInclude; select?: Prisma.TestAttemptSelect } = {},
+): Promise<unknown> {
+  return prisma.testAttempt.findUnique({
+    where: { id },
+    ...(args.include ? { include: args.include } : {}),
+    ...(args.select && !args.include ? { select: args.select } : {}),
+  } as Prisma.TestAttemptFindUniqueArgs);
 }
 
 export function findPracticeAttemptsByUser(
@@ -119,7 +129,7 @@ export async function getPracticeAttemptStatsByUserForTests(practiceTestIds: str
   if (!practiceTestIds.length) {
     return new Map<
       string,
-      { attemptCount: number; lastAttemptAt: Date | null; bestScore: number | null; lastAttemptId: string | null }
+      { attemptCount: number; lastAttemptAt: Date | null; bestScore: number | null; lastAttemptId: string | null; lastAttemptStatus: number | null; lastAttemptStartedAt: Date | null }
     >();
   }
   const rows = await prisma.testAttempt.groupBy({
@@ -128,7 +138,7 @@ export async function getPracticeAttemptStatsByUserForTests(practiceTestIds: str
     _count: { _all: true },
     _max: { startedAt: true, score: true },
   });
-  const map = new Map<string, { attemptCount: number; lastAttemptAt: Date | null; bestScore: number | null; lastAttemptId: string | null }>();
+  const map = new Map<string, { attemptCount: number; lastAttemptAt: Date | null; bestScore: number | null; lastAttemptId: string | null; lastAttemptStatus: number | null; lastAttemptStartedAt: Date | null }>();
   rows.forEach((r) => {
     if (!r.practiceTestId) return;
     map.set(r.practiceTestId, {
@@ -136,19 +146,23 @@ export async function getPracticeAttemptStatsByUserForTests(practiceTestIds: str
       lastAttemptAt: r._max.startedAt ?? null,
       bestScore: r._max.score ?? null,
       lastAttemptId: null,
+      lastAttemptStatus: null,
+      lastAttemptStartedAt: null,
     });
   });
 
   const latestAttempts = await prisma.testAttempt.findMany({
     where: { userId, practiceTestId: { in: practiceTestIds } },
     orderBy: { startedAt: 'desc' },
-    select: { id: true, practiceTestId: true, startedAt: true },
+    select: { id: true, practiceTestId: true, status: true, startedAt: true },
   });
   for (const row of latestAttempts) {
     if (!row.practiceTestId) continue;
     const entry = map.get(row.practiceTestId);
     if (!entry || entry.lastAttemptId) continue;
     entry.lastAttemptId = row.id;
+    entry.lastAttemptStatus = row.status;
+    entry.lastAttemptStartedAt = row.startedAt;
   }
 
   return map;
@@ -158,7 +172,7 @@ export async function getExamAttemptStatsByUserForTests(examTestIds: string[], u
   if (!examTestIds.length) {
     return new Map<
       string,
-      { attemptCount: number; lastAttemptAt: Date | null; bestScore: number | null; lastAttemptId: string | null }
+      { attemptCount: number; lastAttemptAt: Date | null; bestScore: number | null; lastAttemptId: string | null; lastAttemptStatus: number | null; lastAttemptStartedAt: Date | null }
     >();
   }
   const rows = await prisma.testAttempt.groupBy({
@@ -167,7 +181,7 @@ export async function getExamAttemptStatsByUserForTests(examTestIds: string[], u
     _count: { _all: true },
     _max: { startedAt: true, score: true },
   });
-  const map = new Map<string, { attemptCount: number; lastAttemptAt: Date | null; bestScore: number | null; lastAttemptId: string | null }>();
+  const map = new Map<string, { attemptCount: number; lastAttemptAt: Date | null; bestScore: number | null; lastAttemptId: string | null; lastAttemptStatus: number | null; lastAttemptStartedAt: Date | null }>();
   rows.forEach((r) => {
     if (!r.examTestId) return;
     map.set(r.examTestId, {
@@ -175,19 +189,23 @@ export async function getExamAttemptStatsByUserForTests(examTestIds: string[], u
       lastAttemptAt: r._max.startedAt ?? null,
       bestScore: r._max.score ?? null,
       lastAttemptId: null,
+      lastAttemptStatus: null,
+      lastAttemptStartedAt: null,
     });
   });
 
   const latestAttempts = await prisma.testAttempt.findMany({
     where: { userId, examTestId: { in: examTestIds } },
     orderBy: { startedAt: 'desc' },
-    select: { id: true, examTestId: true, startedAt: true },
+    select: { id: true, examTestId: true, status: true, startedAt: true },
   });
   for (const row of latestAttempts) {
     if (!row.examTestId) continue;
     const entry = map.get(row.examTestId);
     if (!entry || entry.lastAttemptId) continue;
     entry.lastAttemptId = row.id;
+    entry.lastAttemptStatus = row.status;
+    entry.lastAttemptStartedAt = row.startedAt;
   }
 
   return map;
