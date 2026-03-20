@@ -91,17 +91,19 @@ export async function createPracticeTestQuestion(
     correctOptionIdsAnswers: data.correctOptionIdsAnswers ?? [],
   };
 
-  if (data.options?.length) {
-    (createData as any).options = {
-      create: data.options.map((o) => ({
-        text: o.text,
-        mediaUrl: o.mediaUrl ?? null,
-      })),
-    };
-  }
+  const optionsData = data.options?.length
+    ? {
+        options: {
+          create: data.options.map((o) => ({
+            text: o.text,
+            mediaUrl: o.mediaUrl ?? null,
+          })),
+        },
+      }
+    : {};
 
   return prisma.testQuestion.create({
-    data: createData,
+    data: { ...createData, ...optionsData },
     select: questionSelect,
   });
 }
@@ -221,17 +223,19 @@ export async function createExamTestQuestion(
     correctOptionIdsAnswers: data.correctOptionIdsAnswers ?? [],
   };
 
-  if (data.options?.length) {
-    (createData as any).options = {
-      create: data.options.map((o) => ({
-        text: o.text,
-        mediaUrl: o.mediaUrl ?? null,
-      })),
-    };
-  }
+  const optionsData = data.options?.length
+    ? {
+        options: {
+          create: data.options.map((o) => ({
+            text: o.text,
+            mediaUrl: o.mediaUrl ?? null,
+          })),
+        },
+      }
+    : {};
 
   return prisma.testQuestion.create({
-    data: createData,
+    data: { ...createData, ...optionsData },
     select: questionSelect,
   });
 }

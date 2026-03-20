@@ -19,34 +19,21 @@ function getBusinessId(req: Request): number {
   return businessId;
 }
 
-function enforceBusinessScope(req: AuthRequest, res: Response, businessId: number): boolean {
-  const user = req.user;
-  if (!user) {
-    ApiResponseHandler.unauthorized(res, 'User not authenticated');
-    return false;
-  }
-  const isSuperAdmin = user.role === UserRole.SUPERADMIN;
-  const hasBusinessAccess = user.businessId === businessId;
-  if (!isSuperAdmin && !hasBusinessAccess) {
-    ApiResponseHandler.forbidden(res, 'Forbidden: You do not have access to this business');
-    return false;
-  }
-  return true;
-}
 
 export const examTestController = {
   async create(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      if (!enforceBusinessScope(req, res, businessId)) return;
+      
       const userId = req.user?.id;
       if (!userId) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
 
       const created = await service.create(businessId, req.body, userId);
       return ApiResponseHandler.success(res, TestMapper.examTest(created), 'Exam test created successfully', 201);
-    } catch (e: any) {
+    } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
-      logger.error(`Error creating exam test: ${e.message}`);
+      const message = e instanceof Error ? e.message : 'Unknown error';
+      logger.error(`Error creating exam test: ${message}`);
       return ApiResponseHandler.serverError(res, 'Failed to create exam test');
     }
   },
@@ -54,7 +41,7 @@ export const examTestController = {
   async list(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      if (!enforceBusinessScope(req, res, businessId)) return;
+      
       const status = req.query.status !== undefined ? Number(req.query.status) : undefined;
       const batchId = req.query.batchId !== undefined ? Number(req.query.batchId) : undefined;
 
@@ -71,9 +58,10 @@ export const examTestController = {
 
       const list = await service.list(businessId, q);
       return ApiResponseHandler.success(res, list.map(TestMapper.examTest), 'Exam tests fetched successfully');
-    } catch (e: any) {
+    } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
-      logger.error(`Error listing exam tests: ${e.message}`);
+      const message = e instanceof Error ? e.message : 'Unknown error';
+      logger.error(`Error listing exam tests: ${message}`);
       return ApiResponseHandler.serverError(res, 'Failed to fetch exam tests');
     }
   },
@@ -81,15 +69,16 @@ export const examTestController = {
   async get(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      if (!enforceBusinessScope(req, res, businessId)) return;
+      
       const examTestId = req.params.examTestId;
       if (!examTestId) return ApiResponseHandler.badRequest(res, 'examTestId is required');
       const t = await service.get(businessId, examTestId);
       return ApiResponseHandler.success(res, TestMapper.examTest(t), 'Exam test fetched successfully');
-    } catch (e: any) {
+    } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
       if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
-      logger.error(`Error fetching exam test: ${e.message}`);
+      const message = e instanceof Error ? e.message : 'Unknown error';
+      logger.error(`Error fetching exam test: ${message}`);
       return ApiResponseHandler.serverError(res, 'Failed to fetch exam test');
     }
   },
@@ -98,17 +87,18 @@ export const examTestController = {
     try {
       const businessId = getBusinessId(req);
       const examTestId = req.params.examTestId;
-      if (!enforceBusinessScope(req, res, businessId)) return;
+      
       if (!examTestId) return ApiResponseHandler.badRequest(res, 'examTestId is required');
       const userId = req.user?.id;
       if (!userId) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
 
       const updated = await service.update(businessId, examTestId, req.body, userId);
       return ApiResponseHandler.success(res, TestMapper.examTest(updated), 'Exam test updated successfully');
-    } catch (e: any) {
+    } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
       if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
-      logger.error(`Error updating exam test: ${e.message}`);
+      const message = e instanceof Error ? e.message : 'Unknown error';
+      logger.error(`Error updating exam test: ${message}`);
       return ApiResponseHandler.serverError(res, 'Failed to update exam test');
     }
   },
@@ -117,14 +107,15 @@ export const examTestController = {
     try {
       const businessId = getBusinessId(req);
       const examTestId = req.params.examTestId;
-      if (!enforceBusinessScope(req, res, businessId)) return;
+      
       if (!examTestId) return ApiResponseHandler.badRequest(res, 'examTestId is required');
       await service.remove(businessId, examTestId);
       return ApiResponseHandler.success(res, null, 'Exam test deleted successfully');
-    } catch (e: any) {
+    } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
       if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
-      logger.error(`Error deleting exam test: ${e.message}`);
+      const message = e instanceof Error ? e.message : 'Unknown error';
+      logger.error(`Error deleting exam test: ${message}`);
       return ApiResponseHandler.serverError(res, 'Failed to delete exam test');
     }
   },
@@ -132,7 +123,7 @@ export const examTestController = {
   async publish(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      if (!enforceBusinessScope(req, res, businessId)) return;
+      
       const userId = req.user?.id;
       if (!userId) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
 
@@ -140,10 +131,11 @@ export const examTestController = {
       if (!examTestId) return ApiResponseHandler.badRequest(res, 'examTestId is required');
       const updated = await service.publish(businessId, examTestId, userId);
       return ApiResponseHandler.success(res, TestMapper.examTest(updated), 'Exam test published successfully');
-    } catch (e: any) {
+    } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
       if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
-      logger.error(`Error publishing exam test: ${e.message}`);
+      const message = e instanceof Error ? e.message : 'Unknown error';
+      logger.error(`Error publishing exam test: ${message}`);
       return ApiResponseHandler.serverError(res, 'Failed to publish exam test');
     }
   },
@@ -152,14 +144,15 @@ export const examTestController = {
     try {
       const businessId = getBusinessId(req);
       const examTestId = req.params.examTestId;
-      if (!enforceBusinessScope(req, res, businessId)) return;
+      
       if (!examTestId) return ApiResponseHandler.badRequest(res, 'examTestId is required');
       const qs = await service.listQuestions(businessId, examTestId);
       return ApiResponseHandler.success(res, qs.map(TestMapper.question), 'Questions fetched successfully');
-    } catch (e: any) {
+    } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
       if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
-      logger.error(`Error listing exam questions: ${e.message}`);
+      const message = e instanceof Error ? e.message : 'Unknown error';
+      logger.error(`Error listing exam questions: ${message}`);
       return ApiResponseHandler.serverError(res, 'Failed to fetch questions');
     }
   },
@@ -168,14 +161,15 @@ export const examTestController = {
     try {
       const businessId = getBusinessId(req);
       const examTestId = req.params.examTestId;
-      if (!enforceBusinessScope(req, res, businessId)) return;
+      
       if (!examTestId) return ApiResponseHandler.badRequest(res, 'examTestId is required');
       const created = await service.createQuestion(businessId, examTestId, req.body);
       return ApiResponseHandler.success(res, TestMapper.question(created), 'Question created successfully', 201);
-    } catch (e: any) {
+    } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
       if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
-      logger.error(`Error creating exam question: ${e.message}`);
+      const message = e instanceof Error ? e.message : 'Unknown error';
+      logger.error(`Error creating exam question: ${message}`);
       return ApiResponseHandler.serverError(res, 'Failed to create question');
     }
   },
@@ -184,14 +178,15 @@ export const examTestController = {
     try {
       const businessId = getBusinessId(req);
       const questionId = req.params.questionId;
-      if (!enforceBusinessScope(req, res, businessId)) return;
+      
       if (!questionId) return ApiResponseHandler.badRequest(res, 'questionId is required');
       const updated = await service.updateQuestion(businessId, questionId, req.body);
       return ApiResponseHandler.success(res, TestMapper.question(updated), 'Question updated successfully');
-    } catch (e: any) {
+    } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
       if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
-      logger.error(`Error updating exam question: ${e.message}`);
+      const message = e instanceof Error ? e.message : 'Unknown error';
+      logger.error(`Error updating exam question: ${message}`);
       return ApiResponseHandler.serverError(res, 'Failed to update question');
     }
   },
@@ -200,14 +195,15 @@ export const examTestController = {
     try {
       const businessId = getBusinessId(req);
       const questionId = req.params.questionId;
-      if (!enforceBusinessScope(req, res, businessId)) return;
+      
       if (!questionId) return ApiResponseHandler.badRequest(res, 'questionId is required');
       await service.deleteQuestion(businessId, questionId);
       return ApiResponseHandler.success(res, { id: questionId }, 'Question deleted successfully', 200);
-    } catch (e: any) {
+    } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
       if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
-      logger.error(`Error deleting exam question: ${e.message}`);
+      const message = e instanceof Error ? e.message : 'Unknown error';
+      logger.error(`Error deleting exam question: ${message}`);
       return ApiResponseHandler.serverError(res, 'Failed to delete question');
     }
   },
@@ -215,7 +211,7 @@ export const examTestController = {
   async startAttempt(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      if (!enforceBusinessScope(req, res, businessId)) return;
+  
       const user = req.user;
       if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
 
@@ -228,16 +224,17 @@ export const examTestController = {
         {
           attemptId: started.attemptId,
           startedAt: started.startedAt,
-          test: TestMapper.examTest(started.test),
+          test: TestMapper.examAvailableTest({ ...started.test, totalQuestions: started.questions.length }),
           questions: started.questions.map(TestMapper.question),
         },
         'Exam attempt started successfully',
         201,
       );
-    } catch (e: any) {
+    } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
       if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
-      logger.error(`Error starting exam attempt: ${e.message}`);
+      const message = e instanceof Error ? e.message : 'Unknown error';
+      logger.error(`Error starting exam attempt: ${message}`);
       return ApiResponseHandler.serverError(res, 'Failed to start exam attempt');
     }
   },
@@ -245,15 +242,16 @@ export const examTestController = {
   async available(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      if (!enforceBusinessScope(req, res, businessId)) return;
+      
       const user = req.user;
       if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
 
       const list = await attemptService.listAvailableExamTests(businessId, { id: user.id, role: user.role });
       return ApiResponseHandler.success(res, list, 'Available exam tests fetched successfully');
-    } catch (e: any) {
+    } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
-      logger.error(`Error fetching available exam tests: ${e.message}`);
+      const message = e instanceof Error ? e.message : 'Unknown error';
+      logger.error(`Error fetching available exam tests: ${message}`);
       return ApiResponseHandler.serverError(res, 'Failed to fetch available exam tests');
     }
   },
@@ -261,7 +259,7 @@ export const examTestController = {
   async getAttempt(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      if (!enforceBusinessScope(req, res, businessId)) return;
+      
       const user = req.user;
       if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
       const attemptId = req.params.attemptId;
@@ -272,11 +270,9 @@ export const examTestController = {
         res,
         {
           attempt: details.attempt,
-          test: TestMapper.examTest(details.test),
+          test: TestMapper.examAvailableTest({ ...details.test, totalQuestions: details.questions.length }),
           questions: details.questions.map(TestMapper.question),
           answers: details.answers,
-          revealResults: details.revealResults,
-          effectiveEndAt: details.effectiveEndAt,
         },
         'Exam attempt fetched successfully',
       );
@@ -291,7 +287,7 @@ export const examTestController = {
   async submitAttempt(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      if (!enforceBusinessScope(req, res, businessId)) return;
+      
       const user = req.user;
       if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
       const attemptId = req.params.attemptId;

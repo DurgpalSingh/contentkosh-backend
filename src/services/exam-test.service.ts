@@ -1,12 +1,27 @@
 import { BadRequestError, NotFoundError } from '../errors/api.errors';
 import * as examRepo from '../repositories/exam-test.repo';
 import * as questionRepo from '../repositories/test-question.repo';
+import * as batchRepo from '../repositories/batch.repo';
 import { TestStatus, QuestionType, ResultVisibilityExam } from '../constants/test-enums';
 import logger from '../utils/logger';
+import { CreateExamTestDto, CreateQuestionDto, UpdateExamTestDto, UpdateQuestionDto } from '../dtos/test.dto';
 
 export class ExamTestService {
-  async create(businessId: number, dto: any, userId: number) {
+  private async assertBatchBelongsToBusiness(businessId: number, batchId: number) {
+    const batchBusinessId = await batchRepo.findBatchBusinessId(batchId);
+    if (!batchBusinessId) {
+      logger.warn(`[exam-test] invalid batchId=${batchId} businessId=${businessId}`);
+      throw new BadRequestError('Batch not found');
+    }
+    if (batchBusinessId !== businessId) {
+      logger.warn(`[exam-test] batch business mismatch businessId=${businessId} batchId=${batchId} batchBusinessId=${batchBusinessId}`);
+      throw new BadRequestError('Batch does not belong to this business');
+    }
+  }
+
+  async create(businessId: number, dto: CreateExamTestDto, userId: number) {
     logger.info(`[exam-test] create businessId=${businessId} userId=${userId} batchId=${dto?.batchId}`);
+    await this.assertBatchBelongsToBusiness(businessId, dto.batchId);
     const startAt = new Date(dto.startAt);
     const deadlineAt = new Date(dto.deadlineAt);
     if (!(deadlineAt > startAt)) {
@@ -34,7 +49,7 @@ export class ExamTestService {
 
   async list(businessId: number, query: { status?: number; batchId?: number }) {
     logger.info(`[exam-test] list businessId=${businessId} status=${query?.status ?? 'any'} batchId=${query?.batchId ?? 'any'}`);
-    const where: any = {};
+    const where: { status?: number; batchId?: number } = {};
     if (query.status !== undefined) where.status = query.status;
     if (query.batchId !== undefined) where.batchId = query.batchId;
     return examRepo.findExamTestsByBusinessId(businessId, { where });
@@ -47,9 +62,13 @@ export class ExamTestService {
     return t;
   }
 
-  async update(businessId: number, examTestId: string, dto: any, userId: number) {
+  async update(businessId: number, examTestId: string, dto: UpdateExamTestDto, userId: number) {
     logger.info(`[exam-test] update businessId=${businessId} examTestId=${examTestId} userId=${userId}`);
     const existing = await this.get(businessId, examTestId);
+
+    if (dto.batchId !== undefined) {
+      await this.assertBatchBelongsToBusiness(businessId, dto.batchId);
+    }
 
     const startAt = dto.startAt !== undefined ? new Date(dto.startAt) : existing.startAt;
     const deadlineAt = dto.deadlineAt !== undefined ? new Date(dto.deadlineAt) : existing.deadlineAt;
@@ -86,6 +105,7 @@ export class ExamTestService {
   async publish(businessId: number, examTestId: string, userId: number) {
     logger.info(`[exam-test] publish businessId=${businessId} examTestId=${examTestId} userId=${userId}`);
     const existing = await this.get(businessId, examTestId);
+    await this.assertBatchBelongsToBusiness(businessId, existing.batchId);
     if (existing.status !== TestStatus.DRAFT) {
       throw new BadRequestError('Only draft tests can be published');
     }
@@ -138,7 +158,7 @@ export class ExamTestService {
     }
   }
 
-  async createQuestion(businessId: number, examTestId: string, dto: any) {
+  async createQuestion(businessId: number, examTestId: string, dto: CreateQuestionDto) {
     logger.info(`[exam-test] createQuestion businessId=${businessId} examTestId=${examTestId} type=${dto?.type}`);
     const hasAttempts = await questionRepo.hasAttemptsForExamTest(businessId, examTestId);
     if (hasAttempts) throw new BadRequestError('Cannot modify questions after attempts have started');
@@ -147,7 +167,7 @@ export class ExamTestService {
       type: dto.type,
       correctTextAnswer: dto.correctTextAnswer ?? null,
       correctOptionIdsAnswers: dto.correctOptionIdsAnswers ?? [],
-      options: dto.options?.map((o: any) => ({ text: o.text, mediaUrl: o.mediaUrl ?? null })) ?? [],
+      options: dto.options?.map((o) => ({ text: o.text, mediaUrl: o.mediaUrl ?? null })) ?? [],
     });
 
     const created = await questionRepo.createExamTestQuestionResolvingCorrect(businessId, examTestId, {
@@ -157,13 +177,13 @@ export class ExamTestService {
       explanation: dto.explanation ?? null,
       correctTextAnswer: dto.correctTextAnswer ?? null,
       correctOptionRefs: dto.correctOptionIdsAnswers ?? [],
-      options: dto.options?.map((o: any) => ({ text: o.text, mediaUrl: o.mediaUrl ?? null })) ?? [],
+      options: dto.options?.map((o) => ({ text: o.text, mediaUrl: o.mediaUrl ?? null })) ?? [],
     });
     if (!created) throw new NotFoundError('Exam test not found');
     return created;
   }
 
-  async updateQuestion(businessId: number, questionId: string, dto: any) {
+  async updateQuestion(businessId: number, questionId: string, dto: UpdateQuestionDto) {
     const existing = await questionRepo.findQuestionById(businessId, questionId);
     if (!existing) throw new NotFoundError('Question not found');
 
@@ -174,15 +194,25 @@ export class ExamTestService {
     if (hasAttempts) throw new BadRequestError('Cannot modify questions after attempts have started');
 
     const newType = dto.type ?? existing.type;
-    const options = dto.options?.map((o: any) => ({ id: o.id, text: o.text, mediaUrl: o.mediaUrl ?? null }));
-    const correctOptionIdsAnswers = dto.correctOptionIdsAnswers ?? existing.correctOptionIdsAnswers ?? [];
+    const optionPayload = dto.options !== undefined
+      ? dto.options.map((o) => ({
+          ...(o.id !== undefined ? { id: o.id } : {}),
+          text: o.text,
+          mediaUrl: o.mediaUrl ?? null,
+        }))
+      : undefined;
+    const correctOptionIdsAnswersRaw = dto.correctOptionIdsAnswers ?? existing.correctOptionIdsAnswers ?? [];
+    const correctOptionIdsAnswers = correctOptionIdsAnswersRaw.map((v) => String(v));
     const correctTextAnswer = dto.correctTextAnswer ?? existing.correctTextAnswer ?? null;
 
     this.validateQuestionPayload({
       type: newType,
       correctTextAnswer,
       correctOptionIdsAnswers,
-      options: options?.map((o: any) => ({ text: o.text, mediaUrl: o.mediaUrl ?? null })) ?? existing.options?.map((o: any) => ({ text: o.text, mediaUrl: o.mediaUrl ?? null })) ?? [],
+      options:
+        optionPayload?.map((o) => ({ text: o.text, mediaUrl: o.mediaUrl ?? null })) ??
+        existing.options?.map((o) => ({ text: o.text, mediaUrl: o.mediaUrl ?? null })) ??
+        [],
     });
 
     const updated = await questionRepo.updateQuestionAndOptions(businessId, questionId, {
@@ -191,8 +221,8 @@ export class ExamTestService {
       ...(dto.mediaUrl !== undefined ? { mediaUrl: dto.mediaUrl } : {}),
       ...(dto.explanation !== undefined ? { explanation: dto.explanation } : {}),
       ...(dto.correctTextAnswer !== undefined ? { correctTextAnswer: dto.correctTextAnswer } : {}),
-      ...(dto.correctOptionIdsAnswers !== undefined ? { correctOptionIdsAnswers: dto.correctOptionIdsAnswers } : {}),
-      ...(dto.options !== undefined ? { options } : {}),
+      ...(dto.correctOptionIdsAnswers !== undefined ? { correctOptionIdsAnswers } : {}),
+      ...(dto.options !== undefined ? { options: optionPayload ?? [] } : {}),
     });
     if (!updated) throw new NotFoundError('Question not found');
     return updated;

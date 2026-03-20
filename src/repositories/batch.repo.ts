@@ -66,6 +66,22 @@ export async function findBatchById(id: number, options: BatchFindOptions = {}) 
   return prisma.batch.findUnique(query);
 }
 
+export async function findBatchBusinessId(batchId: number): Promise<number | null> {
+  const batch = await prisma.batch.findUnique({
+    where: { id: batchId },
+    select: {
+      course: {
+        select: {
+          exam: {
+            select: { businessId: true },
+          },
+        },
+      },
+    },
+  });
+  return batch?.course?.exam?.businessId ?? null;
+}
+
 export async function findBatchByCodeName(codeName: string) {
   return prisma.batch.findUnique({
     where: { codeName },

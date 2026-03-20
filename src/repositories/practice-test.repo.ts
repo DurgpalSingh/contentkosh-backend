@@ -16,6 +16,11 @@ const practiceTestSelect = {
   updatedBy: true,
   createdAt: true,
   updatedAt: true,
+  _count: {
+    select: {
+      questions: true,
+    },
+  },
 };
 
 export interface PracticeTestFindOptions {

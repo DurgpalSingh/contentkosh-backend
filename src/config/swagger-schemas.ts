@@ -1877,5 +1877,657 @@ export const swaggerSchemas = {
         description: 'Recently added content available to student'
       }
     }
+  },
+  TestStatus: {
+    type: 'integer',
+    enum: [0, 1],
+    description: '0=DRAFT, 1=PUBLISHED'
+  },
+  ResultVisibilityPractice: {
+    type: 'integer',
+    enum: [0, 1],
+    description: '0=IMMEDIATE, 1=HIDDEN'
+  },
+  ResultVisibilityExam: {
+    type: 'integer',
+    enum: [0, 1],
+    description: '0=AFTER_DEADLINE, 1=HIDDEN'
+  },
+  QuestionType: {
+    type: 'integer',
+    enum: [0, 1, 2, 3, 4],
+    description: '0=SINGLE_CHOICE, 1=MULTIPLE_CHOICE, 2=TRUE_FALSE, 3=NUMERICAL, 4=FILL_IN_THE_BLANK'
+  },
+  AttemptStatus: {
+    type: 'integer',
+    enum: [0, 1, 2, 3],
+    description: '0=IN_PROGRESS, 1=SUBMITTED, 2=AUTO_SUBMITTED, 3=EXPIRED'
+  },
+  LockedReason: {
+    type: 'integer',
+    enum: [0, 1, 2],
+    description: '0=NOT_STARTED, 1=DEADLINE_PASSED, 2=ALREADY_ATTEMPTED'
+  },
+  PracticeTest: {
+    type: 'object',
+    required: [
+      'id',
+      'businessId',
+      'batchId',
+      'name',
+      'status',
+      'defaultMarksPerQuestion',
+      'showExplanations',
+      'shuffleQuestions',
+      'shuffleOptions',
+      'createdAt',
+      'updatedAt'
+    ],
+    properties: {
+      id: { type: 'string', minLength: 1, maxLength: 50 },
+      businessId: { type: 'string', minLength: 1, maxLength: 50 },
+      batchId: { type: 'string', minLength: 1, maxLength: 50 },
+      name: { type: 'string', minLength: 1, maxLength: 120 },
+      description: { type: 'string', maxLength: 2000 },
+      status: { $ref: '#/components/schemas/TestStatus' },
+      defaultMarksPerQuestion: { type: 'number', minimum: 0 },
+      showExplanations: { type: 'boolean' },
+      shuffleQuestions: { type: 'boolean' },
+      shuffleOptions: { type: 'boolean' },
+      totalQuestions: { type: 'integer', minimum: 0 },
+      totalMarks: { type: 'number', minimum: 0 },
+      createdBy: { type: 'string', minLength: 1, maxLength: 50 },
+      updatedBy: { type: 'string', minLength: 1, maxLength: 50 },
+      createdAt: { type: 'string', format: 'date-time' },
+      updatedAt: { type: 'string', format: 'date-time' }
+    }
+  },
+  ExamTest: {
+    type: 'object',
+    required: [
+      'id',
+      'businessId',
+      'batchId',
+      'name',
+      'startAt',
+      'deadlineAt',
+      'durationMinutes',
+      'status',
+      'createdBy',
+      'createdAt',
+      'updatedAt'
+    ],
+    properties: {
+      id: { type: 'string', minLength: 1, maxLength: 50 },
+      businessId: { type: 'string', minLength: 1, maxLength: 50 },
+      batchId: { type: 'string', minLength: 1, maxLength: 50 },
+      name: { type: 'string', minLength: 1, maxLength: 120 },
+      description: { type: 'string', maxLength: 2000 },
+      startAt: { type: 'string', format: 'date-time' },
+      deadlineAt: { type: 'string', format: 'date-time' },
+      durationMinutes: { type: 'integer', minimum: 1 },
+      status: { $ref: '#/components/schemas/TestStatus' },
+      defaultMarksPerQuestion: { type: 'number', minimum: 0 },
+      negativeMarksPerQuestion: { type: 'number', minimum: 0 },
+      resultVisibility: { $ref: '#/components/schemas/ResultVisibilityExam' },
+      shuffleQuestions: { type: 'boolean' },
+      shuffleOptions: { type: 'boolean' },
+      totalQuestions: { type: 'integer', minimum: 0 },
+      totalMarks: { type: 'number', minimum: 0 },
+      createdBy: { type: 'string', minLength: 1, maxLength: 50 },
+      updatedBy: { type: 'string', minLength: 1, maxLength: 50 },
+      createdAt: { type: 'string', format: 'date-time' },
+      updatedAt: { type: 'string', format: 'date-time' }
+    }
+  },
+  PracticeAvailableTest: {
+    type: 'object',
+    required: ['id', 'businessId', 'batchId', 'name', 'totalQuestions', 'totalMarks'],
+    properties: {
+      id: { type: 'string', minLength: 1, maxLength: 50 },
+      businessId: { type: 'string', minLength: 1, maxLength: 50 },
+      batchId: { type: 'string', minLength: 1, maxLength: 50 },
+      name: { type: 'string', minLength: 1, maxLength: 120 },
+      description: { type: 'string', maxLength: 2000 },
+      status: { $ref: '#/components/schemas/TestStatus' },
+      totalQuestions: { type: 'integer', minimum: 0 },
+      totalMarks: { type: 'number', minimum: 0 },
+      defaultMarksPerQuestion: { type: 'number', minimum: 0 },
+      canAttempt: { type: 'boolean' },
+      attemptCount: { type: 'integer', minimum: 0 },
+      bestScore: { type: 'number', minimum: 0 },
+      lastAttemptAt: { type: 'string', format: 'date-time' }
+    }
+  },
+  ExamAvailableTest: {
+    type: 'object',
+    required: ['id', 'businessId', 'batchId', 'name', 'startAt', 'deadlineAt', 'durationMinutes'],
+    properties: {
+      id: { type: 'string', minLength: 1, maxLength: 50 },
+      businessId: { type: 'string', minLength: 1, maxLength: 50 },
+      batchId: { type: 'string', minLength: 1, maxLength: 50 },
+      name: { type: 'string', minLength: 1, maxLength: 120 },
+      description: { type: 'string', maxLength: 2000 },
+      status: { $ref: '#/components/schemas/TestStatus' },
+      startAt: { type: 'string', format: 'date-time' },
+      deadlineAt: { type: 'string', format: 'date-time' },
+      durationMinutes: { type: 'integer', minimum: 1 },
+      totalQuestions: { type: 'integer', minimum: 0 },
+      totalMarks: { type: 'number', minimum: 0 },
+      defaultMarksPerQuestion: { type: 'number', minimum: 0 },
+      negativeMarksPerQuestion: { type: 'number', minimum: 0 },
+      resultVisibility: { $ref: '#/components/schemas/ResultVisibilityExam' },
+      canAttempt: { type: 'boolean' },
+      lockedReason: { $ref: '#/components/schemas/LockedReason' },
+      attemptsAllowed: { type: 'integer', minimum: 1 },
+      attemptsUsed: { type: 'integer', minimum: 0 },
+      hasAttempt: { type: 'boolean' },
+      lastAttemptAt: { type: 'string', format: 'date-time' }
+    }
+  },
+  CreatePracticeTestDTO: {
+    type: 'object',
+    required: ['batchId', 'name'],
+    properties: {
+      batchId: { type: 'string', minLength: 1, maxLength: 50 },
+      name: { type: 'string', minLength: 1, maxLength: 120 },
+      description: { type: 'string', maxLength: 2000 },
+      defaultMarksPerQuestion: { type: 'number', minimum: 0 },
+      showExplanations: { type: 'boolean' },
+      shuffleQuestions: { type: 'boolean' },
+      shuffleOptions: { type: 'boolean' },
+      status: { $ref: '#/components/schemas/TestStatus' }
+    }
+  },
+  UpdatePracticeTestDTO: {
+    type: 'object',
+    properties: {
+      name: { type: 'string', minLength: 1, maxLength: 120 },
+      description: { type: 'string', maxLength: 2000 },
+      defaultMarksPerQuestion: { type: 'number', minimum: 0 },
+      showExplanations: { type: 'boolean' },
+      shuffleQuestions: { type: 'boolean' },
+      shuffleOptions: { type: 'boolean' },
+      status: { $ref: '#/components/schemas/TestStatus' }
+    }
+  },
+  CreateExamTestDTO: {
+    type: 'object',
+    required: ['batchId', 'name', 'startAt', 'deadlineAt', 'durationMinutes'],
+    properties: {
+      batchId: { type: 'string', minLength: 1, maxLength: 50 },
+      name: { type: 'string', minLength: 1, maxLength: 120 },
+      description: { type: 'string', maxLength: 2000 },
+      startAt: { type: 'string', format: 'date-time' },
+      deadlineAt: { type: 'string', format: 'date-time' },
+      durationMinutes: { type: 'integer', minimum: 1 },
+      defaultMarksPerQuestion: { type: 'number', minimum: 0 },
+      negativeMarksPerQuestion: { type: 'number', minimum: 0 },
+      resultVisibility: { $ref: '#/components/schemas/ResultVisibilityExam' },
+      shuffleQuestions: { type: 'boolean' },
+      shuffleOptions: { type: 'boolean' },
+      status: { $ref: '#/components/schemas/TestStatus' }
+    }
+  },
+  UpdateExamTestDTO: {
+    type: 'object',
+    properties: {
+      name: { type: 'string', minLength: 1, maxLength: 120 },
+      description: { type: 'string', maxLength: 2000 },
+      startAt: { type: 'string', format: 'date-time' },
+      deadlineAt: { type: 'string', format: 'date-time' },
+      durationMinutes: { type: 'integer', minimum: 1 },
+      defaultMarksPerQuestion: { type: 'number', minimum: 0 },
+      negativeMarksPerQuestion: { type: 'number', minimum: 0 },
+      resultVisibility: { $ref: '#/components/schemas/ResultVisibilityExam' },
+      shuffleQuestions: { type: 'boolean' },
+      shuffleOptions: { type: 'boolean' },
+      status: { $ref: '#/components/schemas/TestStatus' }
+    }
+  },
+  PublishPracticeTestRequest: {
+    type: 'object',
+    required: ['practiceTestId'],
+    properties: {
+      practiceTestId: { type: 'string', minLength: 1, maxLength: 50 }
+    }
+  },
+  PublishExamTestRequest: {
+    type: 'object',
+    required: ['examTestId'],
+    properties: {
+      examTestId: { type: 'string', minLength: 1, maxLength: 50 }
+    }
+  },
+  CreateQuestionDTO: {
+    type: 'object',
+    required: ['type', 'questionText'],
+    properties: {
+      type: { $ref: '#/components/schemas/QuestionType' },
+      questionText: { type: 'string', minLength: 1, maxLength: 4000 },
+      text: {
+        type: 'string',
+        deprecated: true,
+        description: 'Deprecated. Use questionText instead.',
+        maxLength: 4000
+      },
+      mediaUrl: { type: 'string', maxLength: 2048, format: 'uri' },
+      options: {
+        type: 'array',
+        items: { $ref: '#/components/schemas/TestOption' }
+      },
+      correctTextAnswer: { type: 'string', maxLength: 2000 },
+      correctOptionIdsAnswers: {
+        type: 'array',
+        items: { type: 'string', minLength: 1, maxLength: 50 }
+      },
+      correctOptionIds: {
+        type: 'array',
+        deprecated: true,
+        description: 'Deprecated. Use correctOptionIdsAnswers instead.',
+        items: { type: 'string', minLength: 1, maxLength: 50 }
+      }
+    }
+  },
+  UpdateQuestionDTO: {
+    allOf: [{ $ref: '#/components/schemas/CreateQuestionDTO' }]
+  },
+  TestOption: {
+    type: 'object',
+    required: ['text'],
+    properties: {
+      id: { type: 'string', minLength: 1, maxLength: 50 },
+      text: { type: 'string', minLength: 1, maxLength: 1000 },
+      mediaUrl: { type: 'string', maxLength: 2048, format: 'uri' },
+      isCorrect: {
+        type: 'boolean',
+        deprecated: true,
+        description: 'Deprecated. Correctness is defined on question via correctOptionIdsAnswers.'
+      }
+    }
+  },
+  TestQuestion: {
+    type: 'object',
+    required: ['id', 'type', 'questionText'],
+    properties: {
+      id: { type: 'string', minLength: 1, maxLength: 50 },
+      type: { $ref: '#/components/schemas/QuestionType' },
+      questionText: { type: 'string', minLength: 1, maxLength: 4000 },
+      text: {
+        type: 'string',
+        deprecated: true,
+        description: 'Deprecated. Use questionText instead.',
+        maxLength: 4000
+      },
+      mediaUrl: { type: 'string', maxLength: 2048, format: 'uri' },
+      options: {
+        type: 'array',
+        items: { $ref: '#/components/schemas/TestOption' }
+      }
+    }
+  },
+  StartPracticeAttemptRequest: {
+    type: 'object',
+    required: ['practiceTestId'],
+    properties: {
+      practiceTestId: { type: 'string', minLength: 1, maxLength: 50 }
+    }
+  },
+  StartExamAttemptRequest: {
+    type: 'object',
+    required: ['examTestId'],
+    properties: {
+      examTestId: { type: 'string', minLength: 1, maxLength: 50 }
+    }
+  },
+  StartPrecticeTestAttemptResponse: {
+    type: 'object',
+    required: ['attemptId', 'test', 'questions', 'startedAt'],
+    properties: {
+      attemptId: { type: 'string', minLength: 1, maxLength: 50 },
+      test: { $ref: '#/components/schemas/PracticeAvailableTest' },
+      questions: {
+        type: 'array',
+        items: { $ref: '#/components/schemas/TestQuestion' }
+      },
+      startedAt: { type: 'string', format: 'date-time' }
+    }
+  },
+  StartExamTestAttemptResponse: {
+    type: 'object',
+    required: ['attemptId', 'test', 'questions', 'startedAt'],
+    properties: {
+      attemptId: { type: 'string', minLength: 1, maxLength: 50 },
+      test: { $ref: '#/components/schemas/ExamAvailableTest' },
+      questions: {
+        type: 'array',
+        items: { $ref: '#/components/schemas/TestQuestion' }
+      },
+      startedAt: { type: 'string', format: 'date-time' }
+    }
+  },
+  TestDetailsForAttempt: {
+    type: 'object',
+    required: ['id', 'name', 'totalQuestions', 'totalMarks'],
+    properties: {
+      id: { type: 'string', minLength: 1, maxLength: 50 },
+      businessId: { type: 'string', minLength: 1, maxLength: 50 },
+      batchId: { type: 'string', minLength: 1, maxLength: 50 },
+      name: { type: 'string', minLength: 1, maxLength: 120 },
+      description: { type: 'string', maxLength: 2000 },
+      type: { type: 'integer', enum: [0, 1], description: '0=Practice, 1=Exam' },
+      status: { $ref: '#/components/schemas/TestStatus' },
+      totalQuestions: { type: 'integer', minimum: 0 },
+      totalMarks: { type: 'number', minimum: 0 },
+      durationMinutes: { type: 'integer', minimum: 1 },
+      defaultMarksPerQuestion: { type: 'number', minimum: 0 },
+      negativeMarksPerQuestion: { type: 'number', minimum: 0 },
+      showExplanations: { type: 'boolean' },
+      shuffleQuestions: { type: 'boolean' },
+      shuffleOptions: { type: 'boolean' },
+      startAt: { type: 'string', format: 'date-time' },
+      deadlineAt: { type: 'string', format: 'date-time' },
+      resultVisibility: {
+        oneOf: [
+          { $ref: '#/components/schemas/ResultVisibilityPractice' },
+          { $ref: '#/components/schemas/ResultVisibilityExam' }
+        ],
+        description: 'Practice=IMMEDIATE; Exam=AFTER_DEADLINE or HIDDEN.'
+      },
+      attemptsAllowed: { type: 'integer', minimum: 1 },
+      attemptsUsed: { type: 'integer', minimum: 0 }
+    }
+  },
+  SubmitAttemptRequest: {
+    type: 'object',
+    required: ['answers'],
+    properties: {
+      answers: {
+        type: 'array',
+        items: { $ref: '#/components/schemas/TestAnswerSubmission' }
+      }
+    }
+  },
+  TestAnswerSubmission: {
+    type: 'object',
+    required: ['questionId'],
+    properties: {
+      questionId: { type: 'string', minLength: 1, maxLength: 50 },
+      selectedOptionIds: {
+        type: 'array',
+        items: { type: 'string', minLength: 1, maxLength: 50 }
+      },
+      textAnswer: { type: 'string', maxLength: 2000 }
+    }
+  },
+  SubmitAttemptResponse: {
+    oneOf: [
+      { $ref: '#/components/schemas/SubmitAttemptVisible' },
+      { $ref: '#/components/schemas/SubmitAttemptHidden' }
+    ]
+  },
+  SubmitAttemptVisible: {
+    type: 'object',
+    required: ['attemptId', 'status', 'score', 'totalScore', 'percentage'],
+    properties: {
+      attemptId: { type: 'string', minLength: 1, maxLength: 50 },
+      status: { $ref: '#/components/schemas/AttemptStatus' },
+      score: { type: 'number', minimum: 0 },
+      totalScore: { type: 'number', minimum: 0 },
+      percentage: { type: 'number', minimum: 0, maximum: 100 },
+      answers: {
+        type: 'array',
+        items: { $ref: '#/components/schemas/TestAnswer' }
+      },
+      submittedAt: { type: 'string', format: 'date-time' }
+    }
+  },
+  SubmitAttemptHidden: {
+    type: 'object',
+    required: ['attemptId', 'status', 'submittedAt'],
+    properties: {
+      attemptId: { type: 'string', minLength: 1, maxLength: 50 },
+      status: { $ref: '#/components/schemas/AttemptStatus' },
+      submittedAt: { type: 'string', format: 'date-time' }
+    }
+  },
+  TestAttemptDetails: {
+    type: 'object',
+    required: ['attempt', 'test', 'questions'],
+    properties: {
+      attempt: { $ref: '#/components/schemas/TestAttempt' },
+      test: { $ref: '#/components/schemas/TestDetailsForAttempt' },
+      questions: {
+        type: 'array',
+        items: { $ref: '#/components/schemas/TestQuestion' }
+      },
+      answers: {
+        type: 'array',
+        items: { $ref: '#/components/schemas/TestAnswer' }
+      },
+      summary: { $ref: '#/components/schemas/TestAttemptSummary' }
+    }
+  },
+  PracticeTestAttemptDetails: {
+    type: 'object',
+    required: ['attempt', 'test', 'questions'],
+    properties: {
+      attempt: { $ref: '#/components/schemas/TestAttempt' },
+      test: { $ref: '#/components/schemas/PracticeAvailableTest' },
+      questions: {
+        type: 'array',
+        items: { $ref: '#/components/schemas/TestQuestion' }
+      },
+      answers: {
+        type: 'array',
+        items: { $ref: '#/components/schemas/TestAnswer' }
+      },
+      summary: { $ref: '#/components/schemas/TestAttemptSummary' }
+    }
+  },
+  ExamTestAttemptDetails: {
+    type: 'object',
+    required: ['attempt', 'test', 'questions'],
+    properties: {
+      attempt: { $ref: '#/components/schemas/TestAttempt' },
+      test: { $ref: '#/components/schemas/ExamAvailableTest' },
+      questions: {
+        type: 'array',
+        items: { $ref: '#/components/schemas/TestQuestion' }
+      },
+      answers: {
+        type: 'array',
+        items: { $ref: '#/components/schemas/TestAnswer' }
+      },
+      summary: { $ref: '#/components/schemas/TestAttemptSummary' }
+    }
+  },
+  TestAttempt: {
+    type: 'object',
+    required: ['id', 'status', 'startedAt'],
+    properties: {
+      id: { type: 'string', minLength: 1, maxLength: 50 },
+      testId: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 50,
+        deprecated: true,
+        description: 'Deprecated. Use practiceTestId or examTestId.'
+      },
+      practiceTestId: { type: 'string', minLength: 1, maxLength: 50 },
+      examTestId: { type: 'string', minLength: 1, maxLength: 50 },
+      userId: { type: 'string', minLength: 1, maxLength: 50 },
+      status: { $ref: '#/components/schemas/AttemptStatus' },
+      startedAt: { type: 'string', format: 'date-time' },
+      submittedAt: { type: 'string', format: 'date-time' },
+      score: { type: 'number', minimum: 0 },
+      totalScore: { type: 'number', minimum: 0 },
+      percentage: { type: 'number', minimum: 0, maximum: 100 }
+    }
+  },
+  TestAttemptSummary: {
+    type: 'object',
+    properties: {
+      correctCount: { type: 'integer', minimum: 0 },
+      incorrectCount: { type: 'integer', minimum: 0 },
+      skippedCount: { type: 'integer', minimum: 0 },
+      timeTakenSeconds: { type: 'integer', minimum: 0 }
+    }
+  },
+  TestAnswer: {
+    type: 'object',
+    properties: {
+      questionId: { type: 'string', minLength: 1, maxLength: 50 },
+      selectedOptionIds: {
+        type: 'array',
+        items: { type: 'string', minLength: 1, maxLength: 50 }
+      },
+      textAnswer: { type: 'string', maxLength: 2000 },
+      isCorrect: { type: 'boolean' },
+      obtainedMarks: { type: 'number', minimum: 0 }
+    }
+  },
+  TestAnalytics: {
+    type: 'object',
+    properties: {
+      totalAttempts: { type: 'integer', minimum: 0 },
+      averageScore: { type: 'number', minimum: 0 },
+      averagePercentage: { type: 'number', minimum: 0, maximum: 100 },
+      passRate: { type: 'number', minimum: 0, maximum: 100 },
+      highestScore: { type: 'number', minimum: 0 },
+      lowestScore: { type: 'number', minimum: 0 },
+      attempts: {
+        type: 'array',
+        items: { $ref: '#/components/schemas/TestAnalyticsAttempt' }
+      },
+      questionStats: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            questionId: { type: 'string', minLength: 1, maxLength: 50 },
+            correctCount: { type: 'integer', minimum: 0 },
+            totalAttempts: { type: 'integer', minimum: 0 },
+            accuracy: { type: 'number', minimum: 0, maximum: 100 }
+          }
+        }
+      }
+    }
+  },
+  TestAnalyticsAttempt: {
+    type: 'object',
+    required: ['attemptId', 'userId', 'status', 'startedAt'],
+    properties: {
+      attemptId: { type: 'string', minLength: 1, maxLength: 50 },
+      userId: { type: 'string', minLength: 1, maxLength: 50 },
+      status: { $ref: '#/components/schemas/AttemptStatus' },
+      startedAt: { type: 'string', format: 'date-time' },
+      submittedAt: { type: 'string', format: 'date-time' },
+      score: { type: 'number', minimum: 0 },
+      totalScore: { type: 'number', minimum: 0 },
+      percentage: { type: 'number', minimum: 0, maximum: 100 }
+    }
+  }
+};
+
+export const swaggerParameters = {
+  businessId: {
+    name: 'businessId',
+    in: 'path',
+    required: true,
+    schema: { type: 'string', minLength: 1, maxLength: 50 }
+  },
+  practiceTestId: {
+    name: 'practiceTestId',
+    in: 'path',
+    required: true,
+    schema: { type: 'string', minLength: 1, maxLength: 50 },
+    description: 'Deprecated in favor of request body for publish/attempt start.'
+  },
+  examTestId: {
+    name: 'examTestId',
+    in: 'path',
+    required: true,
+    schema: { type: 'string', minLength: 1, maxLength: 50 },
+    description: 'Deprecated in favor of request body for publish/attempt start.'
+  },
+  questionId: {
+    name: 'questionId',
+    in: 'path',
+    required: true,
+    schema: { type: 'string', minLength: 1, maxLength: 50 }
+  },
+  attemptId: {
+    name: 'attemptId',
+    in: 'path',
+    required: true,
+    schema: { type: 'string', minLength: 1, maxLength: 50 }
+  }
+};
+
+export const swaggerResponses = {
+  ApiResponse: {
+    description: 'Standard API response',
+    content: {
+      'application/json': {
+        schema: { $ref: '#/components/schemas/ApiResponse' }
+      }
+    }
+  },
+  BadRequest: {
+    description: 'Bad request',
+    content: {
+      'application/json': {
+        schema: { $ref: '#/components/schemas/ErrorResponse' }
+      }
+    }
+  },
+  Unauthorized: {
+    description: 'Unauthorized',
+    content: {
+      'application/json': {
+        schema: { $ref: '#/components/schemas/ErrorResponse' }
+      }
+    }
+  },
+  Forbidden: {
+    description: 'Forbidden',
+    content: {
+      'application/json': {
+        schema: { $ref: '#/components/schemas/ErrorResponse' }
+      }
+    }
+  },
+  NotFound: {
+    description: 'Not found',
+    content: {
+      'application/json': {
+        schema: { $ref: '#/components/schemas/ErrorResponse' }
+      }
+    }
+  },
+  Conflict: {
+    description: 'Conflict',
+    content: {
+      'application/json': {
+        schema: { $ref: '#/components/schemas/ErrorResponse' }
+      }
+    }
+  },
+  UnprocessableEntity: {
+    description: 'Validation error',
+    content: {
+      'application/json': {
+        schema: { $ref: '#/components/schemas/ErrorResponse' }
+      }
+    }
+  },
+  InternalServerError: {
+    description: 'Internal server error',
+    content: {
+      'application/json': {
+        schema: { $ref: '#/components/schemas/ErrorResponse' }
+      }
+    }
   }
 };

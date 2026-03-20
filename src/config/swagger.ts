@@ -1,6 +1,6 @@
 import swaggerJsdoc from 'swagger-jsdoc';
 import { config } from './config';
-import { swaggerSchemas } from './swagger-schemas';
+import { swaggerSchemas, swaggerParameters, swaggerResponses } from './swagger-schemas';
 
 const options: swaggerJsdoc.Options = {
   definition: {
@@ -32,7 +32,9 @@ const options: swaggerJsdoc.Options = {
           bearerFormat: 'JWT'
         }
       },
-      schemas: swaggerSchemas
+      schemas: swaggerSchemas,
+      parameters: swaggerParameters,
+      responses: swaggerResponses
     }
   },
   apis: ['./src/routes/*.ts', './src/controllers/*.ts']

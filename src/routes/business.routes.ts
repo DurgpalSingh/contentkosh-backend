@@ -332,6 +332,13 @@ router.get(
 );
 
 router.get(
+  '/:businessId/practice-tests/available',
+  authorize(UserRole.STUDENT),
+  validateIdParam('businessId'),
+  practiceTestController.available,
+);
+
+router.get(
   '/:businessId/practice-tests/:practiceTestId',
   authorize(),
   validateIdParam('businessId'),
@@ -406,13 +413,6 @@ router.delete(
   practiceTestController.deleteQuestion,
 );
 
-router.get(
-  '/:businessId/practice-tests/available',
-  validateIdParam('businessId'),
-  authorizeBusinessAccess,
-  practiceTestController.available,
-);
-
 // ==================== LMS EXAM TEST ROUTES ====================
 router.post(
   '/:businessId/exam-tests',
@@ -429,6 +429,13 @@ router.get(
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   examTestController.list,
+);
+
+router.get(
+  '/:businessId/exam-tests/available',
+  authorize(UserRole.STUDENT),
+  validateIdParam('businessId'),
+  examTestController.available,
 );
 
 router.get(
@@ -506,34 +513,27 @@ router.delete(
   examTestController.deleteQuestion,
 );
 
-router.get(
-  '/:businessId/exam-tests/available',
-  validateIdParam('businessId'),
-  authorizeBusinessAccess,
-  examTestController.available,
-);
-
 // ==================== LMS ATTEMPT ROUTES (STUDENT) ====================
 router.post(
   '/:businessId/practice-tests/attempts',
+  authorize(UserRole.STUDENT),
   validateIdParam('businessId'),
-  authorizeBusinessAccess,
   validateDto(StartPracticeAttemptRequestDto),
   practiceTestController.startAttempt,
 );
 
 router.get(
   '/:businessId/practice-tests/attempts/:attemptId',
+  authorize(UserRole.STUDENT),
   validateIdParam('businessId'),
-  authorizeBusinessAccess,
   validateStringIdParam('attemptId'),
   practiceTestController.getAttempt,
 );
 
 router.post(
   '/:businessId/practice-tests/attempts/:attemptId/submit',
+  authorize(UserRole.STUDENT),
   validateIdParam('businessId'),
-  authorizeBusinessAccess,
   validateStringIdParam('attemptId'),
   validateDto(SubmitAttemptRequestDto),
   practiceTestController.submitAttempt,
@@ -541,24 +541,24 @@ router.post(
 
 router.post(
   '/:businessId/exam-tests/attempts',
+  authorize(UserRole.STUDENT),
   validateIdParam('businessId'),
-  authorizeBusinessAccess,
   validateDto(StartExamAttemptRequestDto),
   examTestController.startAttempt,
 );
 
 router.get(
   '/:businessId/exam-tests/attempts/:attemptId',
+  authorize(UserRole.STUDENT),
   validateIdParam('businessId'),
-  authorizeBusinessAccess,
   validateStringIdParam('attemptId'),
   examTestController.getAttempt,
 );
 
 router.post(
   '/:businessId/exam-tests/attempts/:attemptId/submit',
+  authorize(UserRole.STUDENT),
   validateIdParam('businessId'),
-  authorizeBusinessAccess,
   validateStringIdParam('attemptId'),
   validateDto(SubmitAttemptRequestDto),
   examTestController.submitAttempt,

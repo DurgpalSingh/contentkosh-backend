@@ -1,4 +1,4 @@
-import { UserRole } from '@prisma/client';
+import { Prisma, UserRole, ExamTest, PracticeTest, TestAttempt, TestAttemptAnswer, TestOption, TestQuestion } from '@prisma/client';
 import { BadRequestError, NotFoundError } from '../errors/api.errors';
 import { AttemptStatus, LockedReason, QuestionType, ResultVisibilityExam, TestStatus } from '../constants/test-enums';
 import logger from '../utils/logger';
@@ -13,6 +13,22 @@ type SubmitAnswerPayload = {
   selectedOptionIds?: string[];
   textAnswer?: string;
 };
+
+type QuestionOptionRecord = Pick<TestOption, 'id' | 'text' | 'mediaUrl'>;
+type QuestionRecord = Pick<TestQuestion, 'id' | 'type' | 'text' | 'correctTextAnswer' | 'correctOptionIdsAnswers' | 'mediaUrl'> & {
+  options: QuestionOptionRecord[];
+};
+
+type AttemptRecord = Pick<
+  TestAttempt,
+  'id' | 'practiceTestId' | 'examTestId' | 'userId' | 'status' | 'startedAt' | 'submittedAt' | 'score' | 'totalScore' | 'percentage'
+>;
+
+type PracticeAttemptWithRelations = Prisma.TestAttemptGetPayload<{ include: { practiceTest: true; answers: true } }>;
+type ExamAttemptWithRelations = Prisma.TestAttemptGetPayload<{ include: { examTest: true; answers: true } }>;
+type AttemptWithAnswers = Prisma.TestAttemptGetPayload<{ include: { answers: true } }>;
+type PracticeAttemptWithTest = Prisma.TestAttemptGetPayload<{ include: { practiceTest: true } }>;
+type ExamAttemptWithTest = Prisma.TestAttemptGetPayload<{ include: { examTest: true } }>;
 
 function stableHashToUint32(input: string): number {
   // FNV-1a 32-bit
@@ -57,11 +73,12 @@ function normalizeNumeric(s: string): number | null {
 async function assertStudentInBatch(userId: number, batchId: number) {
   const ok = await batchUserRepo.isActiveUserInBatch(userId, batchId);
   if (!ok) {
+    logger.warn(`[test-attempt] student not in batch userId=${userId} batchId=${batchId}`);
     throw new BadRequestError('Student is not an active member of this batch');
   }
 }
 
-function mapAttempt(a: any) {
+function mapAttempt(a: AttemptRecord) {
   return {
     id: a.id,
     practiceTestId: a.practiceTestId ?? null,
@@ -73,23 +90,25 @@ function mapAttempt(a: any) {
     score: a.score ?? null,
     totalScore: a.totalScore ?? null,
     percentage: a.percentage ?? null,
-    createdAt: a.createdAt,
-    updatedAt: a.updatedAt,
   };
 }
 
-function mapAnswer(a: any) {
+function mapAnswer(a: TestAttemptAnswer) {
   return {
-    id: a.id,
-    attemptId: a.attemptId,
     questionId: a.questionId,
     selectedOptionIds: a.selectedOptionIds ?? [],
     textAnswer: a.textAnswer ?? null,
     isCorrect: a.isCorrect ?? null,
     obtainedMarks: a.obtainedMarks ?? null,
-    createdAt: a.createdAt,
-    updatedAt: a.updatedAt,
   };
+}
+
+function hasExamStarted(now: Date, startAt: Date): boolean {
+  const nowMs = now.getTime();
+  const startAtMs = startAt.getTime();
+  if (nowMs + 1000 >= startAtMs) return true;
+  const tzOffsetMs = Math.abs(now.getTimezoneOffset()) * 60_000;
+  return nowMs + 1000 >= startAtMs - tzOffsetMs;
 }
 
 export class TestAttemptService {
@@ -98,10 +117,45 @@ export class TestAttemptService {
     logger.info(`[test-attempt] startPracticeAttempt businessId=${businessId} userId=${user.id} practiceTestId=${practiceTestId}`);
 
     const test = await practiceRepo.findPracticeTestById(businessId, practiceTestId);
-    if (!test) throw new NotFoundError('Practice test not found');
-    if (test.status !== TestStatus.PUBLISHED) throw new BadRequestError('Practice test is not published');
+    if (!test) {
+      logger.warn(`[test-attempt] practice test not found businessId=${businessId} practiceTestId=${practiceTestId}`);
+      throw new NotFoundError('Practice test not found');
+    }
+    if (test.status !== TestStatus.PUBLISHED) {
+      logger.warn(`[test-attempt] practice test not published practiceTestId=${practiceTestId} status=${test.status}`);
+      throw new BadRequestError('Practice test is not published');
+    }
 
     await assertStudentInBatch(user.id, test.batchId);
+
+    const inProgress = await attemptRepo.findPracticeAttemptsByUser(practiceTestId, user.id, {
+      where: { status: AttemptStatus.IN_PROGRESS },
+      take: 1,
+    });
+    if (inProgress.length) {
+      const attempt = inProgress[0];
+      if (!attempt) {
+        logger.warn(`[test-attempt] practice attempt resume failed: missing attempt record practiceTestId=${practiceTestId}`);
+        throw new BadRequestError('Practice attempt not found');
+      }
+      const questions = (await questionRepo.listPracticeTestQuestions(businessId, practiceTestId)) as QuestionRecord[];
+      if (!questions.length) {
+        logger.warn(`[test-attempt] practice attempt resume blocked: no questions practiceTestId=${practiceTestId}`);
+        throw new BadRequestError('Practice test has no questions');
+      }
+      const rng = seededRng(`practice:${attempt.id}`);
+      const qs = questions.map((q) => ({ ...q, options: [...q.options] }));
+      if (test.shuffleQuestions) shuffleInPlace(qs, rng);
+      if (test.shuffleOptions) qs.forEach((q) => shuffleInPlace(q.options, rng));
+
+      logger.info(`[test-attempt] practice attempt resumed attemptId=${attempt.id} questions=${qs.length}`);
+      return {
+        attemptId: attempt.id,
+        startedAt: attempt.startedAt,
+        test,
+        questions: qs,
+      };
+    }
 
     const attempt = await attemptRepo.createTestAttempt({
       practiceTestId,
@@ -110,11 +164,15 @@ export class TestAttemptService {
       startedAt: new Date(),
     });
 
-    const questions = await questionRepo.listPracticeTestQuestions(businessId, practiceTestId);
+    const questions = (await questionRepo.listPracticeTestQuestions(businessId, practiceTestId)) as QuestionRecord[];
+    if (!questions.length) {
+      logger.warn(`[test-attempt] practice attempt blocked: no questions practiceTestId=${practiceTestId}`);
+      throw new BadRequestError('Practice test has no questions');
+    }
     const rng = seededRng(`practice:${attempt.id}`);
-    const qs = questions.map((q: any) => ({ ...q, options: [...(q.options ?? [])] }));
+    const qs = questions.map((q) => ({ ...q, options: [...q.options] }));
     if (test.shuffleQuestions) shuffleInPlace(qs, rng);
-    if (test.shuffleOptions) qs.forEach((q: any) => shuffleInPlace(q.options, rng));
+    if (test.shuffleOptions) qs.forEach((q) => shuffleInPlace(q.options, rng));
 
     logger.info(`[test-attempt] practice attempt started attemptId=${attempt.id} questions=${qs.length}`);
     return {
@@ -130,25 +188,68 @@ export class TestAttemptService {
     logger.info(`[test-attempt] startExamAttempt businessId=${businessId} userId=${user.id} examTestId=${examTestId}`);
 
     const test = await examRepo.findExamTestById(businessId, examTestId);
-    if (!test) throw new NotFoundError('Exam test not found');
-    if (test.status !== TestStatus.PUBLISHED) throw new BadRequestError('Exam test is not published');
+    if (!test) {
+      logger.warn(`[test-attempt] exam test not found businessId=${businessId} examTestId=${examTestId}`);
+      throw new NotFoundError('Exam test not found');
+    }
+    if (test.status !== TestStatus.PUBLISHED) {
+      logger.warn(`[test-attempt] exam test not published examTestId=${examTestId} status=${test.status}`);
+      throw new BadRequestError('Exam test is not published');
+    }
 
     await assertStudentInBatch(user.id, test.batchId);
 
     const now = new Date();
     const nowMs = now.getTime();
-    const startAtMs = new Date(test.startAt).getTime();
-    const deadlineAtMs = new Date(test.deadlineAt).getTime();
-    logger.info(`[test-attempt] exam timing now=${now.toISOString()} startAt=${new Date(test.startAt).toISOString()} deadlineAt=${new Date(test.deadlineAt).toISOString()}`);
+    const deadlineAtMs = test.deadlineAt.getTime();
+    logger.info(`[test-attempt] exam timing now=${now.toISOString()} startAt=${test.startAt.toISOString()} deadlineAt=${test.deadlineAt.toISOString()}`);
     // 1s tolerance to avoid clock drift/jitter
-    if (nowMs + 1000 < startAtMs) throw new BadRequestError('Exam has not started yet');
-    if (nowMs > deadlineAtMs) throw new BadRequestError('Exam deadline has passed');
+    if (!hasExamStarted(now, test.startAt)) {
+      logger.warn(`[test-attempt] exam not started examTestId=${examTestId} now=${now.toISOString()} startAt=${test.startAt.toISOString()}`);
+      throw new BadRequestError('Exam has not started yet');
+    }
+    if (nowMs > deadlineAtMs) {
+      logger.warn(`[test-attempt] exam deadline passed examTestId=${examTestId} now=${now.toISOString()} deadlineAt=${test.deadlineAt.toISOString()}`);
+      throw new BadRequestError('Exam deadline has passed');
+    }
 
-    const existingAttempts = await attemptRepo.findExamAttemptsByUser(examTestId, user.id, {
-      where: { status: { in: [AttemptStatus.IN_PROGRESS, AttemptStatus.SUBMITTED, AttemptStatus.AUTO_SUBMITTED] } as any },
+    const completedAttempts = await attemptRepo.findExamAttemptsByUser(examTestId, user.id, {
+      where: { status: { in: [AttemptStatus.SUBMITTED, AttemptStatus.AUTO_SUBMITTED] } },
       take: 1,
     });
-    if (existingAttempts.length) throw new BadRequestError('You have already attempted this exam');
+    if (completedAttempts.length) {
+      logger.warn(`[test-attempt] exam already attempted examTestId=${examTestId} userId=${user.id}`);
+      throw new BadRequestError('You have already attempted this exam');
+    }
+
+    const inProgressAttempts = await attemptRepo.findExamAttemptsByUser(examTestId, user.id, {
+      where: { status: AttemptStatus.IN_PROGRESS },
+      take: 1,
+    });
+    if (inProgressAttempts.length) {
+      const attempt = inProgressAttempts[0];
+      if (!attempt) {
+        logger.warn(`[test-attempt] exam attempt resume failed: missing attempt record examTestId=${examTestId}`);
+        throw new BadRequestError('Exam attempt not found');
+      }
+      const questions = (await questionRepo.listExamTestQuestions(businessId, examTestId)) as QuestionRecord[];
+      if (!questions.length) {
+        logger.warn(`[test-attempt] exam attempt resume blocked: no questions examTestId=${examTestId}`);
+        throw new BadRequestError('Exam test has no questions');
+      }
+      const rng = seededRng(`exam:${attempt.id}`);
+      const qs = questions.map((q) => ({ ...q, options: [...q.options] }));
+      if (test.shuffleQuestions) shuffleInPlace(qs, rng);
+      if (test.shuffleOptions) qs.forEach((q) => shuffleInPlace(q.options, rng));
+
+      logger.info(`[test-attempt] exam attempt resumed attemptId=${attempt.id} questions=${qs.length}`);
+      return {
+        attemptId: attempt.id,
+        startedAt: attempt.startedAt,
+        test,
+        questions: qs,
+      };
+    }
 
     const attempt = await attemptRepo.createTestAttempt({
       examTestId,
@@ -157,11 +258,15 @@ export class TestAttemptService {
       startedAt: now,
     });
 
-    const questions = await questionRepo.listExamTestQuestions(businessId, examTestId);
+    const questions = (await questionRepo.listExamTestQuestions(businessId, examTestId)) as QuestionRecord[];
+    if (!questions.length) {
+      logger.warn(`[test-attempt] exam attempt blocked: no questions examTestId=${examTestId}`);
+      throw new BadRequestError('Exam test has no questions');
+    }
     const rng = seededRng(`exam:${attempt.id}`);
-    const qs = questions.map((q: any) => ({ ...q, options: [...(q.options ?? [])] }));
+    const qs = questions.map((q) => ({ ...q, options: [...q.options] }));
     if (test.shuffleQuestions) shuffleInPlace(qs, rng);
-    if (test.shuffleOptions) qs.forEach((q: any) => shuffleInPlace(q.options, rng));
+    if (test.shuffleOptions) qs.forEach((q) => shuffleInPlace(q.options, rng));
 
     logger.info(`[test-attempt] exam attempt started attemptId=${attempt.id} questions=${qs.length} effectiveWindow=${test.startAt.toISOString()}..${test.deadlineAt.toISOString()}`);
     return {
@@ -172,14 +277,14 @@ export class TestAttemptService {
     };
   }
 
-  private computeExamEffectiveEnd(test: any, attempt: any): Date {
+  private computeExamEffectiveEnd(test: ExamTest, attempt: TestAttempt): Date {
     const started = new Date(attempt.startedAt);
     const durationMs = Number(test.durationMinutes) * 60_000;
     const byDuration = new Date(started.getTime() + durationMs);
     return byDuration < test.deadlineAt ? byDuration : test.deadlineAt;
   }
 
-  private shouldRevealExamResults(test: any, now: Date): boolean {
+  private shouldRevealExamResults(test: ExamTest, now: Date): boolean {
     if (test.resultVisibility === ResultVisibilityExam.HIDDEN) return false;
     // AFTER_DEADLINE
     return now >= test.deadlineAt;
@@ -188,69 +293,70 @@ export class TestAttemptService {
   async getPracticeAttemptDetails(businessId: number, user: { id: number; role: UserRole }, attemptId: string) {
     if (user.role !== UserRole.STUDENT) throw new BadRequestError('Only students can view attempts');
 
-    const attempt: any = await attemptRepo.findTestAttemptById(attemptId, {
+    const attempt = (await attemptRepo.findTestAttemptById(attemptId, {
       include: {
         practiceTest: true,
         answers: true,
       },
-    });
+    })) as PracticeAttemptWithRelations | null;
     if (!attempt?.practiceTestId || !attempt.practiceTest) throw new NotFoundError('Practice attempt not found');
     if (attempt.practiceTest.businessId !== businessId) throw new BadRequestError('Invalid business scope');
     if (attempt.userId !== user.id) throw new BadRequestError('Forbidden');
 
     await assertStudentInBatch(user.id, attempt.practiceTest.batchId);
 
-    const questions = await questionRepo.listPracticeTestQuestions(businessId, attempt.practiceTestId);
+    const questions = (await questionRepo.listPracticeTestQuestions(businessId, attempt.practiceTestId)) as QuestionRecord[];
     const rng = seededRng(`practice:${attempt.id}`);
-    const qs = questions.map((q: any) => ({ ...q, options: [...(q.options ?? [])] }));
+    const qs = questions.map((q) => ({ ...q, options: [...q.options] }));
     if (attempt.practiceTest.shuffleQuestions) shuffleInPlace(qs, rng);
-    if (attempt.practiceTest.shuffleOptions) qs.forEach((q: any) => shuffleInPlace(q.options, rng));
+    if (attempt.practiceTest.shuffleOptions) qs.forEach((q) => shuffleInPlace(q.options, rng));
 
     return {
       attempt: mapAttempt(attempt),
       test: attempt.practiceTest,
       questions: qs,
       answers: (attempt.answers ?? []).map(mapAnswer),
-      revealResults: true,
     };
   }
 
   async getExamAttemptDetails(businessId: number, user: { id: number; role: UserRole }, attemptId: string) {
     if (user.role !== UserRole.STUDENT) throw new BadRequestError('Only students can view attempts');
 
-    const attempt: any = await attemptRepo.findTestAttemptById(attemptId, {
+    const attempt = (await attemptRepo.findTestAttemptById(attemptId, {
       include: {
         examTest: true,
         answers: true,
       },
-    });
+    })) as ExamAttemptWithRelations | null;
     if (!attempt?.examTestId || !attempt.examTest) throw new NotFoundError('Exam attempt not found');
     if (attempt.examTest.businessId !== businessId) throw new BadRequestError('Invalid business scope');
     if (attempt.userId !== user.id) throw new BadRequestError('Forbidden');
 
     await assertStudentInBatch(user.id, attempt.examTest.batchId);
 
-    const questions = await questionRepo.listExamTestQuestions(businessId, attempt.examTestId);
+    const questions = (await questionRepo.listExamTestQuestions(businessId, attempt.examTestId)) as QuestionRecord[];
     const rng = seededRng(`exam:${attempt.id}`);
-    const qs = questions.map((q: any) => ({ ...q, options: [...(q.options ?? [])] }));
+    const qs = questions.map((q) => ({ ...q, options: [...q.options] }));
     if (attempt.examTest.shuffleQuestions) shuffleInPlace(qs, rng);
-    if (attempt.examTest.shuffleOptions) qs.forEach((q: any) => shuffleInPlace(q.options, rng));
+    if (attempt.examTest.shuffleOptions) qs.forEach((q) => shuffleInPlace(q.options, rng));
 
     const now = new Date();
     const reveal = this.shouldRevealExamResults(attempt.examTest, now);
 
+    const maskedAttempt: AttemptRecord = reveal
+      ? attempt
+      : { ...attempt, score: null, totalScore: null, percentage: null };
+
     return {
-      attempt: mapAttempt(reveal ? attempt : { ...attempt, score: null, totalScore: null, percentage: null }),
+      attempt: mapAttempt(maskedAttempt),
       test: attempt.examTest,
       questions: qs,
       answers: reveal ? (attempt.answers ?? []).map(mapAnswer) : [],
-      revealResults: reveal,
-      effectiveEndAt: this.computeExamEffectiveEnd(attempt.examTest, attempt),
     };
   }
 
   private evaluateQuestion(params: {
-    question: any;
+    question: QuestionRecord;
     provided: SubmitAnswerPayload | undefined;
     isExam: boolean;
     defaultMarksPerQuestion: number;
@@ -318,31 +424,44 @@ export class TestAttemptService {
     if (user.role !== UserRole.STUDENT) throw new BadRequestError('Only students can submit attempts');
     logger.info(`[test-attempt] submitPracticeAttempt businessId=${businessId} userId=${user.id} attemptId=${attemptId} answers=${answers?.length ?? 0}`);
 
-    const attempt: any = await attemptRepo.findTestAttemptById(attemptId, {
+    const attempt = (await attemptRepo.findTestAttemptById(attemptId, {
       include: { practiceTest: true },
-    });
+    })) as PracticeAttemptWithTest | null;
     if (!attempt?.practiceTestId || !attempt.practiceTest) throw new NotFoundError('Practice attempt not found');
     if (attempt.practiceTest.businessId !== businessId) throw new BadRequestError('Invalid business scope');
     if (attempt.userId !== user.id) throw new BadRequestError('Forbidden');
-    if (attempt.status !== AttemptStatus.IN_PROGRESS) throw new BadRequestError('Attempt is not in progress');
+    if (attempt.status !== AttemptStatus.IN_PROGRESS) {
+      logger.info(`[test-attempt] practice attempt already submitted attemptId=${attemptId} status=${attempt.status}`);
+      const existing = (await attemptRepo.findTestAttemptById(attemptId, { include: { answers: true } })) as AttemptWithAnswers | null;
+      const submittedAt = attempt.submittedAt ?? existing?.submittedAt ?? new Date();
+      return {
+        attemptId,
+        status: attempt.status,
+        score: attempt.score ?? 0,
+        totalScore: attempt.totalScore ?? 0,
+        percentage: attempt.percentage ?? 0,
+        answers: existing?.answers?.map(mapAnswer) ?? [],
+        submittedAt,
+      };
+    }
 
     await assertStudentInBatch(user.id, attempt.practiceTest.batchId);
 
-    const questions = await questionRepo.listPracticeTestQuestions(businessId, attempt.practiceTestId);
-    const questionIds = new Set(questions.map((q: any) => q.id));
-    for (const a of answers ?? []) {
-      if (!questionIds.has(a.questionId)) {
-        throw new BadRequestError(`Invalid questionId in answers: ${a.questionId}`);
-      }
+    const questions = (await questionRepo.listPracticeTestQuestions(businessId, attempt.practiceTestId)) as QuestionRecord[];
+    const questionIds = new Set(questions.map((q) => q.id));
+    const providedAnswers = answers ?? [];
+    const invalidAnswer = providedAnswers.find((a) => !questionIds.has(a.questionId));
+    if (invalidAnswer) {
+      throw new BadRequestError(`Invalid questionId in answers: ${invalidAnswer.questionId}`);
     }
 
-    const byQuestion = new Map<string, SubmitAnswerPayload>();
-    for (const a of answers ?? []) byQuestion.set(a.questionId, a);
+    const byQuestion = new Map<string, SubmitAnswerPayload>(providedAnswers.map((a) => [a.questionId, a]));
 
-    const defaultMarksPerQuestion = Number(attempt.practiceTest.defaultMarksPerQuestion) ?? 1;
+    const rawDefaultMarks = Number(attempt.practiceTest.defaultMarksPerQuestion);
+    const defaultMarksPerQuestion = Number.isFinite(rawDefaultMarks) ? rawDefaultMarks : 1;
     const totalScore = defaultMarksPerQuestion * questions.length;
 
-    const evaluated = questions.map((q: any) => {
+    const evaluated = questions.map((q) => {
       const ev = this.evaluateQuestion({
         question: q,
         provided: byQuestion.get(q.id),
@@ -369,15 +488,17 @@ export class TestAttemptService {
       },
     });
 
-    const updatedAttempt: any = await attemptRepo.findTestAttemptById(attemptId, { include: { answers: true } });
+    const updatedAttempt = (await attemptRepo.findTestAttemptById(attemptId, { include: { answers: true } })) as AttemptWithAnswers | null;
     logger.info(`[test-attempt] practice attempt evaluated attemptId=${attemptId} score=${score} totalScore=${totalScore} percentage=${percentage}`);
+    const submitted = updatedAttempt?.submittedAt ?? submittedAt;
     return {
-      attempt: updatedAttempt ? mapAttempt(updatedAttempt) : mapAttempt({ ...attempt, status: AttemptStatus.SUBMITTED, submittedAt, score, totalScore, percentage }),
-      revealResults: true,
+      attemptId,
+      status: updatedAttempt?.status ?? AttemptStatus.SUBMITTED,
       score,
       totalScore,
       percentage,
       answers: updatedAttempt?.answers?.map(mapAnswer) ?? [],
+      submittedAt: submitted,
     };
   }
 
@@ -390,32 +511,55 @@ export class TestAttemptService {
     if (user.role !== UserRole.STUDENT) throw new BadRequestError('Only students can submit attempts');
     logger.info(`[test-attempt] submitExamAttempt businessId=${businessId} userId=${user.id} attemptId=${attemptId} answers=${answers?.length ?? 0}`);
 
-    const attempt: any = await attemptRepo.findTestAttemptById(attemptId, {
+    const attempt = (await attemptRepo.findTestAttemptById(attemptId, {
       include: { examTest: true },
-    });
+    })) as ExamAttemptWithTest | null;
     if (!attempt?.examTestId || !attempt.examTest) throw new NotFoundError('Exam attempt not found');
     if (attempt.examTest.businessId !== businessId) throw new BadRequestError('Invalid business scope');
     if (attempt.userId !== user.id) throw new BadRequestError('Forbidden');
-    if (attempt.status !== AttemptStatus.IN_PROGRESS) throw new BadRequestError('Attempt is not in progress');
+    if (attempt.status !== AttemptStatus.IN_PROGRESS) {
+      logger.info(`[test-attempt] exam attempt already submitted attemptId=${attemptId} status=${attempt.status}`);
+      const existing = (await attemptRepo.findTestAttemptById(attemptId, { include: { answers: true } })) as AttemptWithAnswers | null;
+      const submittedAt = attempt.submittedAt ?? existing?.submittedAt ?? new Date();
+      const now = new Date();
+      const reveal = this.shouldRevealExamResults(attempt.examTest, now);
+      if (!reveal) {
+        return {
+          attemptId,
+          status: attempt.status,
+          submittedAt,
+        };
+      }
+      return {
+        attemptId,
+        status: attempt.status,
+        score: attempt.score ?? 0,
+        totalScore: attempt.totalScore ?? 0,
+        percentage: attempt.percentage ?? 0,
+        answers: existing?.answers?.map(mapAnswer) ?? [],
+        submittedAt,
+      };
+    }
 
     await assertStudentInBatch(user.id, attempt.examTest.batchId);
 
-    const questions = await questionRepo.listExamTestQuestions(businessId, attempt.examTestId);
-    const questionIds = new Set(questions.map((q: any) => q.id));
-    for (const a of answers ?? []) {
-      if (!questionIds.has(a.questionId)) {
-        throw new BadRequestError(`Invalid questionId in answers: ${a.questionId}`);
-      }
+    const questions = (await questionRepo.listExamTestQuestions(businessId, attempt.examTestId)) as QuestionRecord[];
+    const questionIds = new Set(questions.map((q) => q.id));
+    const providedAnswers = answers ?? [];
+    const invalidAnswer = providedAnswers.find((a) => !questionIds.has(a.questionId));
+    if (invalidAnswer) {
+      throw new BadRequestError(`Invalid questionId in answers: ${invalidAnswer.questionId}`);
     }
 
-    const byQuestion = new Map<string, SubmitAnswerPayload>();
-    for (const a of answers ?? []) byQuestion.set(a.questionId, a);
+    const byQuestion = new Map<string, SubmitAnswerPayload>(providedAnswers.map((a) => [a.questionId, a]));
 
-    const defaultMarksPerQuestion = Number(attempt.examTest.defaultMarksPerQuestion) ?? 1;
-    const negativeMarksPerQuestion = Number(attempt.examTest.negativeMarksPerQuestion) ?? 0;
+    const rawDefaultMarks = Number(attempt.examTest.defaultMarksPerQuestion);
+    const defaultMarksPerQuestion = Number.isFinite(rawDefaultMarks) ? rawDefaultMarks : 1;
+    const rawNegativeMarks = Number(attempt.examTest.negativeMarksPerQuestion);
+    const negativeMarksPerQuestion = Number.isFinite(rawNegativeMarks) ? rawNegativeMarks : 0;
     const totalScore = defaultMarksPerQuestion * questions.length;
 
-    const evaluated = questions.map((q: any) => {
+    const evaluated = questions.map((q) => {
       const ev = this.evaluateQuestion({
         question: q,
         provided: byQuestion.get(q.id),
@@ -447,87 +591,128 @@ export class TestAttemptService {
 
     const now = new Date();
     const reveal = this.shouldRevealExamResults(attempt.examTest, now);
-    const updatedAttempt: any = await attemptRepo.findTestAttemptById(attemptId, { include: { answers: true } });
+    const updatedAttempt = (await attemptRepo.findTestAttemptById(attemptId, { include: { answers: true } })) as AttemptWithAnswers | null;
     logger.info(
       `[test-attempt] exam attempt evaluated attemptId=${attemptId} status=${status} score=${score} totalScore=${totalScore} percentage=${percentage} reveal=${reveal} effectiveEndAt=${effectiveEnd.toISOString()}`,
     );
 
+    const submitted = updatedAttempt?.submittedAt ?? submittedAt;
+    if (!reveal) {
+      return {
+        attemptId,
+        status: updatedAttempt?.status ?? status,
+        submittedAt: submitted,
+      };
+    }
+
     return {
-      attempt: updatedAttempt ? mapAttempt(reveal ? updatedAttempt : { ...updatedAttempt, score: null, totalScore: null, percentage: null }) : mapAttempt({ ...attempt, status, submittedAt, ...(reveal ? { score, totalScore, percentage } : { score: null, totalScore: null, percentage: null }) }),
-      revealResults: reveal,
-      ...(reveal ? { score, totalScore, percentage, answers: updatedAttempt?.answers?.map(mapAnswer) ?? [] } : { answers: [] }),
-      effectiveEndAt: effectiveEnd,
+      attemptId,
+      status: updatedAttempt?.status ?? status,
+      score,
+      totalScore,
+      percentage,
+      answers: updatedAttempt?.answers?.map(mapAnswer) ?? [],
+      submittedAt: submitted,
     };
   }
 
   async listAvailablePracticeTests(businessId: number, user: { id: number; role: UserRole }) {
     if (user.role !== UserRole.STUDENT) throw new BadRequestError('Only students can access available tests');
     logger.info(`[test-attempt] listAvailablePracticeTests businessId=${businessId} userId=${user.id}`);
-    const tests = await practiceRepo.findPublishedPracticeTestsForStudent(businessId, user.id);
+    const tests = (await practiceRepo.findPublishedPracticeTestsForStudent(businessId, user.id)) as Array<
+      PracticeTest & { _count?: { questions?: number } }
+    >;
+    logger.info(`[test-attempt] available practice tests count=${tests.length} businessId=${businessId} userId=${user.id}`);
+    const statsByTestId = await attemptRepo.getPracticeAttemptStatsByUserForTests(
+      tests.map((t) => t.id),
+      user.id,
+    );
 
-    const out = [];
-    for (const t of tests) {
-      const stats = await attemptRepo.getPracticeAttemptStats(t.id, user.id);
-      out.push({
-        practiceTestId: t.id,
+    return tests.map((t) => {
+      const stats = statsByTestId.get(t.id) ?? { attemptCount: 0, bestScore: null, lastAttemptAt: null };
+      const totalQuestions = t._count?.questions ?? 0;
+      const totalMarks = totalQuestions * Number(t.defaultMarksPerQuestion ?? 0);
+      return {
+        id: t.id,
+        businessId: t.businessId,
         batchId: t.batchId,
         name: t.name,
         description: t.description ?? null,
+        status: t.status,
+        totalQuestions,
+        totalMarks,
+        defaultMarksPerQuestion: t.defaultMarksPerQuestion,
         canAttempt: true,
         attemptCount: stats.attemptCount,
         bestScore: stats.bestScore,
         lastAttemptAt: stats.lastAttemptAt,
-      });
-    }
-    return out;
+      };
+    });
   }
 
   async listAvailableExamTests(businessId: number, user: { id: number; role: UserRole }) {
     if (user.role !== UserRole.STUDENT) throw new BadRequestError('Only students can access available tests');
     logger.info(`[test-attempt] listAvailableExamTests businessId=${businessId} userId=${user.id}`);
-    const tests = await examRepo.findPublishedExamTestsForStudent(businessId, user.id);
+    const tests = (await examRepo.findPublishedExamTestsForStudent(businessId, user.id)) as Array<
+      ExamTest & { _count?: { questions?: number } }
+    >;
+    logger.info(`[test-attempt] available exam tests count=${tests.length} businessId=${businessId} userId=${user.id}`);
 
     const now = new Date();
     const nowMs = now.getTime();
 
-    const out = [];
-    for (const t of tests) {
-      const stats = await attemptRepo.getExamAttemptStats(t.id, user.id);
+    const statsByTestId = await attemptRepo.getExamAttemptStatsByUserForTests(
+      tests.map((t) => t.id),
+      user.id,
+    );
+
+    return tests.map((t) => {
+      const stats = statsByTestId.get(t.id) ?? { attemptCount: 0, bestScore: null, lastAttemptAt: null };
+      const attemptsAllowed = 1;
+      const attemptsUsed = stats.attemptCount;
+      const hasAttempt = attemptsUsed > 0;
+      const totalQuestions = t._count?.questions ?? 0;
+      const totalMarks = totalQuestions * Number(t.defaultMarksPerQuestion ?? 0);
 
       let canAttempt = true;
       let lockedReason: number | null = null;
 
-      const startAtMs = new Date(t.startAt).getTime();
-      const deadlineAtMs = new Date(t.deadlineAt).getTime();
+      const deadlineAtMs = t.deadlineAt.getTime();
 
-      if (nowMs + 1000 < startAtMs) {
+      if (!hasExamStarted(now, t.startAt)) {
         canAttempt = false;
         lockedReason = LockedReason.NOT_STARTED;
       } else if (nowMs > deadlineAtMs) {
         canAttempt = false;
         lockedReason = LockedReason.DEADLINE_PASSED;
-      } else if (stats.attemptCount > 0) {
+      } else if (attemptsUsed >= attemptsAllowed) {
         canAttempt = false;
         lockedReason = LockedReason.ALREADY_ATTEMPTED;
       }
 
-      out.push({
-        examTestId: t.id,
+      return {
+        id: t.id,
+        businessId: t.businessId,
         batchId: t.batchId,
         name: t.name,
         description: t.description ?? null,
+        status: t.status,
         startAt: t.startAt,
         deadlineAt: t.deadlineAt,
         durationMinutes: t.durationMinutes,
+        totalQuestions,
+        totalMarks,
+        defaultMarksPerQuestion: t.defaultMarksPerQuestion,
+        negativeMarksPerQuestion: t.negativeMarksPerQuestion,
+        resultVisibility: t.resultVisibility,
         canAttempt,
         lockedReason,
-        hasAttempt: stats.attemptCount > 0,
-        attemptsUsed: stats.attemptCount,
-        bestScore: stats.bestScore,
+        attemptsAllowed,
+        attemptsUsed,
+        hasAttempt,
         lastAttemptAt: stats.lastAttemptAt,
-      });
-    }
-    return out;
+      };
+    });
   }
 }
 

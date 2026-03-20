@@ -16,40 +16,33 @@ const attemptSelect = {
   updatedAt: true,
 };
 
-export interface TestAttemptFindOptions {
+export type TestAttemptFindOptions = Omit<Prisma.TestAttemptFindManyArgs, 'where'> & {
   where?: Prisma.TestAttemptWhereInput;
-  orderBy?: Prisma.TestAttemptOrderByWithRelationInput;
-  skip?: number;
-  take?: number;
-  select?: Prisma.TestAttemptSelect;
-  include?: Prisma.TestAttemptInclude;
-}
+};
 
-export function createTestAttempt(data: Prisma.TestAttemptUncheckedCreateInput): Promise<any> {
+export type TestAttemptRecord = Prisma.TestAttemptGetPayload<{ select: typeof attemptSelect }>;
+
+export function createTestAttempt(data: Prisma.TestAttemptUncheckedCreateInput): Promise<TestAttemptRecord> {
   return prisma.testAttempt.create({
     data,
     select: attemptSelect,
   });
 }
 
-export function findTestAttemptById(
+export function findTestAttemptById<T extends Omit<Prisma.TestAttemptFindUniqueArgs, 'where'>>(
   id: string,
-  options: TestAttemptFindOptions = {},
-): Promise<any> {
-  const query: any = { where: { id } };
-
-  if (options.select) query.select = options.select;
-  else if (options.include) query.include = options.include;
-  else query.select = attemptSelect;
-
-  return prisma.testAttempt.findUnique(query);
+  options?: T,
+): Promise<Prisma.TestAttemptGetPayload<{ where: { id: string } } & T> | null> {
+  const query: Prisma.TestAttemptFindUniqueArgs = { where: { id }, ...(options ?? {}) };
+  if (!query.select && !query.include) query.select = attemptSelect;
+  return prisma.testAttempt.findUnique(query) as Promise<Prisma.TestAttemptGetPayload<{ where: { id: string } } & T> | null>;
 }
 
 export function findPracticeAttemptsByUser(
   practiceTestId: string,
   userId: number,
   options: TestAttemptFindOptions = {},
-): Promise<any> {
+): Promise<TestAttemptRecord[]> {
   const query: Prisma.TestAttemptFindManyArgs = {
     where: { practiceTestId, userId, ...(options.where ?? {}) },
     orderBy: options.orderBy ?? { startedAt: 'desc' },
@@ -60,7 +53,7 @@ export function findPracticeAttemptsByUser(
 
   if (options.select) query.select = options.select;
   else if (options.include) query.include = options.include;
-  else (query as any).select = attemptSelect;
+  else query.select = attemptSelect;
 
   return prisma.testAttempt.findMany(query);
 }
@@ -69,7 +62,7 @@ export function findExamAttemptsByUser(
   examTestId: string,
   userId: number,
   options: TestAttemptFindOptions = {},
-): Promise<any> {
+): Promise<TestAttemptRecord[]> {
   const query: Prisma.TestAttemptFindManyArgs = {
     where: { examTestId, userId, ...(options.where ?? {}) },
     orderBy: options.orderBy ?? { startedAt: 'desc' },
@@ -80,7 +73,7 @@ export function findExamAttemptsByUser(
 
   if (options.select) query.select = options.select;
   else if (options.include) query.include = options.include;
-  else (query as any).select = attemptSelect;
+  else query.select = attemptSelect;
 
   return prisma.testAttempt.findMany(query);
 }
@@ -88,7 +81,7 @@ export function findExamAttemptsByUser(
 export function updateTestAttempt(
   id: string,
   data: Prisma.TestAttemptUncheckedUpdateInput,
-): Promise<any> {
+): Promise<TestAttemptRecord> {
   return prisma.testAttempt.update({
     where: { id },
     data,
@@ -122,6 +115,46 @@ export async function getExamAttemptStats(examTestId: string, userId: number) {
   };
 }
 
+export async function getPracticeAttemptStatsByUserForTests(practiceTestIds: string[], userId: number) {
+  if (!practiceTestIds.length) return new Map<string, { attemptCount: number; lastAttemptAt: Date | null; bestScore: number | null }>();
+  const rows = await prisma.testAttempt.groupBy({
+    by: ['practiceTestId'],
+    where: { userId, practiceTestId: { in: practiceTestIds } },
+    _count: { _all: true },
+    _max: { startedAt: true, score: true },
+  });
+  const map = new Map<string, { attemptCount: number; lastAttemptAt: Date | null; bestScore: number | null }>();
+  rows.forEach((r) => {
+    if (!r.practiceTestId) return;
+    map.set(r.practiceTestId, {
+      attemptCount: r._count._all ?? 0,
+      lastAttemptAt: r._max.startedAt ?? null,
+      bestScore: r._max.score ?? null,
+    });
+  });
+  return map;
+}
+
+export async function getExamAttemptStatsByUserForTests(examTestIds: string[], userId: number) {
+  if (!examTestIds.length) return new Map<string, { attemptCount: number; lastAttemptAt: Date | null; bestScore: number | null }>();
+  const rows = await prisma.testAttempt.groupBy({
+    by: ['examTestId'],
+    where: { userId, examTestId: { in: examTestIds } },
+    _count: { _all: true },
+    _max: { startedAt: true, score: true },
+  });
+  const map = new Map<string, { attemptCount: number; lastAttemptAt: Date | null; bestScore: number | null }>();
+  rows.forEach((r) => {
+    if (!r.examTestId) return;
+    map.set(r.examTestId, {
+      attemptCount: r._count._all ?? 0,
+      lastAttemptAt: r._max.startedAt ?? null,
+      bestScore: r._max.score ?? null,
+    });
+  });
+  return map;
+}
+
 export async function upsertAttemptAnswersAndFinalize(params: {
   attemptId: string;
   evaluated: Array<{
@@ -136,25 +169,27 @@ export async function upsertAttemptAnswersAndFinalize(params: {
   const { attemptId, evaluated, attemptUpdate } = params;
 
   await prisma.$transaction(async (tx) => {
-    for (const e of evaluated) {
-      await tx.testAttemptAnswer.upsert({
-        where: { attemptId_questionId: { attemptId, questionId: e.questionId } },
-        create: {
-          attemptId,
-          questionId: e.questionId,
-          selectedOptionIds: e.selectedOptionIds,
-          textAnswer: e.textAnswer,
-          isCorrect: e.isCorrect,
-          obtainedMarks: e.obtainedMarks,
-        },
-        update: {
-          selectedOptionIds: e.selectedOptionIds,
-          textAnswer: e.textAnswer,
-          isCorrect: e.isCorrect,
-          obtainedMarks: e.obtainedMarks,
-        },
-      });
-    }
+    await Promise.all(
+      evaluated.map((e) =>
+        tx.testAttemptAnswer.upsert({
+          where: { attemptId_questionId: { attemptId, questionId: e.questionId } },
+          create: {
+            attemptId,
+            questionId: e.questionId,
+            selectedOptionIds: e.selectedOptionIds,
+            textAnswer: e.textAnswer,
+            isCorrect: e.isCorrect,
+            obtainedMarks: e.obtainedMarks,
+          },
+          update: {
+            selectedOptionIds: e.selectedOptionIds,
+            textAnswer: e.textAnswer,
+            isCorrect: e.isCorrect,
+            obtainedMarks: e.obtainedMarks,
+          },
+        }),
+      ),
+    );
 
     await tx.testAttempt.update({
       where: { id: attemptId },
