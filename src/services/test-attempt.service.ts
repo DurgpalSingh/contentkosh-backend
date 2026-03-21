@@ -1,23 +1,20 @@
-import { UserRole, ExamTest, PracticeTest, TestAttempt, TestAttemptAnswer, TestOption, TestQuestion } from '@prisma/client';
+import { UserRole, ExamTest, PracticeTest, TestAttempt, TestAttemptAnswer } from '@prisma/client';
 import { BadRequestError, ForbiddenError, NotFoundError } from '../errors/api.errors';
-import { AttemptStatus, LockedReason, QuestionType, ResultVisibilityExam, TestStatus } from '../constants/test-enums';
+import { AttemptStatus, LockedReason, ResultVisibilityExam, TestStatus } from '../constants/test-enums';
 import logger from '../utils/logger';
 import * as attemptRepo from '../repositories/test-attempt.repo';
 import * as practiceRepo from '../repositories/practice-test.repo';
 import * as examRepo from '../repositories/exam-test.repo';
 import * as questionRepo from '../repositories/test-question.repo';
 import * as batchUserRepo from '../repositories/batch.repo';
-
-type SubmitAnswerPayload = {
-  questionId: string;
-  selectedOptionIds?: string[];
-  textAnswer?: string;
-};
-
-type QuestionOptionRecord = Pick<TestOption, 'id' | 'text' | 'mediaUrl'>;
-type QuestionRecord = Pick<TestQuestion, 'id' | 'type' | 'text' | 'correctTextAnswer' | 'correctOptionIdsAnswers' | 'mediaUrl'> & {
-  options: QuestionOptionRecord[];
-};
+import { computeAttemptSummaryStats } from '../utils/test-analytics-summary.utils';
+import {
+  buildAnswersByQuestionIdMap,
+  buildEvaluatedByQuestionIdMap,
+  mapDetailResultQuestion,
+  mapSubmittedResultQuestion,
+} from '../utils/test-attempt-result.utils';
+import { evaluateQuestion, type ScoringQuestionRecord as QuestionRecord, type SubmitAnswerPayload } from '../utils/test-scoring.utils';
 
 type AttemptRecord = Pick<
   TestAttempt,
@@ -53,15 +50,6 @@ function shuffleInPlace<T>(arr: T[], rand: () => number) {
     arr[i] = arr[j] as T;
     arr[j] = tmp;
   }
-}
-
-function normalizeText(s: string): string {
-  return s.trim().toLowerCase();
-}
-
-function normalizeNumeric(s: string): number | null {
-  const n = Number(s);
-  return Number.isFinite(n) ? n : null;
 }
 
 function csvEscape(value: unknown): string {
@@ -303,11 +291,9 @@ export class TestAttemptService {
   async getPracticeAttemptDetails(businessId: number, user: { id: number; role: UserRole }, attemptId: string) {
     if (user.role !== UserRole.STUDENT) throw new BadRequestError('Only students can view attempts');
 
-    const attempt = await attemptRepo.findTestAttemptById(attemptId, {
-      include: {
-        practiceTest: true,
-        answers: true,
-      },
+    const attempt = await attemptRepo.findTestAttemptWithInclude(attemptId, {
+      practiceTest: true,
+      answers: true,
     });
     if (!attempt?.practiceTestId || !attempt.practiceTest) throw new NotFoundError('Practice attempt not found');
     if (attempt.practiceTest.businessId !== businessId) throw new BadRequestError('Invalid business scope');
@@ -321,6 +307,8 @@ export class TestAttemptService {
     if (attempt.practiceTest.shuffleQuestions) shuffleInPlace(qs, rng);
     if (attempt.practiceTest.shuffleOptions) qs.forEach((q) => shuffleInPlace(q.options, rng));
 
+    const answersByQuestionId = buildAnswersByQuestionIdMap(attempt.answers);
+
     return {
       attempt: mapAttempt(attempt),
       test: attempt.practiceTest,
@@ -328,16 +316,7 @@ export class TestAttemptService {
       answers: (attempt.answers ?? []).map(mapAnswer),
       result: attempt.status === AttemptStatus.SUBMITTED || attempt.status === AttemptStatus.AUTO_SUBMITTED
         ? {
-            questions: qs.map((q) => {
-              const ans = (attempt.answers ?? []).find((a) => a.questionId === q.id);
-              return {
-                questionId: q.id,
-                isCorrect: ans?.isCorrect ?? null,
-                obtainedMarks: ans?.obtainedMarks ?? null,
-                correctOptionIds: q.correctOptionIdsAnswers ?? [],
-                correctTextAnswer: q.correctTextAnswer ?? null,
-              };
-            }),
+            questions: qs.map((q) => mapDetailResultQuestion(q, answersByQuestionId)),
           }
         : null,
     };
@@ -346,11 +325,9 @@ export class TestAttemptService {
   async getExamAttemptDetails(businessId: number, user: { id: number; role: UserRole }, attemptId: string) {
     if (user.role !== UserRole.STUDENT) throw new BadRequestError('Only students can view attempts');
 
-    const attempt = await attemptRepo.findTestAttemptById(attemptId, {
-      include: {
-        examTest: true,
-        answers: true,
-      },
+    const attempt = await attemptRepo.findTestAttemptWithInclude(attemptId, {
+      examTest: true,
+      answers: true,
     });
     if (!attempt?.examTestId || !attempt.examTest) throw new NotFoundError('Exam attempt not found');
     if (attempt.examTest.businessId !== businessId) throw new BadRequestError('Invalid business scope');
@@ -371,6 +348,8 @@ export class TestAttemptService {
       ? attempt
       : { ...attempt, score: null, totalScore: null, percentage: null };
 
+    const answersByQuestionId = buildAnswersByQuestionIdMap(attempt.answers);
+
     // Compute timeRemainingSeconds for in-progress attempts
     let timeRemainingSeconds: number | null = null;
     if (attempt.status === AttemptStatus.IN_PROGRESS) {
@@ -385,79 +364,10 @@ export class TestAttemptService {
       answers: reveal ? (attempt.answers ?? []).map(mapAnswer) : [],
       result: reveal && (attempt.status === AttemptStatus.SUBMITTED || attempt.status === AttemptStatus.AUTO_SUBMITTED)
         ? {
-            questions: qs.map((q) => {
-              const ans = (attempt.answers ?? []).find((a) => a.questionId === q.id);
-              return {
-                questionId: q.id,
-                isCorrect: ans?.isCorrect ?? null,
-                obtainedMarks: ans?.obtainedMarks ?? null,
-                correctOptionIds: q.correctOptionIdsAnswers ?? [],
-                correctTextAnswer: q.correctTextAnswer ?? null,
-              };
-            }),
+            questions: qs.map((q) => mapDetailResultQuestion(q, answersByQuestionId)),
           }
         : null,
     };
-  }
-
-  private evaluateQuestion(params: {
-    question: QuestionRecord;
-    provided: SubmitAnswerPayload | undefined;
-    isExam: boolean;
-    defaultMarksPerQuestion: number;
-    negativeMarksPerQuestion: number;
-  }): { isCorrect: boolean | null; obtainedMarks: number | null; selectedOptionIds: string[]; textAnswer: string | null } {
-    const { question, provided, isExam, defaultMarksPerQuestion, negativeMarksPerQuestion } = params;
-
-    const selectedOptionIds = (provided?.selectedOptionIds ?? []).filter(Boolean);
-    const textAnswer = provided?.textAnswer !== undefined ? String(provided.textAnswer) : null;
-
-    const answered =
-      (selectedOptionIds.length > 0) ||
-      (textAnswer !== null && textAnswer.trim().length > 0);
-
-    if (!answered) {
-      return { isCorrect: null, obtainedMarks: 0, selectedOptionIds: [], textAnswer: textAnswer?.trim().length ? textAnswer : null };
-    }
-
-    const type = question.type;
-    const isMcq = type === QuestionType.SINGLE_CHOICE || type === QuestionType.MULTIPLE_CHOICE;
-    const isText = type === QuestionType.TRUE_FALSE || type === QuestionType.NUMERICAL || type === QuestionType.FILL_IN_THE_BLANK;
-
-    let correct = false;
-
-    if (isMcq) {
-      const correctIds: string[] = (question.correctOptionIdsAnswers ?? []).filter(Boolean);
-      const a = new Set(selectedOptionIds);
-      const b = new Set(correctIds);
-      if (a.size === b.size) {
-        correct = true;
-        for (const id of a) {
-          if (!b.has(id)) {
-            correct = false;
-            break;
-          }
-        }
-      }
-    } else if (isText) {
-      const expected = question.correctTextAnswer ?? '';
-      if (type === QuestionType.NUMERICAL) {
-        const e = normalizeNumeric(expected);
-        const p = normalizeNumeric(textAnswer ?? '');
-        correct = e !== null && p !== null && e === p;
-      } else {
-        correct = normalizeText(expected) === normalizeText(textAnswer ?? '');
-      }
-    } else {
-      correct = false;
-    }
-
-    if (correct) {
-      return { isCorrect: true, obtainedMarks: defaultMarksPerQuestion, selectedOptionIds, textAnswer };
-    }
-
-    const obtainedMarks = isExam ? -negativeMarksPerQuestion : 0;
-    return { isCorrect: false, obtainedMarks, selectedOptionIds, textAnswer };
   }
 
   async submitPracticeAttempt(
@@ -469,15 +379,15 @@ export class TestAttemptService {
     if (user.role !== UserRole.STUDENT) throw new BadRequestError('Only students can submit attempts');
     logger.info(`[test-attempt] submitPracticeAttempt businessId=${businessId} userId=${user.id} attemptId=${attemptId} answers=${answers?.length ?? 0}`);
 
-    const attempt = await attemptRepo.findTestAttemptById(attemptId, {
-      include: { practiceTest: true },
+    const attempt = await attemptRepo.findTestAttemptWithInclude(attemptId, {
+      practiceTest: true,
     });
     if (!attempt?.practiceTestId || !attempt.practiceTest) throw new NotFoundError('Practice attempt not found');
     if (attempt.practiceTest.businessId !== businessId) throw new BadRequestError('Invalid business scope');
     if (attempt.userId !== user.id) throw new BadRequestError('Forbidden');
     if (attempt.status !== AttemptStatus.IN_PROGRESS) {
       logger.info(`[test-attempt] practice attempt already submitted attemptId=${attemptId} status=${attempt.status}`);
-      const existing = await attemptRepo.findTestAttemptById(attemptId, { include: { answers: true } });
+      const existing = await attemptRepo.findTestAttemptWithInclude(attemptId, { answers: true });
       const submittedAt = attempt.submittedAt ?? existing?.submittedAt ?? new Date();
       return {
         attemptId,
@@ -507,7 +417,7 @@ export class TestAttemptService {
     const totalScore = defaultMarksPerQuestion * questions.length;
 
     const evaluated = questions.map((q) => {
-      const ev = this.evaluateQuestion({
+      const ev = evaluateQuestion({
         question: q,
         provided: byQuestion.get(q.id),
         isExam: false,
@@ -521,7 +431,7 @@ export class TestAttemptService {
     const percentage = totalScore > 0 ? (score / totalScore) * 100 : 0;
     const submittedAt = new Date();
 
-    await attemptRepo.upsertAttemptAnswersAndFinalize({
+    const updatedAttempt = await attemptRepo.upsertAttemptAnswersAndFinalize({
       attemptId,
       evaluated,
       attemptUpdate: {
@@ -533,9 +443,9 @@ export class TestAttemptService {
       },
     });
 
-    const updatedAttempt = await attemptRepo.findTestAttemptById(attemptId, { include: { answers: true } });
     logger.info(`[test-attempt] practice attempt evaluated attemptId=${attemptId} score=${score} totalScore=${totalScore} percentage=${percentage}`);
     const submitted = updatedAttempt?.submittedAt ?? submittedAt;
+    const evaluatedByQ = buildEvaluatedByQuestionIdMap(evaluated);
     return {
       attemptId,
       status: updatedAttempt?.status ?? AttemptStatus.SUBMITTED,
@@ -545,16 +455,7 @@ export class TestAttemptService {
       answers: updatedAttempt?.answers?.map(mapAnswer) ?? [],
       submittedAt: submitted,
       result: {
-        questions: questions.map((q) => {
-          const ev = evaluated.find((e) => e.questionId === q.id);
-          return {
-            questionId: q.id,
-            isCorrect: ev?.isCorrect ?? null,
-            obtainedMarks: ev?.obtainedMarks ?? null,
-            correctOptionIds: q.correctOptionIdsAnswers ?? [],
-            correctTextAnswer: q.correctTextAnswer ?? null,
-          };
-        }),
+        questions: questions.map((q) => mapSubmittedResultQuestion(q, evaluatedByQ)),
       },
     };
   }
@@ -568,15 +469,15 @@ export class TestAttemptService {
     if (user.role !== UserRole.STUDENT) throw new BadRequestError('Only students can submit attempts');
     logger.info(`[test-attempt] submitExamAttempt businessId=${businessId} userId=${user.id} attemptId=${attemptId} answers=${answers?.length ?? 0}`);
 
-    const attempt = await attemptRepo.findTestAttemptById(attemptId, {
-      include: { examTest: true },
+    const attempt = await attemptRepo.findTestAttemptWithInclude(attemptId, {
+      examTest: true,
     });
     if (!attempt?.examTestId || !attempt.examTest) throw new NotFoundError('Exam attempt not found');
     if (attempt.examTest.businessId !== businessId) throw new BadRequestError('Invalid business scope');
     if (attempt.userId !== user.id) throw new BadRequestError('Forbidden');
     if (attempt.status !== AttemptStatus.IN_PROGRESS) {
       logger.info(`[test-attempt] exam attempt already submitted attemptId=${attemptId} status=${attempt.status}`);
-      const existing = await attemptRepo.findTestAttemptById(attemptId, { include: { answers: true } });
+      const existing = await attemptRepo.findTestAttemptWithInclude(attemptId, { answers: true });
       const submittedAt = attempt.submittedAt ?? existing?.submittedAt ?? new Date();
       const now = new Date();
       const reveal = this.shouldRevealExamResults(attempt.examTest, now);
@@ -617,7 +518,7 @@ export class TestAttemptService {
     const totalScore = defaultMarksPerQuestion * questions.length;
 
     const evaluated = questions.map((q) => {
-      const ev = this.evaluateQuestion({
+      const ev = evaluateQuestion({
         question: q,
         provided: byQuestion.get(q.id),
         isExam: true,
@@ -634,7 +535,7 @@ export class TestAttemptService {
     const effectiveEnd = this.computeExamEffectiveEnd(attempt.examTest, attempt);
     const status = submittedAt > effectiveEnd ? AttemptStatus.AUTO_SUBMITTED : AttemptStatus.SUBMITTED;
 
-    await attemptRepo.upsertAttemptAnswersAndFinalize({
+    const updatedAttempt = await attemptRepo.upsertAttemptAnswersAndFinalize({
       attemptId,
       evaluated,
       attemptUpdate: {
@@ -648,7 +549,6 @@ export class TestAttemptService {
 
     const now = new Date();
     const reveal = this.shouldRevealExamResults(attempt.examTest, now);
-    const updatedAttempt = await attemptRepo.findTestAttemptById(attemptId, { include: { answers: true } });
     logger.info(
       `[test-attempt] exam attempt evaluated attemptId=${attemptId} status=${status} score=${score} totalScore=${totalScore} percentage=${percentage} reveal=${reveal} effectiveEndAt=${effectiveEnd.toISOString()}`,
     );
@@ -663,6 +563,7 @@ export class TestAttemptService {
       };
     }
 
+    const evaluatedByQ = buildEvaluatedByQuestionIdMap(evaluated);
     return {
       attemptId,
       status: updatedAttempt?.status ?? status,
@@ -672,16 +573,7 @@ export class TestAttemptService {
       answers: updatedAttempt?.answers?.map(mapAnswer) ?? [],
       submittedAt: submitted,
       result: {
-        questions: questions.map((q) => {
-          const ev = evaluated.find((e) => e.questionId === q.id);
-          return {
-            questionId: q.id,
-            isCorrect: ev?.isCorrect ?? null,
-            obtainedMarks: ev?.obtainedMarks ?? null,
-            correctOptionIds: q.correctOptionIdsAnswers ?? [],
-            correctTextAnswer: q.correctTextAnswer ?? null,
-          };
-        }),
+        questions: questions.map((q) => mapSubmittedResultQuestion(q, evaluatedByQ)),
       },
     };
   }
@@ -834,25 +726,14 @@ export class TestAttemptService {
 
     const attemptStatuses = [AttemptStatus.SUBMITTED, AttemptStatus.AUTO_SUBMITTED];
     const attempts = await attemptRepo.getPracticeTestAnalyticsAttempts(practiceTestId, attemptStatuses);
-    const totalAttempts = attempts.length;
 
     const questionIds = await attemptRepo.getPracticeTestQuestionIds(practiceTestId);
     const correctCountsRows = await attemptRepo.getPracticeTestCorrectCountsByQuestion(practiceTestId, attemptStatuses);
     const correctCounts = new Map(correctCountsRows.map((r) => [r.questionId, r.correctCount]));
 
-    const scores = attempts.map((a) => a.score ?? 0);
-    const percentages = attempts.map((a) => a.percentage ?? 0);
-
-    const sum = (arr: number[]) => arr.reduce((s, v) => s + v, 0);
-    const averageScore = totalAttempts ? sum(scores) / totalAttempts : 0;
-    const averagePercentage = totalAttempts ? sum(percentages) / totalAttempts : 0;
-    const highestScore = totalAttempts ? Math.max(...scores) : 0;
-    const lowestScore = totalAttempts ? Math.min(...scores) : 0;
-
-    // No explicit passing threshold was defined in the plan/swagger; use 33% as the default "pass" line.
-    const PASS_THRESHOLD_PERCENT = 33;
-    const passCount = attempts.filter((a) => (a.percentage ?? 0) >= PASS_THRESHOLD_PERCENT).length;
-    const passRate = totalAttempts ? (passCount / totalAttempts) * 100 : 0;
+    const PASS_THRESHOLD_PERCENT_PRACTICE = 33;
+    const summaryStats = computeAttemptSummaryStats(attempts, { passThresholdPercent: PASS_THRESHOLD_PERCENT_PRACTICE });
+    const { totalAttempts, averageScore, averagePercentage, passRate, highestScore, lowestScore } = summaryStats;
 
     const questionStats = questionIds.map((questionId) => {
       const correctCount = correctCounts.get(questionId) ?? 0;
@@ -946,24 +827,14 @@ export class TestAttemptService {
 
     const attemptStatuses = [AttemptStatus.SUBMITTED, AttemptStatus.AUTO_SUBMITTED];
     const attempts = await attemptRepo.getExamTestAnalyticsAttempts(examTestId, attemptStatuses);
-    const totalAttempts = attempts.length;
 
     const questionIds = await attemptRepo.getExamTestQuestionIds(examTestId);
     const correctCountsRows = await attemptRepo.getExamTestCorrectCountsByQuestion(examTestId, attemptStatuses);
     const correctCounts = new Map(correctCountsRows.map((r) => [r.questionId, r.correctCount]));
 
-    const scores = attempts.map((a) => a.score ?? 0);
-    const percentages = attempts.map((a) => a.percentage ?? 0);
-
-    const sum = (arr: number[]) => arr.reduce((s, v) => s + v, 0);
-    const averageScore = totalAttempts ? sum(scores) / totalAttempts : 0;
-    const averagePercentage = totalAttempts ? sum(percentages) / totalAttempts : 0;
-    const highestScore = totalAttempts ? Math.max(...scores) : 0;
-    const lowestScore = totalAttempts ? Math.min(...scores) : 0;
-
-    const PASS_THRESHOLD_PERCENT = 40;
-    const passCount = attempts.filter((a) => (a.percentage ?? 0) >= PASS_THRESHOLD_PERCENT).length;
-    const passRate = totalAttempts ? (passCount / totalAttempts) * 100 : 0;
+    const PASS_THRESHOLD_PERCENT_EXAM = 40;
+    const summaryStats = computeAttemptSummaryStats(attempts, { passThresholdPercent: PASS_THRESHOLD_PERCENT_EXAM });
+    const { totalAttempts, averageScore, averagePercentage, passRate, highestScore, lowestScore } = summaryStats;
 
     const questionStats = questionIds.map((questionId) => {
       const correctCount = correctCounts.get(questionId) ?? 0;
