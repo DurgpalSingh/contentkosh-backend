@@ -6,7 +6,7 @@ import { TestAttemptService } from '../../../src/services/testAttempt.service';
 import * as attemptRepo from '../../../src/repositories/testAttempt.repo';
 import * as practiceRepo from '../../../src/repositories/practiceTest.repo';
 import * as examRepo from '../../../src/repositories/examTest.repo';
-import * as questionRepo from '../../../src/repositories/test-question.repo';
+import * as questionRepo from '../../../src/repositories/testQuestion.repo';
 import * as batchRepo from '../../../src/repositories/batch.repo';
 
 jest.mock('../../../src/repositories/testAttempt.repo');

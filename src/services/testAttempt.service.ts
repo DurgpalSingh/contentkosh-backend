@@ -5,7 +5,7 @@ import logger from '../utils/logger';
 import * as attemptRepo from '../repositories/testAttempt.repo';
 import * as practiceRepo from '../repositories/practiceTest.repo';
 import * as examRepo from '../repositories/examTest.repo';
-import * as questionRepo from '../repositories/test-question.repo';
+import * as questionRepo from '../repositories/testQuestion.repo';
 import * as batchUserRepo from '../repositories/batch.repo';
 import { computeAttemptSummaryStats } from '../utils/test-analytics-summary.utils';
 import { buildAnswersByQuestionIdMap, buildEvaluatedByQuestionIdMap, mapSubmittedResultQuestion } from '../utils/testAttemptResult.utils';

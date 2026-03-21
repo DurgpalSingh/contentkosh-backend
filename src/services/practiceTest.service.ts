@@ -1,6 +1,6 @@
 import { BadRequestError, NotFoundError } from '../errors/api.errors';
 import * as practiceRepo from '../repositories/practiceTest.repo';
-import * as questionRepo from '../repositories/test-question.repo';
+import * as questionRepo from '../repositories/testQuestion.repo';
 import { TestStatus } from '../constants/test-enums';
 import logger from '../utils/logger';
 import { CreatePracticeTestDto, CreateQuestionDto, UpdatePracticeTestDto, UpdateQuestionDto } from '../dtos/test.dto';
