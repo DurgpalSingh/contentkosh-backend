@@ -1,9 +1,13 @@
 import { BadRequestError, ForbiddenError } from '../errors/api.errors';
 import * as batchRepo from '../repositories/batch.repo';
+import logger from './logger';
 
 export async function assertTeacherInBatch(userId: number, batchId: number): Promise<void> {
   const ok = await batchRepo.isActiveUserInBatch(userId, batchId);
-  if (!ok) throw new ForbiddenError('Access denied to this batch');
+  if (!ok) {
+    logger.warn(`[test-access] assertTeacherInBatch forbidden userId=${userId} batchId=${batchId}`);
+    throw new ForbiddenError('Access denied to this batch');
+  }
 }
 
 export async function assertBatchBelongsToBusiness(businessId: number, batchId: number): Promise<void> {

@@ -2,17 +2,18 @@ import request from 'supertest';
 import express from 'express';
 
 import businessRoutes from '../../../src/routes/business.routes';
+import { practiceTestRouter } from '../../../src/routes/practiceTest.routes';
 import { errorHandler } from '../../../src/middlewares/error.middleware';
 import logger from '../../../src/utils/logger';
 
-import * as practiceRepo from '../../../src/repositories/practice-test.repo';
-import * as examRepo from '../../../src/repositories/exam-test.repo';
-import * as attemptRepo from '../../../src/repositories/test-attempt.repo';
+import * as practiceRepo from '../../../src/repositories/practiceTest.repo';
+import * as examRepo from '../../../src/repositories/examTest.repo';
+import * as attemptRepo from '../../../src/repositories/testAttempt.repo';
 
 jest.mock('../../../src/utils/logger');
-jest.mock('../../../src/repositories/practice-test.repo');
-jest.mock('../../../src/repositories/exam-test.repo');
-jest.mock('../../../src/repositories/test-attempt.repo');
+jest.mock('../../../src/repositories/practiceTest.repo');
+jest.mock('../../../src/repositories/examTest.repo');
+jest.mock('../../../src/repositories/testAttempt.repo');
 
 describe('Test Module - Analytics routes', () => {
   const app = express();
@@ -26,6 +27,7 @@ describe('Test Module - Analytics routes', () => {
   });
 
   app.use('/api/business', businessRoutes);
+  app.use('/api/business', practiceTestRouter);
   app.use(errorHandler);
 
   beforeEach(() => {
@@ -74,9 +76,9 @@ describe('Test Module - Analytics routes', () => {
     const res = await request(app).get('/api/business/1/practice-tests/practice-1/analytics');
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
-    expect(res.body.data.totalAttempts).toBe(2);
-    expect(res.body.data.averageScore).toBe(2.5);
-    expect(res.body.data.passRate).toBe(50);
+    expect(res.body.data.summary.totalAttempts).toBe(2);
+    expect(res.body.data.summary.averageScore).toBe(2.5);
+    expect(res.body.data.summary.passRate).toBe(100);
     expect(res.body.data.questionStats).toHaveLength(2);
   });
 

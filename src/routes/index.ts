@@ -11,8 +11,8 @@ import teacherRoutes from './teacher.routes';
 import healthRoutes from './health.routes';
 import authRoutes from './auth.routes';
 import dashboardRoutes from './dashboard.routes';
-import { practiceTestRouter } from './practice-test.routes';
-import { examTestRouter } from './exam-test.routes';
+import { practiceTestRouter } from './practiceTest.routes';
+import { examTestRouter } from './examTest.routes';
 import { authenticate } from '../middlewares/auth.middleware';
 
 const router = Router();

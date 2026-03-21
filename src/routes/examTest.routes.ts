@@ -12,7 +12,7 @@ import {
   UpdateExamTestDto,
   UpdateQuestionDto,
 } from '../dtos/test.dto';
-import { examTestController } from '../controllers/exam-test.controller';
+import { examTestController } from '../controllers/examTest.controller';
 
 export const examTestRouter = Router();
 
@@ -24,6 +24,7 @@ export const examTestRouter = Router();
  * /api/business/{businessId}/exam-tests/available:
  *   get:
  *     summary: Get available exam tests for the authenticated user
+ *     description: Student catalog of published exam tests from every batch where the user has an active membership.
  *     tags: [ExamTests]
  *     security:
  *       - bearerAuth: []
@@ -111,7 +112,7 @@ examTestRouter.get(
  */
 examTestRouter.post(
   '/:businessId/exam-tests/publish',
-  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  authorize(UserRole.ADMIN, UserRole.TEACHER, UserRole.SUPERADMIN),
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateDto(PublishExamTestRequestDto),
@@ -219,6 +220,7 @@ examTestRouter.get(
   '/:businessId/exam-tests/attempts/:attemptId',
   authorize(UserRole.STUDENT),
   validateIdParam('businessId'),
+  authorizeBusinessAccess,
   validateStringIdParam('attemptId'),
   examTestController.getAttempt,
 );
@@ -334,7 +336,7 @@ examTestRouter.post(
  */
 examTestRouter.put(
   '/:businessId/exam-tests/questions/:questionId',
-  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  authorize(UserRole.ADMIN, UserRole.TEACHER, UserRole.SUPERADMIN),
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('questionId'),
@@ -379,7 +381,7 @@ examTestRouter.put(
  */
 examTestRouter.delete(
   '/:businessId/exam-tests/questions/:questionId',
-  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  authorize(UserRole.ADMIN, UserRole.TEACHER, UserRole.SUPERADMIN),
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('questionId'),
@@ -432,7 +434,7 @@ examTestRouter.delete(
  */
 examTestRouter.post(
   '/:businessId/exam-tests',
-  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  authorize(UserRole.ADMIN, UserRole.TEACHER, UserRole.SUPERADMIN),
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateDto(CreateExamTestDto),
@@ -444,6 +446,9 @@ examTestRouter.post(
  * /api/business/{businessId}/exam-tests:
  *   get:
  *     summary: List exam tests for a business
+ *     description: |
+ *       Teacher or admin listing (scoped to batches the teacher belongs to; admins and superadmins see all tests in the business).
+ *       Students should use `GET /exam-tests/available` for published exams across all batches they are active members of.
  *     tags: [ExamTests]
  *     security:
  *       - bearerAuth: []
@@ -492,7 +497,7 @@ examTestRouter.post(
  */
 examTestRouter.get(
   '/:businessId/exam-tests',
-  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  authorize(UserRole.ADMIN, UserRole.TEACHER, UserRole.SUPERADMIN),
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   examTestController.list,
@@ -540,7 +545,7 @@ examTestRouter.get(
  */
 examTestRouter.get(
   '/:businessId/exam-tests/:examTestId/analytics/export',
-  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  authorize(UserRole.ADMIN, UserRole.TEACHER, UserRole.SUPERADMIN),
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('examTestId'),
@@ -593,7 +598,7 @@ examTestRouter.get(
  */
 examTestRouter.get(
   '/:businessId/exam-tests/:examTestId/analytics',
-  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  authorize(UserRole.ADMIN, UserRole.TEACHER, UserRole.SUPERADMIN),
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('examTestId'),
@@ -648,7 +653,7 @@ examTestRouter.get(
  */
 examTestRouter.get(
   '/:businessId/exam-tests/:examTestId/questions',
-  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  authorize(UserRole.ADMIN, UserRole.TEACHER, UserRole.SUPERADMIN),
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('examTestId'),
@@ -707,7 +712,7 @@ examTestRouter.get(
  */
 examTestRouter.post(
   '/:businessId/exam-tests/:examTestId/questions',
-  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  authorize(UserRole.ADMIN, UserRole.TEACHER, UserRole.SUPERADMIN),
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('examTestId'),
@@ -820,7 +825,7 @@ examTestRouter.get(
  */
 examTestRouter.put(
   '/:businessId/exam-tests/:examTestId',
-  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  authorize(UserRole.ADMIN, UserRole.TEACHER, UserRole.SUPERADMIN),
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('examTestId'),
@@ -865,7 +870,7 @@ examTestRouter.put(
  */
 examTestRouter.delete(
   '/:businessId/exam-tests/:examTestId',
-  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  authorize(UserRole.ADMIN, UserRole.TEACHER, UserRole.SUPERADMIN),
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('examTestId'),

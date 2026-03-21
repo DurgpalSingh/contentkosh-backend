@@ -1927,6 +1927,7 @@ export const swaggerSchemas = {
       id: { type: 'string', minLength: 1, maxLength: 50 },
       businessId: { type: 'string', minLength: 1, maxLength: 50 },
       batchId: { type: 'string', minLength: 1, maxLength: 50 },
+      batchName: { type: 'string', description: 'Batch display name (when loaded with batch join)' },
       name: { type: 'string', minLength: 1, maxLength: 120 },
       description: { type: 'string', maxLength: 2000 },
       status: { $ref: '#/components/schemas/TestStatus' },
@@ -1961,6 +1962,7 @@ export const swaggerSchemas = {
       id: { type: 'string', minLength: 1, maxLength: 50 },
       businessId: { type: 'string', minLength: 1, maxLength: 50 },
       batchId: { type: 'string', minLength: 1, maxLength: 50 },
+      batchName: { type: 'string', description: 'Batch display name (when loaded with batch join)' },
       name: { type: 'string', minLength: 1, maxLength: 120 },
       description: { type: 'string', maxLength: 2000 },
       startAt: { type: 'string', format: 'date-time' },
@@ -1987,6 +1989,7 @@ export const swaggerSchemas = {
       id: { type: 'string', minLength: 1, maxLength: 50 },
       businessId: { type: 'string', minLength: 1, maxLength: 50 },
       batchId: { type: 'string', minLength: 1, maxLength: 50 },
+      batchName: { type: 'string', description: 'Batch display name for UI' },
       name: { type: 'string', minLength: 1, maxLength: 120 },
       description: { type: 'string', maxLength: 2000 },
       status: { $ref: '#/components/schemas/TestStatus' },
@@ -2007,6 +2010,7 @@ export const swaggerSchemas = {
       id: { type: 'string', minLength: 1, maxLength: 50 },
       businessId: { type: 'string', minLength: 1, maxLength: 50 },
       batchId: { type: 'string', minLength: 1, maxLength: 50 },
+      batchName: { type: 'string', description: 'Batch display name for UI' },
       name: { type: 'string', minLength: 1, maxLength: 120 },
       description: { type: 'string', maxLength: 2000 },
       status: { $ref: '#/components/schemas/TestStatus' },
@@ -2293,6 +2297,34 @@ export const swaggerSchemas = {
       submittedAt: { type: 'string', format: 'date-time' }
     }
   },
+  StudentAttemptQuestion: {
+    type: 'object',
+    required: ['question'],
+    description: 'Per-question row for student attempt detail: display + student answer + optional correct answer when policy allows.',
+    properties: {
+      question: { $ref: '#/components/schemas/TestQuestion' },
+      studentAnswer: {
+        type: 'object',
+        nullable: true,
+        description: 'Omitted or null when exam results are withheld before reveal.',
+        properties: {
+          selectedOptionIds: { type: 'array', items: { type: 'string' } },
+          textAnswer: { type: 'string', nullable: true },
+          isCorrect: { type: 'boolean', nullable: true },
+          obtainedMarks: { type: 'number', nullable: true }
+        }
+      },
+      correctAnswer: {
+        type: 'object',
+        nullable: true,
+        description: 'Present only after practice submit or when exam result visibility allows.',
+        properties: {
+          correctOptionIds: { type: 'array', items: { type: 'string' } },
+          correctTextAnswer: { type: 'string', nullable: true }
+        }
+      }
+    }
+  },
   TestAttemptDetails: {
     type: 'object',
     required: ['attempt', 'test', 'questions'],
@@ -2313,35 +2345,29 @@ export const swaggerSchemas = {
   PracticeTestAttemptDetails: {
     type: 'object',
     required: ['attempt', 'test', 'questions'],
+    description:
+      'Top-level `answers` removed; use `questions[].studentAnswer` and `questions[].correctAnswer`.',
     properties: {
       attempt: { $ref: '#/components/schemas/TestAttempt' },
       test: { $ref: '#/components/schemas/PracticeAvailableTest' },
       questions: {
         type: 'array',
-        items: { $ref: '#/components/schemas/TestQuestion' }
-      },
-      answers: {
-        type: 'array',
-        items: { $ref: '#/components/schemas/TestAnswer' }
-      },
-      summary: { $ref: '#/components/schemas/TestAttemptSummary' }
+        items: { $ref: '#/components/schemas/StudentAttemptQuestion' }
+      }
     }
   },
   ExamTestAttemptDetails: {
     type: 'object',
     required: ['attempt', 'test', 'questions'],
+    description:
+      'Top-level `answers` removed; use `questions[].studentAnswer` and `questions[].correctAnswer` per result visibility.',
     properties: {
       attempt: { $ref: '#/components/schemas/TestAttempt' },
       test: { $ref: '#/components/schemas/ExamAvailableTest' },
       questions: {
         type: 'array',
-        items: { $ref: '#/components/schemas/TestQuestion' }
-      },
-      answers: {
-        type: 'array',
-        items: { $ref: '#/components/schemas/TestAnswer' }
-      },
-      summary: { $ref: '#/components/schemas/TestAttemptSummary' }
+        items: { $ref: '#/components/schemas/StudentAttemptQuestion' }
+      }
     }
   },
   TestAttempt: {

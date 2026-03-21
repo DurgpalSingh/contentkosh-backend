@@ -1,17 +1,17 @@
 import { UserRole } from '@prisma/client';
 import { BadRequestError } from '../../../src/errors/api.errors';
 import { AttemptStatus, QuestionType, ResultVisibilityExam } from '../../../src/constants/test-enums';
-import { TestAttemptService } from '../../../src/services/test-attempt.service';
+import { TestAttemptService } from '../../../src/services/testAttempt.service';
 
-import * as attemptRepo from '../../../src/repositories/test-attempt.repo';
-import * as practiceRepo from '../../../src/repositories/practice-test.repo';
-import * as examRepo from '../../../src/repositories/exam-test.repo';
+import * as attemptRepo from '../../../src/repositories/testAttempt.repo';
+import * as practiceRepo from '../../../src/repositories/practiceTest.repo';
+import * as examRepo from '../../../src/repositories/examTest.repo';
 import * as questionRepo from '../../../src/repositories/test-question.repo';
 import * as batchRepo from '../../../src/repositories/batch.repo';
 
-jest.mock('../../../src/repositories/test-attempt.repo');
-jest.mock('../../../src/repositories/practice-test.repo');
-jest.mock('../../../src/repositories/exam-test.repo');
+jest.mock('../../../src/repositories/testAttempt.repo');
+jest.mock('../../../src/repositories/practiceTest.repo');
+jest.mock('../../../src/repositories/examTest.repo');
 jest.mock('../../../src/repositories/test-question.repo');
 jest.mock('../../../src/repositories/batch.repo');
 
@@ -128,7 +128,7 @@ describe('Day 4 - Analytics validation & edge cases', () => {
 
     const deadlineAt = new Date(now.getTime() - 10_000); // reveal=true (AFTER_DEADLINE)
 
-    (attemptRepo.findTestAttemptById as jest.Mock).mockResolvedValueOnce({
+    (attemptRepo.findTestAttemptWithInclude as jest.Mock).mockResolvedValueOnce({
       id: 'attempt-1',
       examTestId: 'exam-test-1',
       userId: 7,
@@ -170,9 +170,6 @@ describe('Day 4 - Analytics validation & edge cases', () => {
 
     const upsertSpy = attemptRepo.upsertAttemptAnswersAndFinalize as unknown as jest.Mock;
     upsertSpy.mockResolvedValue(undefined);
-
-    // After upsert, service fetches updated attempt for details.
-    (attemptRepo.findTestAttemptById as jest.Mock).mockResolvedValueOnce(null);
 
     const service = new TestAttemptService();
     const result = await service.submitExamAttempt(
@@ -260,7 +257,7 @@ describe('Day 4 - Analytics validation & edge cases', () => {
     jest.setSystemTime(now);
 
     // Practice attempt evaluation (incorrect gives 0)
-    (attemptRepo.findTestAttemptById as jest.Mock).mockResolvedValueOnce({
+    (attemptRepo.findTestAttemptWithInclude as jest.Mock).mockResolvedValueOnce({
       id: 'attempt-practice-1',
       practiceTestId: 'practice-test-1',
       userId: 7,
@@ -353,7 +350,6 @@ describe('Day 4 - Analytics validation & edge cases', () => {
 
     const upsertSpyPractice = attemptRepo.upsertAttemptAnswersAndFinalize as unknown as jest.Mock;
     upsertSpyPractice.mockResolvedValue(undefined);
-    (attemptRepo.findTestAttemptById as jest.Mock).mockResolvedValueOnce(null); // after upsert
 
     const service = new TestAttemptService();
     await service.submitPracticeAttempt(
@@ -374,7 +370,7 @@ describe('Day 4 - Analytics validation & edge cases', () => {
     expect(practiceQ5.obtainedMarks).toBe(0);
 
     // Exam attempt evaluation (incorrect => negative)
-    (attemptRepo.findTestAttemptById as jest.Mock).mockResolvedValueOnce({
+    (attemptRepo.findTestAttemptWithInclude as jest.Mock).mockResolvedValueOnce({
       id: 'attempt-exam-1',
       examTestId: 'exam-test-1',
       userId: 7,
@@ -462,9 +458,6 @@ describe('Day 4 - Analytics validation & edge cases', () => {
         options: [],
       },
     ]);
-
-    // after upsert fetch
-    (attemptRepo.findTestAttemptById as jest.Mock).mockResolvedValueOnce(null);
 
     const upsertCallCountBefore = upsertSpyPractice.mock.calls.length;
     await service.submitExamAttempt(

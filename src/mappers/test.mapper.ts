@@ -1,9 +1,12 @@
+import type { TestAttemptAnswer } from '@prisma/client';
 import { TestStatus } from '../constants/test-enums';
 
 export type PracticeTestResponse = {
   id: string;
   businessId: number;
   batchId: number;
+  /** Batch display name when loaded via batch join (list/get). */
+  batchName?: string;
   name: string;
   description?: string | null;
   status: number;
@@ -25,6 +28,8 @@ export type ExamTestResponse = {
   id: string;
   businessId: number;
   batchId: number;
+  /** Batch display name when loaded via batch join (list/get). */
+  batchName?: string;
   name: string;
   description?: string | null;
   status: number;
@@ -60,10 +65,31 @@ export type TestQuestionResponse = {
   options: TestOptionResponse[];
 };
 
+/** One row in GET attempt detail: question + student answer + optional correct solution. */
+export type StudentAttemptAnswerPayload = {
+  selectedOptionIds: string[];
+  textAnswer: string | null;
+  isCorrect: boolean | null;
+  obtainedMarks: number | null;
+};
+
+export type StudentAttemptCorrectPayload = {
+  correctOptionIds: string[];
+  correctTextAnswer: string | null;
+};
+
+export type StudentAttemptQuestionResponse = {
+  question: TestQuestionResponse;
+  studentAnswer: StudentAttemptAnswerPayload | null;
+  correctAnswer: StudentAttemptCorrectPayload | null;
+};
+
 export type PracticeAvailableTestResponse = {
   id: string;
   businessId: number;
   batchId: number;
+  /** Human-readable batch name for UI (student available list). */
+  batchName?: string;
   name: string;
   description?: string | null;
   status?: number;
@@ -80,6 +106,7 @@ export type ExamAvailableTestResponse = {
   id: string;
   businessId: number;
   batchId: number;
+  batchName?: string;
   name: string;
   description?: string | null;
   status?: number;
@@ -106,6 +133,35 @@ type TestCountCarrier = {
   totalQuestions?: number;
 };
 
+type BatchNameCarrier = {
+  batch?: {
+    displayName: string;
+  } | null;
+};
+
+type QuestionForStudentAttemptRow = {
+  id: string;
+  type: number;
+  text: string;
+  mediaUrl?: string | null;
+  options: Array<{ id: string; text: string; mediaUrl?: string | null }>;
+  correctOptionIdsAnswers?: string[] | null;
+  correctTextAnswer?: string | null;
+};
+
+function mapStudentAnswerPayload(
+  answerRow: TestAttemptAnswer | undefined,
+  includeScoring: boolean,
+): StudentAttemptAnswerPayload | null {
+  if (!answerRow) return null;
+  return {
+    selectedOptionIds: answerRow.selectedOptionIds ?? [],
+    textAnswer: answerRow.textAnswer ?? null,
+    isCorrect: includeScoring ? (answerRow.isCorrect ?? null) : null,
+    obtainedMarks: includeScoring ? (answerRow.obtainedMarks ?? null) : null,
+  };
+}
+
 function resolveTotalQuestions(t: TestCountCarrier): number {
   return t.totalQuestions ?? t._count?.questions ?? 0;
 }
@@ -126,13 +182,14 @@ export const TestMapper = {
     updatedBy?: number | null;
     createdAt: Date;
     updatedAt: Date;
-  } & TestCountCarrier): PracticeTestResponse {
+  } & TestCountCarrier & BatchNameCarrier): PracticeTestResponse {
     const totalQuestions = resolveTotalQuestions(t);
     const totalMarks = totalQuestions * Number(t.defaultMarksPerQuestion ?? 0);
     return {
       id: t.id,
       businessId: t.businessId,
       batchId: t.batchId,
+      ...(t.batch?.displayName !== undefined ? { batchName: t.batch.displayName } : {}),
       name: t.name,
       description: t.description ?? null,
       status: t.status,
@@ -170,13 +227,14 @@ export const TestMapper = {
     updatedBy?: number | null;
     createdAt: Date;
     updatedAt: Date;
-  } & TestCountCarrier): ExamTestResponse {
+  } & TestCountCarrier & BatchNameCarrier): ExamTestResponse {
     const totalQuestions = resolveTotalQuestions(t);
     const totalMarks = totalQuestions * Number(t.defaultMarksPerQuestion ?? 0);
     return {
       id: t.id,
       businessId: t.businessId,
       batchId: t.batchId,
+      ...(t.batch?.displayName !== undefined ? { batchName: t.batch.displayName } : {}),
       name: t.name,
       description: t.description ?? null,
       status: t.status,
@@ -228,7 +286,7 @@ export const TestMapper = {
       description?: string | null;
       status?: number;
       defaultMarksPerQuestion?: number;
-    } & TestCountCarrier,
+    } & TestCountCarrier & BatchNameCarrier,
     stats?: { attemptCount?: number; bestScore?: number | null; lastAttemptAt?: Date | null; canAttempt?: boolean },
   ): PracticeAvailableTestResponse {
     const totalQuestions = resolveTotalQuestions(t);
@@ -237,6 +295,7 @@ export const TestMapper = {
       id: t.id,
       businessId: t.businessId,
       batchId: t.batchId,
+      ...(t.batch?.displayName !== undefined ? { batchName: t.batch.displayName } : {}),
       name: t.name,
       description: t.description ?? null,
       totalQuestions,
@@ -268,7 +327,7 @@ export const TestMapper = {
       defaultMarksPerQuestion?: number;
       negativeMarksPerQuestion?: number;
       resultVisibility?: number;
-    } & TestCountCarrier,
+    } & TestCountCarrier & BatchNameCarrier,
     stats?: {
       canAttempt?: boolean;
       lockedReason?: number | null;
@@ -284,6 +343,7 @@ export const TestMapper = {
       id: t.id,
       businessId: t.businessId,
       batchId: t.batchId,
+      ...(t.batch?.displayName !== undefined ? { batchName: t.batch.displayName } : {}),
       name: t.name,
       description: t.description ?? null,
       startAt: t.startAt,
@@ -305,6 +365,41 @@ export const TestMapper = {
       ...(stats?.attemptsUsed !== undefined ? { attemptsUsed: stats.attemptsUsed } : {}),
       ...(stats?.hasAttempt !== undefined ? { hasAttempt: stats.hasAttempt } : {}),
       ...(stats?.lastAttemptAt !== undefined ? { lastAttemptAt: stats.lastAttemptAt ?? null } : {}),
+    };
+  },
+
+  /**
+   * Student attempt detail: one entry per question in attempt order, with nested student vs correct payloads.
+   * Correct answer is omitted until policy allows (practice after submit; exam per result visibility).
+   */
+  attemptQuestionForStudent(params: {
+    question: QuestionForStudentAttemptRow;
+    answerRow: TestAttemptAnswer | undefined;
+    includeCorrectAnswer: boolean;
+    includeStudentScoring: boolean;
+    /** When true (e.g. exam submitted before results release), omit student answer entirely. */
+    hideStudentAnswer: boolean;
+  }): StudentAttemptQuestionResponse {
+    const { question, answerRow, includeCorrectAnswer, includeStudentScoring, hideStudentAnswer } = params;
+    const questionResponse = TestMapper.question(question);
+    if (hideStudentAnswer) {
+      return {
+        question: questionResponse,
+        studentAnswer: null,
+        correctAnswer: null,
+      };
+    }
+    const studentAnswer = mapStudentAnswerPayload(answerRow, includeStudentScoring);
+    const correctAnswer: StudentAttemptCorrectPayload | null = includeCorrectAnswer
+      ? {
+          correctOptionIds: question.correctOptionIdsAnswers ?? [],
+          correctTextAnswer: question.correctTextAnswer ?? null,
+        }
+      : null;
+    return {
+      question: questionResponse,
+      studentAnswer,
+      correctAnswer,
     };
   },
 };

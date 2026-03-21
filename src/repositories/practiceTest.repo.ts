@@ -6,6 +6,12 @@ const practiceTestSelect = {
   id: true,
   businessId: true,
   batchId: true,
+  batch: {
+    select: {
+      id: true,
+      displayName: true,
+    },
+  },
   name: true,
   description: true,
   status: true,

@@ -12,7 +12,7 @@ import {
   UpdatePracticeTestDto,
   UpdateQuestionDto,
 } from '../dtos/test.dto';
-import { practiceTestController } from '../controllers/practice-test.controller';
+import { practiceTestController } from '../controllers/practiceTest.controller';
 
 export const practiceTestRouter = Router();
 
@@ -25,6 +25,7 @@ export const practiceTestRouter = Router();
  * /api/business/{businessId}/practice-tests/available:
  *   get:
  *     summary: Get available practice tests for the authenticated user
+ *     description: Student catalog of published practice tests from every batch where the user has an active membership.
  *     tags: [PracticeTests]
  *     security:
  *       - bearerAuth: []
@@ -112,7 +113,7 @@ practiceTestRouter.get(
  */
 practiceTestRouter.post(
   '/:businessId/practice-tests/publish',
-  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  authorize(UserRole.ADMIN, UserRole.TEACHER, UserRole.SUPERADMIN),
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateDto(PublishPracticeTestRequestDto),
@@ -220,6 +221,7 @@ practiceTestRouter.get(
   '/:businessId/practice-tests/attempts/:attemptId',
   authorize(UserRole.STUDENT),
   validateIdParam('businessId'),
+  authorizeBusinessAccess,
   validateStringIdParam('attemptId'),
   practiceTestController.getAttempt,
 );
@@ -335,7 +337,7 @@ practiceTestRouter.post(
  */
 practiceTestRouter.put(
   '/:businessId/practice-tests/questions/:questionId',
-  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  authorize(UserRole.ADMIN, UserRole.TEACHER, UserRole.SUPERADMIN),
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('questionId'),
@@ -380,7 +382,7 @@ practiceTestRouter.put(
  */
 practiceTestRouter.delete(
   '/:businessId/practice-tests/questions/:questionId',
-  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  authorize(UserRole.ADMIN, UserRole.TEACHER, UserRole.SUPERADMIN),
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('questionId'),
@@ -433,7 +435,7 @@ practiceTestRouter.delete(
  */
 practiceTestRouter.post(
   '/:businessId/practice-tests',
-  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  authorize(UserRole.ADMIN, UserRole.TEACHER, UserRole.SUPERADMIN),
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateDto(CreatePracticeTestDto),
@@ -445,6 +447,9 @@ practiceTestRouter.post(
  * /api/business/{businessId}/practice-tests:
  *   get:
  *     summary: List practice tests for a business
+ *     description: |
+ *       Teacher or admin listing (scoped to batches the teacher belongs to; admins and superadmins see all tests in the business).
+ *       Students should use `GET /practice-tests/available` for published tests across all batches they are active members of.
  *     tags: [PracticeTests]
  *     security:
  *       - bearerAuth: []
@@ -493,7 +498,7 @@ practiceTestRouter.post(
  */
 practiceTestRouter.get(
   '/:businessId/practice-tests',
-  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  authorize(UserRole.ADMIN, UserRole.TEACHER, UserRole.SUPERADMIN),
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   practiceTestController.list,
@@ -541,7 +546,7 @@ practiceTestRouter.get(
  */
 practiceTestRouter.get(
   '/:businessId/practice-tests/:practiceTestId/analytics/export',
-  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  authorize(UserRole.ADMIN, UserRole.TEACHER, UserRole.SUPERADMIN),
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('practiceTestId'),
@@ -594,7 +599,7 @@ practiceTestRouter.get(
  */
 practiceTestRouter.get(
   '/:businessId/practice-tests/:practiceTestId/analytics',
-  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  authorize(UserRole.ADMIN, UserRole.TEACHER, UserRole.SUPERADMIN),
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('practiceTestId'),
@@ -649,7 +654,7 @@ practiceTestRouter.get(
  */
 practiceTestRouter.get(
   '/:businessId/practice-tests/:practiceTestId/questions',
-  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  authorize(UserRole.ADMIN, UserRole.TEACHER, UserRole.SUPERADMIN),
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('practiceTestId'),
@@ -708,7 +713,7 @@ practiceTestRouter.get(
  */
 practiceTestRouter.post(
   '/:businessId/practice-tests/:practiceTestId/questions',
-  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  authorize(UserRole.ADMIN, UserRole.TEACHER, UserRole.SUPERADMIN),
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('practiceTestId'),
@@ -821,7 +826,7 @@ practiceTestRouter.get(
  */
 practiceTestRouter.put(
   '/:businessId/practice-tests/:practiceTestId',
-  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  authorize(UserRole.ADMIN, UserRole.TEACHER, UserRole.SUPERADMIN),
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('practiceTestId'),
@@ -866,7 +871,7 @@ practiceTestRouter.put(
  */
 practiceTestRouter.delete(
   '/:businessId/practice-tests/:practiceTestId',
-  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  authorize(UserRole.ADMIN, UserRole.TEACHER, UserRole.SUPERADMIN),
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('practiceTestId'),

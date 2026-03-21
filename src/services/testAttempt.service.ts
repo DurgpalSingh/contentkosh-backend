@@ -2,19 +2,15 @@ import { UserRole, ExamTest, PracticeTest, TestAttempt, TestAttemptAnswer } from
 import { BadRequestError, ForbiddenError, NotFoundError } from '../errors/api.errors';
 import { AttemptStatus, LockedReason, ResultVisibilityExam, TestStatus } from '../constants/test-enums';
 import logger from '../utils/logger';
-import * as attemptRepo from '../repositories/test-attempt.repo';
-import * as practiceRepo from '../repositories/practice-test.repo';
-import * as examRepo from '../repositories/exam-test.repo';
+import * as attemptRepo from '../repositories/testAttempt.repo';
+import * as practiceRepo from '../repositories/practiceTest.repo';
+import * as examRepo from '../repositories/examTest.repo';
 import * as questionRepo from '../repositories/test-question.repo';
 import * as batchUserRepo from '../repositories/batch.repo';
 import { computeAttemptSummaryStats } from '../utils/test-analytics-summary.utils';
-import {
-  buildAnswersByQuestionIdMap,
-  buildEvaluatedByQuestionIdMap,
-  mapDetailResultQuestion,
-  mapSubmittedResultQuestion,
-} from '../utils/test-attempt-result.utils';
+import { buildAnswersByQuestionIdMap, buildEvaluatedByQuestionIdMap, mapSubmittedResultQuestion } from '../utils/testAttemptResult.utils';
 import { evaluateQuestion, type ScoringQuestionRecord as QuestionRecord, type SubmitAnswerPayload } from '../utils/test-scoring.utils';
+import { TestMapper } from '../mappers/test.mapper';
 
 type AttemptRecord = Pick<
   TestAttempt,
@@ -43,12 +39,12 @@ function seededRng(seed: string): () => number {
   };
 }
 
-function shuffleInPlace<T>(arr: T[], rand: () => number) {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(rand() * (i + 1));
-    const tmp = arr[i] as T;
-    arr[i] = arr[j] as T;
-    arr[j] = tmp;
+function shuffleInPlace<T>(items: T[], rand: () => number) {
+  for (let index = items.length - 1; index > 0; index--) {
+    const swapIndex = Math.floor(rand() * (index + 1));
+    const temp = items[index] as T;
+    items[index] = items[swapIndex] as T;
+    items[swapIndex] = temp;
   }
 }
 
@@ -63,28 +59,28 @@ function csvEscape(value: unknown): string {
 
 
 
-function mapAttempt(a: AttemptRecord) {
+function mapAttemptSummary(attemptRecord: AttemptRecord) {
   return {
-    id: a.id,
-    practiceTestId: a.practiceTestId ?? null,
-    examTestId: a.examTestId ?? null,
-    userId: a.userId,
-    status: a.status,
-    startedAt: a.startedAt,
-    submittedAt: a.submittedAt ?? null,
-    score: a.score ?? null,
-    totalScore: a.totalScore ?? null,
-    percentage: a.percentage ?? null,
+    id: attemptRecord.id,
+    practiceTestId: attemptRecord.practiceTestId ?? null,
+    examTestId: attemptRecord.examTestId ?? null,
+    userId: attemptRecord.userId,
+    status: attemptRecord.status,
+    startedAt: attemptRecord.startedAt,
+    submittedAt: attemptRecord.submittedAt ?? null,
+    score: attemptRecord.score ?? null,
+    totalScore: attemptRecord.totalScore ?? null,
+    percentage: attemptRecord.percentage ?? null,
   };
 }
 
-function mapAnswer(a: TestAttemptAnswer) {
+function mapAnswer(answerRow: TestAttemptAnswer) {
   return {
-    questionId: a.questionId,
-    selectedOptionIds: a.selectedOptionIds ?? [],
-    textAnswer: a.textAnswer ?? null,
-    isCorrect: a.isCorrect ?? null,
-    obtainedMarks: a.obtainedMarks ?? null,
+    questionId: answerRow.questionId,
+    selectedOptionIds: answerRow.selectedOptionIds ?? [],
+    textAnswer: answerRow.textAnswer ?? null,
+    isCorrect: answerRow.isCorrect ?? null,
+    obtainedMarks: answerRow.obtainedMarks ?? null,
   };
 }
 
@@ -142,16 +138,18 @@ export class TestAttemptService {
         throw new BadRequestError('Practice test has no questions');
       }
       const rng = seededRng(`practice:${attempt.id}`);
-      const qs = questions.map((q) => ({ ...q, options: [...q.options] }));
-      if (test.shuffleQuestions) shuffleInPlace(qs, rng);
-      if (test.shuffleOptions) qs.forEach((q) => shuffleInPlace(q.options, rng));
+      const questionsInAttemptOrder = questions.map((questionRecord) => ({ ...questionRecord, options: [...questionRecord.options] }));
+      if (test.shuffleQuestions) shuffleInPlace(questionsInAttemptOrder, rng);
+      if (test.shuffleOptions) {
+        questionsInAttemptOrder.forEach((questionRecord) => shuffleInPlace(questionRecord.options, rng));
+      }
 
-      logger.info(`[test-attempt] practice attempt resumed attemptId=${attempt.id} questions=${qs.length}`);
+      logger.info(`[test-attempt] practice attempt resumed attemptId=${attempt.id} questions=${questionsInAttemptOrder.length}`);
       return {
         attemptId: attempt.id,
         startedAt: attempt.startedAt,
         test,
-        questions: qs,
+        questions: questionsInAttemptOrder,
       };
     }
 
@@ -168,16 +166,18 @@ export class TestAttemptService {
       throw new BadRequestError('Practice test has no questions');
     }
     const rng = seededRng(`practice:${attempt.id}`);
-    const qs = questions.map((q) => ({ ...q, options: [...q.options] }));
-    if (test.shuffleQuestions) shuffleInPlace(qs, rng);
-    if (test.shuffleOptions) qs.forEach((q) => shuffleInPlace(q.options, rng));
+    const questionsInAttemptOrder = questions.map((questionRecord) => ({ ...questionRecord, options: [...questionRecord.options] }));
+    if (test.shuffleQuestions) shuffleInPlace(questionsInAttemptOrder, rng);
+    if (test.shuffleOptions) {
+      questionsInAttemptOrder.forEach((questionRecord) => shuffleInPlace(questionRecord.options, rng));
+    }
 
-    logger.info(`[test-attempt] practice attempt started attemptId=${attempt.id} questions=${qs.length}`);
+    logger.info(`[test-attempt] practice attempt started attemptId=${attempt.id} questions=${questionsInAttemptOrder.length}`);
     return {
       attemptId: attempt.id,
       startedAt: attempt.startedAt,
       test,
-      questions: qs,
+      questions: questionsInAttemptOrder,
     };
   }
 
@@ -236,16 +236,18 @@ export class TestAttemptService {
         throw new BadRequestError('Exam test has no questions');
       }
       const rng = seededRng(`exam:${attempt.id}`);
-      const qs = questions.map((q) => ({ ...q, options: [...q.options] }));
-      if (test.shuffleQuestions) shuffleInPlace(qs, rng);
-      if (test.shuffleOptions) qs.forEach((q) => shuffleInPlace(q.options, rng));
+      const questionsInAttemptOrder = questions.map((questionRecord) => ({ ...questionRecord, options: [...questionRecord.options] }));
+      if (test.shuffleQuestions) shuffleInPlace(questionsInAttemptOrder, rng);
+      if (test.shuffleOptions) {
+        questionsInAttemptOrder.forEach((questionRecord) => shuffleInPlace(questionRecord.options, rng));
+      }
 
-      logger.info(`[test-attempt] exam attempt resumed attemptId=${attempt.id} questions=${qs.length}`);
+      logger.info(`[test-attempt] exam attempt resumed attemptId=${attempt.id} questions=${questionsInAttemptOrder.length}`);
       return {
         attemptId: attempt.id,
         startedAt: attempt.startedAt,
         test,
-        questions: qs,
+        questions: questionsInAttemptOrder,
       };
     }
 
@@ -262,16 +264,20 @@ export class TestAttemptService {
       throw new BadRequestError('Exam test has no questions');
     }
     const rng = seededRng(`exam:${attempt.id}`);
-    const qs = questions.map((q) => ({ ...q, options: [...q.options] }));
-    if (test.shuffleQuestions) shuffleInPlace(qs, rng);
-    if (test.shuffleOptions) qs.forEach((q) => shuffleInPlace(q.options, rng));
+    const questionsInAttemptOrder = questions.map((questionRecord) => ({ ...questionRecord, options: [...questionRecord.options] }));
+    if (test.shuffleQuestions) shuffleInPlace(questionsInAttemptOrder, rng);
+    if (test.shuffleOptions) {
+      questionsInAttemptOrder.forEach((questionRecord) => shuffleInPlace(questionRecord.options, rng));
+    }
 
-    logger.info(`[test-attempt] exam attempt started attemptId=${attempt.id} questions=${qs.length} effectiveWindow=${test.startAt.toISOString()}..${test.deadlineAt.toISOString()}`);
+    logger.info(
+      `[test-attempt] exam attempt started attemptId=${attempt.id} questions=${questionsInAttemptOrder.length} effectiveWindow=${test.startAt.toISOString()}..${test.deadlineAt.toISOString()}`,
+    );
     return {
       attemptId: attempt.id,
       startedAt: attempt.startedAt,
       test,
-      questions: qs,
+      questions: questionsInAttemptOrder,
     };
   }
 
@@ -290,9 +296,14 @@ export class TestAttemptService {
 
   async getPracticeAttemptDetails(businessId: number, user: { id: number; role: UserRole }, attemptId: string) {
     if (user.role !== UserRole.STUDENT) throw new BadRequestError('Only students can view attempts');
+    logger.info(`[test-attempt] getPracticeAttemptDetails businessId=${businessId} userId=${user.id} attemptId=${attemptId}`);
 
     const attempt = await attemptRepo.findTestAttemptWithInclude(attemptId, {
-      practiceTest: true,
+      practiceTest: {
+        include: {
+          batch: { select: { id: true, displayName: true } },
+        },
+      },
       answers: true,
     });
     if (!attempt?.practiceTestId || !attempt.practiceTest) throw new NotFoundError('Practice attempt not found');
@@ -303,30 +314,41 @@ export class TestAttemptService {
 
     const questions = (await questionRepo.listPracticeTestQuestions(businessId, attempt.practiceTestId)) as QuestionRecord[];
     const rng = seededRng(`practice:${attempt.id}`);
-    const qs = questions.map((q) => ({ ...q, options: [...q.options] }));
-    if (attempt.practiceTest.shuffleQuestions) shuffleInPlace(qs, rng);
-    if (attempt.practiceTest.shuffleOptions) qs.forEach((q) => shuffleInPlace(q.options, rng));
+    const questionsInAttemptOrder = questions.map((questionRecord) => ({ ...questionRecord, options: [...questionRecord.options] }));
+    if (attempt.practiceTest.shuffleQuestions) shuffleInPlace(questionsInAttemptOrder, rng);
+    if (attempt.practiceTest.shuffleOptions) {
+      questionsInAttemptOrder.forEach((questionRecord) => shuffleInPlace(questionRecord.options, rng));
+    }
 
     const answersByQuestionId = buildAnswersByQuestionIdMap(attempt.answers);
+    const isSubmitted = attempt.status === AttemptStatus.SUBMITTED || attempt.status === AttemptStatus.AUTO_SUBMITTED;
+    const questionsWithAnswers = questionsInAttemptOrder.map((questionRecord) =>
+      TestMapper.attemptQuestionForStudent({
+        question: questionRecord,
+        answerRow: answersByQuestionId.get(questionRecord.id),
+        includeCorrectAnswer: isSubmitted,
+        includeStudentScoring: isSubmitted,
+        hideStudentAnswer: false,
+      }),
+    );
 
     return {
-      attempt: mapAttempt(attempt),
+      attempt: mapAttemptSummary(attempt),
       test: attempt.practiceTest,
-      questions: qs,
-      answers: (attempt.answers ?? []).map(mapAnswer),
-      result: attempt.status === AttemptStatus.SUBMITTED || attempt.status === AttemptStatus.AUTO_SUBMITTED
-        ? {
-            questions: qs.map((q) => mapDetailResultQuestion(q, answersByQuestionId)),
-          }
-        : null,
+      questions: questionsWithAnswers,
     };
   }
 
   async getExamAttemptDetails(businessId: number, user: { id: number; role: UserRole }, attemptId: string) {
     if (user.role !== UserRole.STUDENT) throw new BadRequestError('Only students can view attempts');
+    logger.info(`[test-attempt] getExamAttemptDetails businessId=${businessId} userId=${user.id} attemptId=${attemptId}`);
 
     const attempt = await attemptRepo.findTestAttemptWithInclude(attemptId, {
-      examTest: true,
+      examTest: {
+        include: {
+          batch: { select: { id: true, displayName: true } },
+        },
+      },
       answers: true,
     });
     if (!attempt?.examTestId || !attempt.examTest) throw new NotFoundError('Exam attempt not found');
@@ -337,9 +359,11 @@ export class TestAttemptService {
 
     const questions = (await questionRepo.listExamTestQuestions(businessId, attempt.examTestId)) as QuestionRecord[];
     const rng = seededRng(`exam:${attempt.id}`);
-    const qs = questions.map((q) => ({ ...q, options: [...q.options] }));
-    if (attempt.examTest.shuffleQuestions) shuffleInPlace(qs, rng);
-    if (attempt.examTest.shuffleOptions) qs.forEach((q) => shuffleInPlace(q.options, rng));
+    const questionsInAttemptOrder = questions.map((questionRecord) => ({ ...questionRecord, options: [...questionRecord.options] }));
+    if (attempt.examTest.shuffleQuestions) shuffleInPlace(questionsInAttemptOrder, rng);
+    if (attempt.examTest.shuffleOptions) {
+      questionsInAttemptOrder.forEach((questionRecord) => shuffleInPlace(questionRecord.options, rng));
+    }
 
     const now = new Date();
     const reveal = this.shouldRevealExamResults(attempt.examTest, now);
@@ -349,6 +373,18 @@ export class TestAttemptService {
       : { ...attempt, score: null, totalScore: null, percentage: null };
 
     const answersByQuestionId = buildAnswersByQuestionIdMap(attempt.answers);
+    const isSubmitted = attempt.status === AttemptStatus.SUBMITTED || attempt.status === AttemptStatus.AUTO_SUBMITTED;
+    const hideStudentAnswer = !reveal && isSubmitted;
+
+    const questionsWithAnswers = questionsInAttemptOrder.map((questionRecord) =>
+      TestMapper.attemptQuestionForStudent({
+        question: questionRecord,
+        answerRow: answersByQuestionId.get(questionRecord.id),
+        includeCorrectAnswer: reveal && isSubmitted,
+        includeStudentScoring: reveal && isSubmitted,
+        hideStudentAnswer,
+      }),
+    );
 
     // Compute timeRemainingSeconds for in-progress attempts
     let timeRemainingSeconds: number | null = null;
@@ -358,15 +394,9 @@ export class TestAttemptService {
     }
 
     return {
-      attempt: { ...mapAttempt(maskedAttempt), ...(timeRemainingSeconds !== null ? { timeRemainingSeconds } : {}) },
+      attempt: { ...mapAttemptSummary(maskedAttempt), ...(timeRemainingSeconds !== null ? { timeRemainingSeconds } : {}) },
       test: attempt.examTest,
-      questions: qs,
-      answers: reveal ? (attempt.answers ?? []).map(mapAnswer) : [],
-      result: reveal && (attempt.status === AttemptStatus.SUBMITTED || attempt.status === AttemptStatus.AUTO_SUBMITTED)
-        ? {
-            questions: qs.map((q) => mapDetailResultQuestion(q, answersByQuestionId)),
-          }
-        : null,
+      questions: questionsWithAnswers,
     };
   }
 
@@ -598,10 +628,12 @@ export class TestAttemptService {
       const isInProgress = stats.lastAttemptStatus === AttemptStatus.IN_PROGRESS;
       const canResume = isInProgress;
       const canStart = !isInProgress;
+      const batch = 'batch' in t ? (t as { batch?: { displayName: string } | null }).batch : undefined;
       return {
         id: t.id,
         businessId,
         batchId: t.batchId,
+        ...(batch?.displayName !== undefined ? { batchName: batch.displayName } : {}),
         name: t.name,
         description: t.description ?? null,
         status: t.status,
@@ -676,10 +708,12 @@ export class TestAttemptService {
         timeRemainingSeconds = Math.max(0, Math.floor((effectiveEndMs - nowMs) / 1000));
       }
 
+      const batch = 'batch' in t ? (t as { batch?: { displayName: string } | null }).batch : undefined;
       return {
         id: t.id,
         businessId,
         batchId: t.batchId,
+        ...(batch?.displayName !== undefined ? { batchName: batch.displayName } : {}),
         name: t.name,
         description: t.description ?? null,
         status: t.status,
