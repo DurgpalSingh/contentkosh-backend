@@ -2285,7 +2285,18 @@ export const swaggerSchemas = {
         type: 'array',
         items: { $ref: '#/components/schemas/TestAnswer' }
       },
-      submittedAt: { type: 'string', format: 'date-time' }
+      submittedAt: { type: 'string', format: 'date-time' },
+      result: {
+        type: 'object',
+        nullable: true,
+        description: 'Per-question evaluation detail (practice tests and visible exam results only)',
+        properties: {
+          questions: {
+            type: 'array',
+            items: { $ref: '#/components/schemas/SubmitAttemptResultQuestion' }
+          }
+        }
+      }
     }
   },
   SubmitAttemptHidden: {
@@ -2295,6 +2306,16 @@ export const swaggerSchemas = {
       attemptId: { type: 'string', minLength: 1, maxLength: 50 },
       status: { $ref: '#/components/schemas/AttemptStatus' },
       submittedAt: { type: 'string', format: 'date-time' }
+    }
+  },
+  SubmitAttemptResultQuestion: {
+    type: 'object',
+    properties: {
+      questionId: { type: 'string', minLength: 1, maxLength: 50 },
+      isCorrect: { type: 'boolean', nullable: true },
+      obtainedMarks: { type: 'number', nullable: true },
+      correctOptionIds: { type: 'array', items: { type: 'string' } },
+      correctTextAnswer: { type: 'string', nullable: true }
     }
   },
   StudentAttemptQuestion: {

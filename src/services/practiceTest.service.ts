@@ -5,8 +5,8 @@ import { TestStatus } from '../constants/test-enums';
 import logger from '../utils/logger';
 import { CreatePracticeTestDto, CreateQuestionDto, UpdatePracticeTestDto, UpdateQuestionDto } from '../dtos/test.dto';
 import { UserRole } from '@prisma/client';
-import { validateQuestionPayload } from '../utils/question-validation.utils';
-import { assertTeacherInBatch, assertBatchBelongsToBusiness } from '../utils/test-access.utils';
+import { validateQuestionPayload, assertTeacherInBatch, assertBatchBelongsToBusiness } from '../utils/test.utils';
+import { TestMapper } from '../mappers/test.mapper';
 
 export class PracticeTestService {
   private isElevated(role: UserRole) {
@@ -57,16 +57,24 @@ export class PracticeTestService {
     if (query.status !== undefined) where.status = query.status;
     if (query.batchId !== undefined) where.batchId = query.batchId;
     if (!this.isElevated(user.role)) {
-      return practiceRepo.findPracticeTestsByBusinessIdForUser(businessId, user.id, { where });
+      const raw = await practiceRepo.findPracticeTestsByBusinessIdForUser(businessId, user.id, { where });
+      return raw.map((t) => TestMapper.practiceTest(t));
     }
-    return practiceRepo.findPracticeTestsByBusinessId(businessId, { where });
+    const raw = await practiceRepo.findPracticeTestsByBusinessId(businessId, { where });
+    return raw.map((t) => TestMapper.practiceTest(t));
   }
 
   async get(businessId: number, practiceTestId: string, user: { id: number; role: UserRole }) {
     logger.info(
       `[practice-test] get businessId=${businessId} practiceTestId=${practiceTestId} userId=${user.id} role=${user.role}`,
     );
-    return this.getWithAccess(businessId, practiceTestId, user);
+    const raw = await this.getWithAccess(businessId, practiceTestId, user);
+    const canSeeQuestions = this.isElevated(user.role) || user.role === UserRole.TEACHER;
+    if (canSeeQuestions) {
+      const questions = await questionRepo.listPracticeTestQuestions(businessId, practiceTestId);
+      return { ...raw, questions } as typeof raw & { questions: typeof questions };
+    }
+    return raw as typeof raw & { questions?: undefined };
   }
 
   async update(
@@ -76,6 +84,13 @@ export class PracticeTestService {
     user: { id: number; role: UserRole },
   ) {
     logger.info(`[practice-test] update businessId=${businessId} practiceTestId=${practiceTestId} userId=${user.id}`);
+    if (user.role === UserRole.TEACHER) {
+      const exists = await practiceRepo.findPracticeTestById(businessId, practiceTestId);
+      if (exists) {
+        await assertTeacherInBatch(user.id, exists.batchId); // throws ForbiddenError (403) if not in batch
+      }
+      // If !exists, fall through — getWithAccess will throw 404
+    }
     const existing = await this.getWithAccess(businessId, practiceTestId, user);
     if (dto.batchId !== undefined) {
       await assertBatchBelongsToBusiness(businessId, dto.batchId);
@@ -103,6 +118,13 @@ export class PracticeTestService {
 
   async remove(businessId: number, practiceTestId: string, user: { id: number; role: UserRole }) {
     logger.info(`[practice-test] remove businessId=${businessId} practiceTestId=${practiceTestId} userId=${user.id}`);
+    if (user.role === UserRole.TEACHER) {
+      const exists = await practiceRepo.findPracticeTestById(businessId, practiceTestId);
+      if (exists) {
+        await assertTeacherInBatch(user.id, exists.batchId); // throws ForbiddenError (403) if not in batch
+      }
+      // If !exists, fall through — getWithAccess will throw 404
+    }
     const existing = await this.getWithAccess(businessId, practiceTestId, user);
     if (user.role === UserRole.TEACHER) {
       await assertTeacherInBatch(user.id, existing.batchId);

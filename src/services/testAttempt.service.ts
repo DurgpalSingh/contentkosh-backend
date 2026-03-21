@@ -7,9 +7,9 @@ import * as practiceRepo from '../repositories/practiceTest.repo';
 import * as examRepo from '../repositories/examTest.repo';
 import * as questionRepo from '../repositories/testQuestion.repo';
 import * as batchUserRepo from '../repositories/batch.repo';
-import { computeAttemptSummaryStats } from '../utils/test-analytics-summary.utils';
-import { buildAnswersByQuestionIdMap, buildEvaluatedByQuestionIdMap, mapSubmittedResultQuestion } from '../utils/testAttemptResult.utils';
-import { evaluateQuestion, type ScoringQuestionRecord as QuestionRecord, type SubmitAnswerPayload } from '../utils/test-scoring.utils';
+import { computeAttemptSummaryStats } from '../utils/test.utils';
+import { buildAnswersByQuestionIdMap, buildEvaluatedByQuestionIdMap, mapSubmittedResultQuestion } from '../utils/test.utils';
+import { evaluateQuestion, type ScoringQuestionRecord as QuestionRecord, type SubmitAnswerPayload } from '../utils/test.utils';
 import { TestMapper } from '../mappers/test.mapper';
 
 type AttemptRecord = Pick<
@@ -102,7 +102,7 @@ export class TestAttemptService {
     const ok = await batchUserRepo.isActiveUserInBatch(userId, batchId);
     if (!ok) {
       logger.warn(`[test-attempt] student not in batch userId=${userId} batchId=${batchId}`);
-      throw new BadRequestError('Student is not an active member of this batch');
+      throw new ForbiddenError('Student is not an active member of this batch');
     }
   }
 
@@ -531,6 +531,15 @@ export class TestAttemptService {
 
     await this.assertStudentInBatch(user.id, attempt.examTest.batchId);
 
+    const now = new Date();
+    if (now > attempt.examTest.deadlineAt) {
+      logger.warn(
+        `[test-attempt] submitExamAttempt rejected: deadline passed attemptId=${attemptId} ` +
+        `now=${now.toISOString()} deadlineAt=${attempt.examTest.deadlineAt.toISOString()}`
+      );
+      throw new BadRequestError('Exam deadline has passed, submission not allowed');
+    }
+
     const questions = (await questionRepo.listExamTestQuestions(businessId, attempt.examTestId)) as QuestionRecord[];
     const questionIds = new Set(questions.map((q) => q.id));
     const providedAnswers = answers ?? [];
@@ -577,7 +586,7 @@ export class TestAttemptService {
       },
     });
 
-    const now = new Date();
+    // const now = new Date();
     const reveal = this.shouldRevealExamResults(attempt.examTest, now);
     logger.info(
       `[test-attempt] exam attempt evaluated attemptId=${attemptId} status=${status} score=${score} totalScore=${totalScore} percentage=${percentage} reveal=${reveal} effectiveEndAt=${effectiveEnd.toISOString()}`,

@@ -67,7 +67,12 @@ export const examTestController = {
       const examTestId = req.params.examTestId;
       if (!examTestId) return ApiResponseHandler.badRequest(res, 'examTestId is required');
       const t = await service.get(businessId, examTestId, { id: user.id, role: user.role });
-      return ApiResponseHandler.success(res, TestMapper.examTest(t), 'Exam test fetched successfully');
+      const { questions, ...testData } = t;
+      const response = {
+        ...TestMapper.examTest(testData),
+        ...(questions ? { questions: questions.map(TestMapper.question) } : {}),
+      };
+      return ApiResponseHandler.success(res, response, 'Exam test fetched successfully');
     } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
       if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
@@ -229,7 +234,7 @@ export const examTestController = {
           attemptId: started.attemptId,
           startedAt: started.startedAt,
           test: TestMapper.examAvailableTest({ ...started.test, totalQuestions: started.questions.length }),
-          questions: started.questions.map(TestMapper.question),
+          questions: started.questions.map(TestMapper.questionForAttempt),
         },
         'Exam attempt started successfully',
         201,

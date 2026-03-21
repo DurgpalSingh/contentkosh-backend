@@ -62,7 +62,12 @@ export const practiceTestController = {
       const practiceTestId = req.params.practiceTestId;
       if (!practiceTestId) return ApiResponseHandler.badRequest(res, 'practiceTestId is required');
       const t = await service.get(businessId, practiceTestId, { id: user.id, role: user.role });
-      return ApiResponseHandler.success(res, TestMapper.practiceTest(t), 'Practice test fetched successfully');
+      const { questions, ...testData } = t;
+      const response = {
+        ...TestMapper.practiceTest(testData),
+        ...(questions ? { questions: questions.map(TestMapper.question) } : {}),
+      };
+      return ApiResponseHandler.success(res, response, 'Practice test fetched successfully');
     } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
       if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
@@ -216,7 +221,7 @@ export const practiceTestController = {
           attemptId: started.attemptId,
           startedAt: started.startedAt,
           test: TestMapper.practiceAvailableTest({ ...started.test, totalQuestions: started.questions.length }),
-          questions: started.questions.map(TestMapper.question),
+          questions: started.questions.map(TestMapper.questionForAttempt),
         },
         'Practice attempt started successfully',
         201,

@@ -62,6 +62,8 @@ export type TestQuestionResponse = {
   type: number;
   questionText: string;
   mediaUrl?: string | null;
+  correctTextAnswer?: string | null;
+  explanation?: string | null;
   options: TestOptionResponse[];
 };
 
@@ -262,8 +264,33 @@ export const TestMapper = {
     type: number;
     text: string;
     mediaUrl?: string | null;
+    correctTextAnswer?: string | null;
+    explanation?: string | null;
     options?: Array<{ id: string; text: string; mediaUrl?: string | null }>;
   }): TestQuestionResponse {
+    return {
+      id: q.id,
+      type: q.type,
+      questionText: q.text,
+      mediaUrl: q.mediaUrl ?? null,
+      correctTextAnswer: q.correctTextAnswer ?? null,
+      explanation: q.explanation ?? null,
+      options: (q.options ?? []).map((o) => ({
+        id: o.id,
+        text: o.text,
+        mediaUrl: o.mediaUrl ?? null,
+      })),
+    };
+  },
+
+  /** Question shape for active attempt — strips correct answer fields so students can't see them. */
+  questionForAttempt(q: {
+    id: string;
+    type: number;
+    text: string;
+    mediaUrl?: string | null;
+    options?: Array<{ id: string; text: string; mediaUrl?: string | null }>;
+  }): Omit<TestQuestionResponse, 'correctTextAnswer' | 'explanation'> {
     return {
       id: q.id,
       type: q.type,
