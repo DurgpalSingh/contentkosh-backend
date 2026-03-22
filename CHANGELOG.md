@@ -1,5 +1,33 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.0] - LMS Test Module (Practice & Exam Tests)
+**P.R raised by**  : Shubh404-SE on **Date** : 2026-03-22
+
+### Added
+- **Practice Test API**: Full lifecycle management for practice tests under a batch.
+  - `POST /api/business/:businessId/practice-tests` — Create practice test
+  - `GET /api/business/:businessId/practice-tests` — List practice tests
+  - `GET /api/business/:businessId/practice-tests/:testId` — Get single test (includes questions for ADMIN/TEACHER)
+  - `PUT /api/business/:businessId/practice-tests/:testId` — Update practice test
+  - `DELETE /api/business/:businessId/practice-tests/:testId` — Delete practice test
+  - `PUT /api/business/:businessId/practice-tests/:testId/publish` — Publish practice test
+  - `GET /api/business/:businessId/practice-tests/:testId/questions` — List questions
+  - `POST /api/business/:businessId/practice-tests/:testId/questions` — Add question
+  - `PUT /api/business/:businessId/practice-tests/:testId/questions/:questionId` — Update question
+  - `DELETE /api/business/:businessId/practice-tests/:testId/questions/:questionId` — Delete question
+- **Exam Test API**: Full lifecycle management for exam-linked tests.
+  - Same CRUD, questions, and publish routes under `/api/business/:businessId/exam-tests`
+- **Test Attempt API**: Student attempt/submit flow for both test types.
+- **Question Types Supported**: MCQ (single/multiple), TRUE_FALSE, NUMERICAL, TEXT
+- **Scoring**: Auto-scoring on submit with partial credit support for multi-select MCQ
+
+### Tests
+- **Unit** (`tests/unit/controllers/testModule.controller.test.ts`): 53 tests covering PracticeTest and ExamTest controllers (CRUD, questions, publish) and TestAttempt controller (start, get, submit).
+- **Integration** (`tests/integration/routes/test-module.routes.test.ts`): 77 tests covering full practice + exam test routes including questions, publish, and all attempt flows.
+- **Auth middleware** (`tests/unit/middlewares/auth.middleware.test.ts`): Updated to use `ck_access_token` cookie instead of Bearer token.
+- **Auth routes** (`tests/integration/routes/auth.routes.test.ts`): Rewritten to use httpOnly cookies (`ck_access_token` / `ck_refresh_token`); added `cookieParser` to test app.
+
+---
 ## Version [1.1.27] - user allowed in multiple business
 **P.R raised by**  : Shubh404-SE on **Date** : 2026-03-17
 

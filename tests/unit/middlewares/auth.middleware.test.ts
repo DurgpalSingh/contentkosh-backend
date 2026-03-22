@@ -1,7 +1,6 @@
 import { Response, NextFunction } from 'express';
 import { authenticate, authorize } from '../../../src/middlewares/auth.middleware';
 import { AuthService } from '../../../src/services/auth.service';
-import { ApiResponseHandler } from '../../../src/utils/apiResponse';
 import { UserRole } from '@prisma/client';
 
 // Mock dependencies
@@ -19,7 +18,8 @@ describe('Auth Middleware', () => {
 
     beforeEach(() => {
         req = {
-            headers: {}
+            headers: {},
+            cookies: {},
         };
         res = {
             status: jest.fn().mockReturnThis(),
@@ -30,31 +30,24 @@ describe('Auth Middleware', () => {
     });
 
     describe('authenticate', () => {
-        it('should return unauthorized if no auth header', async () => {
-            req.headers = {};
+        it('should return unauthorized if no cookie present', async () => {
+            req.cookies = {};
             await authenticate(req, res, next);
             expect(res.status).toHaveBeenCalledWith(401);
             expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: false, message: 'No token provided' }));
             expect(next).not.toHaveBeenCalled();
         });
 
-        it('should return unauthorized if header does not start with Bearer', async () => {
-            req.headers = { authorization: 'Basic token' };
+        it('should return unauthorized if cookie value is empty string', async () => {
+            req.cookies = { ck_access_token: '' };
             await authenticate(req, res, next);
             expect(res.status).toHaveBeenCalledWith(401);
             expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: false, message: 'No token provided' }));
-        });
-
-        it('should return unauthorized if token is missing', async () => {
-            req.headers = { authorization: 'Bearer ' };
-            await authenticate(req, res, next);
-            expect(res.status).toHaveBeenCalledWith(401);
-            expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: false, message: 'No token provided' }));
+            expect(next).not.toHaveBeenCalled();
         });
 
         it('should return unauthorized if token verify returns null', async () => {
-            req.headers = { authorization: 'Bearer invalidtoken' };
-            // eslint-disable-next-line
+            req.cookies = { ck_access_token: 'invalidtoken' };
             (AuthService.verifyAccessToken as jest.Mock).mockReturnValue(null);
 
             await authenticate(req, res, next);
@@ -65,9 +58,8 @@ describe('Auth Middleware', () => {
         });
 
         it('should call next and set user context if token is valid', async () => {
-            req.headers = { authorization: 'Bearer validtoken' };
+            req.cookies = { ck_access_token: 'validtoken' };
             const mockUser = { id: 1, email: 'test@test.com', role: 'USER', businessId: 1 };
-            // eslint-disable-next-line
             (AuthService.verifyAccessToken as jest.Mock).mockReturnValue(mockUser);
 
             await authenticate(req, res, next);

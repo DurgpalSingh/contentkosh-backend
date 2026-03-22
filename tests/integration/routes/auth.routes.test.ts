@@ -1,13 +1,12 @@
 import 'reflect-metadata';
 import request from 'supertest';
 import express from 'express';
+import cookieParser from 'cookie-parser';
 import authRoutes from '../../../src/routes/auth.routes';
 import { AuthService } from '../../../src/services/auth.service';
-import * as UserRepo from '../../../src/repositories/user.repo';
 import * as UserService from '../../../src/services/user.service';
 import { errorHandler } from '../../../src/middlewares/error.middleware';
 import { AuthError, ForbiddenError, AlreadyExistsError } from '../../../src/errors/api.errors';
-import logger from '../../../src/utils/logger';
 
 // Mock dependencies
 jest.mock('../../../src/services/auth.service');
@@ -15,16 +14,17 @@ jest.mock('../../../src/repositories/user.repo');
 jest.mock('../../../src/services/user.service');
 jest.mock('../../../src/utils/logger');
 
-// Mock authenticate middleware for /me route
+/**
+ * Auth middleware mock:
+ * The real authenticate reads from req.cookies['ck_access_token'].
+ * We mock it to inject req.user based on a cookie value for /me tests.
+ */
 jest.mock('../../../src/middlewares/auth.middleware', () => ({
     authenticate: (req: any, res: any, next: any) => {
-        // Check for Authorization header
-        const authHeader = req.headers.authorization;
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        const token = req.cookies?.['ck_access_token'];
+        if (!token) {
             return res.status(401).json({ success: false, message: 'No token provided' });
         }
-
-        const token = authHeader.split(' ')[1];
         if (token === 'valid-token') {
             req.user = { id: 1, email: 'test@test.com', role: 'USER', businessId: 1 };
             next();
@@ -36,6 +36,7 @@ jest.mock('../../../src/middlewares/auth.middleware', () => ({
 
 const app = express();
 app.use(express.json());
+app.use(cookieParser());
 app.use('/auth', authRoutes);
 app.use(errorHandler);
 
@@ -54,7 +55,7 @@ describe('Auth Routes', () => {
             mobile: '9876543210'
         };
 
-        it('should register a new user successfully', async () => {
+        it('should register a new user successfully and set auth cookies', async () => {
             (AuthService.register as jest.Mock).mockResolvedValue({
                 accessToken: 'jwt-access-token',
                 refreshToken: 'jwt-refresh-token',
@@ -72,10 +73,12 @@ describe('Auth Routes', () => {
                 .send(validSignupData);
 
             expect(res.status).toBe(201);
-            expect(res.body.data).toHaveProperty('accessToken');
-            expect(res.body.data).toHaveProperty('refreshToken');
-            expect(res.body.data.user.email).toBe('test@test.com');
+            // Tokens are in httpOnly cookies, not in response body
+            expect(res.body.data).toHaveProperty('email', 'test@test.com');
+            expect(res.body.data).not.toHaveProperty('accessToken');
             expect(res.body.message).toContain('User registered successfully');
+            // Cookies should be set
+            expect(res.headers['set-cookie']).toBeDefined();
         });
 
         it('should return 400 if name is missing', async () => {
@@ -133,7 +136,7 @@ describe('Auth Routes', () => {
             password: 'password123'
         };
 
-        it('should login successfully', async () => {
+        it('should login successfully and set auth cookies', async () => {
             (AuthService.login as jest.Mock).mockResolvedValue({
                 accessToken: 'jwt-access-token',
                 refreshToken: 'jwt-refresh-token',
@@ -151,11 +154,12 @@ describe('Auth Routes', () => {
                 .send(validLoginData);
 
             expect(res.status).toBe(200);
-            expect(res.status).toBe(200);
-            expect(res.body.data).toHaveProperty('accessToken');
-            expect(res.body.data).toHaveProperty('refreshToken');
-            expect(res.body.data.user.email).toBe('test@test.com');
+            // Tokens are in httpOnly cookies, not in response body
+            expect(res.body.data).toHaveProperty('email', 'test@test.com');
+            expect(res.body.data).not.toHaveProperty('accessToken');
             expect(res.body.message).toContain('Login successful');
+            // Cookies should be set
+            expect(res.headers['set-cookie']).toBeDefined();
         });
 
         it('should return 400 if email is missing', async () => {
@@ -200,11 +204,7 @@ describe('Auth Routes', () => {
     // ==================== REFRESH TOKEN ====================
 
     describe('POST /auth/refresh', () => {
-        const validRefreshData = {
-            refreshToken: 'valid-refresh-token'
-        };
-
-        it('should refresh tokens successfully', async () => {
+        it('should refresh tokens successfully using cookie', async () => {
             (AuthService.refreshTokens as jest.Mock).mockResolvedValue({
                 accessToken: 'new-access-token',
                 refreshToken: 'new-refresh-token',
@@ -219,20 +219,20 @@ describe('Auth Routes', () => {
 
             const res = await request(app)
                 .post('/auth/refresh')
-                .send(validRefreshData);
+                .set('Cookie', 'ck_refresh_token=valid-refresh-token');
 
             expect(res.status).toBe(200);
-            expect(res.body.data).toHaveProperty('accessToken');
-            expect(res.body.data).toHaveProperty('refreshToken');
             expect(res.body.message).toContain('Tokens refreshed successfully');
+            // New tokens set as cookies
+            expect(res.headers['set-cookie']).toBeDefined();
         });
 
-        it('should return 400 if refreshToken is missing', async () => {
+        it('should return 401 if refresh cookie is missing', async () => {
             const res = await request(app)
-                .post('/auth/refresh')
-                .send({});
+                .post('/auth/refresh');
 
-            expect(res.status).toBe(400);
+            // Controller returns 401 when no refresh token cookie
+            expect(res.status).toBe(401);
         });
 
         it('should return 401 if refreshToken is invalid', async () => {
@@ -240,7 +240,7 @@ describe('Auth Routes', () => {
 
             const res = await request(app)
                 .post('/auth/refresh')
-                .send(validRefreshData);
+                .set('Cookie', 'ck_refresh_token=invalid-token');
 
             expect(res.status).toBe(401);
             expect(res.body.message).toContain('Invalid refresh token');
@@ -251,7 +251,7 @@ describe('Auth Routes', () => {
 
             const res = await request(app)
                 .post('/auth/refresh')
-                .send(validRefreshData);
+                .set('Cookie', 'ck_refresh_token=revoked-token');
 
             expect(res.status).toBe(401);
             expect(res.body.message).toContain('Refresh token has been revoked');
@@ -262,7 +262,7 @@ describe('Auth Routes', () => {
 
             const res = await request(app)
                 .post('/auth/refresh')
-                .send(validRefreshData);
+                .set('Cookie', 'ck_refresh_token=expired-token');
 
             expect(res.status).toBe(401);
             expect(res.body.message).toContain('Refresh token has expired');
@@ -272,7 +272,7 @@ describe('Auth Routes', () => {
     // ==================== LOGOUT ====================
 
     describe('POST /auth/logout', () => {
-        it('should logout successfully', async () => {
+        it('should logout successfully and clear cookies', async () => {
             const res = await request(app)
                 .post('/auth/logout');
 
@@ -284,7 +284,7 @@ describe('Auth Routes', () => {
     // ==================== GET PROFILE ====================
 
     describe('GET /auth/me', () => {
-        it('should return user profile when authenticated', async () => {
+        it('should return user profile when authenticated via cookie', async () => {
             (UserService.findUserById as jest.Mock).mockResolvedValue({
                 id: 1,
                 email: 'test@test.com',
@@ -295,7 +295,7 @@ describe('Auth Routes', () => {
 
             const res = await request(app)
                 .get('/auth/me')
-                .set('Authorization', 'Bearer valid-token');
+                .set('Cookie', 'ck_access_token=valid-token');
 
             expect(res.status).toBe(200);
             expect(res.body.data).toHaveProperty('id', 1);
@@ -303,7 +303,7 @@ describe('Auth Routes', () => {
             expect(res.body.message).toContain('Profile fetched successfully');
         });
 
-        it('should return 401 if no token provided', async () => {
+        it('should return 401 if no token cookie provided', async () => {
             const res = await request(app)
                 .get('/auth/me');
 
@@ -311,10 +311,10 @@ describe('Auth Routes', () => {
             expect(res.body.message).toContain('No token provided');
         });
 
-        it('should return 401 if token is invalid', async () => {
+        it('should return 401 if token cookie is invalid', async () => {
             const res = await request(app)
                 .get('/auth/me')
-                .set('Authorization', 'Bearer invalid-token');
+                .set('Cookie', 'ck_access_token=invalid-token');
 
             expect(res.status).toBe(401);
             expect(res.body.message).toContain('Invalid token');

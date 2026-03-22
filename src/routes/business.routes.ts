@@ -6,6 +6,7 @@ import { authorize } from '../middlewares/auth.middleware';
 import { UserRole } from '@prisma/client';
 import { validateDto } from '../middlewares/validation/dto.middleware';
 import { CreateBusinessDto, UpdateBusinessDto } from '../dtos/business.dto';
+import { validateIdParam } from '../middlewares/validation.middleware';
 
 const router = Router();
 
