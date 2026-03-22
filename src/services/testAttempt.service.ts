@@ -798,16 +798,27 @@ export class TestAttemptService {
         highestScore,
         lowestScore,
       },
-      attempts: attempts.map((a) => ({
-        attemptId: a.id,
-        userId: String(a.userId),
-        status: a.status,
-        startedAt: a.startedAt,
-        submittedAt: a.submittedAt,
-        score: a.score ?? 0,
-        totalScore: a.totalScore ?? 0,
-        percentage: a.percentage ?? 0,
-      })),
+      attempts: attempts.map((a) => {
+        const startedAt = a.startedAt;
+        const submittedAt = a.submittedAt;
+        const timeTakenMinutes =
+          submittedAt && startedAt
+            ? Math.max(0, Math.round((submittedAt.getTime() - startedAt.getTime()) / 60000))
+            : null;
+        return {
+          attemptId: a.id,
+          userId: String(a.userId),
+          studentName: 'user' in a && a.user?.name ? a.user.name : '',
+          studentEmail: 'user' in a && a.user?.email ? a.user.email : '',
+          status: a.status,
+          startedAt: a.startedAt,
+          submittedAt: a.submittedAt,
+          score: a.score ?? 0,
+          totalScore: a.totalScore ?? 0,
+          percentage: a.percentage ?? 0,
+          timeTakenMinutes,
+        };
+      }),
       questionStats,
     };
   }
@@ -899,16 +910,27 @@ export class TestAttemptService {
         highestScore,
         lowestScore,
       },
-      attempts: attempts.map((a) => ({
-        attemptId: a.id,
-        userId: String(a.userId),
-        status: a.status,
-        startedAt: a.startedAt,
-        submittedAt: a.submittedAt,
-        score: a.score ?? 0,
-        totalScore: a.totalScore ?? 0,
-        percentage: a.percentage ?? 0,
-      })),
+      attempts: attempts.map((a) => {
+        const startedAt = a.startedAt;
+        const submittedAt = a.submittedAt;
+        const timeTakenMinutes =
+          submittedAt && startedAt
+            ? Math.max(0, Math.round((submittedAt.getTime() - startedAt.getTime()) / 60000))
+            : null;
+        return {
+          attemptId: a.id,
+          userId: String(a.userId),
+          studentName: 'user' in a && a.user?.name ? a.user.name : '',
+          studentEmail: 'user' in a && a.user?.email ? a.user.email : '',
+          status: a.status,
+          startedAt: a.startedAt,
+          submittedAt: a.submittedAt,
+          score: a.score ?? 0,
+          totalScore: a.totalScore ?? 0,
+          percentage: a.percentage ?? 0,
+          timeTakenMinutes,
+        };
+      }),
       questionStats,
     };
   }

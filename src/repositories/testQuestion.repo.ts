@@ -108,7 +108,7 @@ export async function createPracticeTestQuestion(
   });
 }
 
-function resolveCorrectOptionIds(params: {
+export function resolveCorrectOptionIds(params: {
   options: Array<{ id: string }>;
   correctRefs: Array<string | number>;
 }): string[] {
@@ -309,7 +309,10 @@ export async function updateQuestionAndOptions(
     mediaUrl?: string | null;
     explanation?: string | null;
     correctTextAnswer?: string | null;
+    /** Stored option ids (legacy). Ignored when `correctOptionRefs` is set. */
     correctOptionIdsAnswers?: string[];
+    /** 1-based indices or option ids; resolved to stored ids after options exist. */
+    correctOptionRefs?: Array<string | number>;
     options?: Array<{ id?: string; text: string; mediaUrl?: string | null }>;
   },
 ) {
@@ -318,6 +321,8 @@ export async function updateQuestionAndOptions(
 
   // If options provided, replace options set (simplest, consistent semantics)
   const shouldReplaceOptions = Array.isArray(data.options);
+  const shouldResolveRefs =
+    data.correctOptionRefs !== undefined && (data.correctOptionRefs?.length ?? 0) > 0;
 
   return prisma.$transaction(async (tx) => {
     if (shouldReplaceOptions) {
@@ -332,7 +337,11 @@ export async function updateQuestionAndOptions(
         ...(data.mediaUrl !== undefined ? { mediaUrl: data.mediaUrl } : {}),
         ...(data.explanation !== undefined ? { explanation: data.explanation } : {}),
         ...(data.correctTextAnswer !== undefined ? { correctTextAnswer: data.correctTextAnswer } : {}),
-        ...(data.correctOptionIdsAnswers !== undefined ? { correctOptionIdsAnswers: data.correctOptionIdsAnswers } : {}),
+        ...(
+          !shouldResolveRefs && data.correctOptionIdsAnswers !== undefined
+            ? { correctOptionIdsAnswers: data.correctOptionIdsAnswers }
+            : {}
+        ),
         ...(shouldReplaceOptions
           ? {
               options: {
@@ -347,7 +356,20 @@ export async function updateQuestionAndOptions(
       select: questionSelect,
     });
 
-    return updated;
+    if (!shouldResolveRefs) {
+      return updated;
+    }
+
+    const resolved = resolveCorrectOptionIds({
+      options: updated.options ?? [],
+      correctRefs: data.correctOptionRefs ?? [],
+    });
+
+    return tx.testQuestion.update({
+      where: { id: questionId },
+      data: { correctOptionIdsAnswers: resolved },
+      select: questionSelect,
+    });
   });
 }
 

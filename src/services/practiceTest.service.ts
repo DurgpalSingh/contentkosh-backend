@@ -224,14 +224,13 @@ export class PracticeTestService {
           mediaUrl: o.mediaUrl ?? null,
         }))
       : undefined;
-    const correctOptionIdsAnswersRaw = dto.correctOptionIdsAnswers ?? existing.correctOptionIdsAnswers ?? [];
-    const correctOptionIdsAnswers = correctOptionIdsAnswersRaw.map((v) => String(v));
+    const correctForValidation = dto.correctOptionIdsAnswers ?? existing.correctOptionIdsAnswers ?? [];
     const correctTextAnswer = dto.correctTextAnswer ?? existing.correctTextAnswer ?? null;
 
     validateQuestionPayload({
       type: newType,
       correctTextAnswer,
-      correctOptionIdsAnswers,
+      correctOptionIdsAnswers: correctForValidation.map((v) => String(v)),
       options:
         optionPayload?.map((o) => ({ text: o.text, mediaUrl: o.mediaUrl ?? null })) ??
         existing.options?.map((o) => ({ text: o.text, mediaUrl: o.mediaUrl ?? null })) ??
@@ -244,7 +243,9 @@ export class PracticeTestService {
       ...(dto.mediaUrl !== undefined ? { mediaUrl: dto.mediaUrl } : {}),
       ...(dto.explanation !== undefined ? { explanation: dto.explanation } : {}),
       ...(dto.correctTextAnswer !== undefined ? { correctTextAnswer: dto.correctTextAnswer } : {}),
-      ...(dto.correctOptionIdsAnswers !== undefined ? { correctOptionIdsAnswers } : {}),
+      ...(dto.correctOptionIdsAnswers !== undefined
+        ? { correctOptionRefs: dto.correctOptionIdsAnswers }
+        : {}),
       ...(dto.options !== undefined ? { options: optionPayload ?? [] } : {}),
     });
     if (!updated) throw new NotFoundError('Question not found');

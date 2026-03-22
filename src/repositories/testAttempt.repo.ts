@@ -330,6 +330,7 @@ export async function getPracticeTestAnalyticsAttempts(
       score: true,
       totalScore: true,
       percentage: true,
+      user: { select: { name: true, email: true } },
     },
   });
 }
@@ -354,6 +355,7 @@ export async function getExamTestAnalyticsAttempts(
       score: true,
       totalScore: true,
       percentage: true,
+      user: { select: { name: true, email: true } },
     },
   });
 }

@@ -64,6 +64,7 @@ export type TestQuestionResponse = {
   mediaUrl?: string | null;
   correctTextAnswer?: string | null;
   explanation?: string | null;
+  correctOptionIdsAnswers?: string[];
   options: TestOptionResponse[];
 };
 
@@ -266,6 +267,7 @@ export const TestMapper = {
     mediaUrl?: string | null;
     correctTextAnswer?: string | null;
     explanation?: string | null;
+    correctOptionIdsAnswers?: string[] | null;
     options?: Array<{ id: string; text: string; mediaUrl?: string | null }>;
   }): TestQuestionResponse {
     return {
@@ -275,6 +277,7 @@ export const TestMapper = {
       mediaUrl: q.mediaUrl ?? null,
       correctTextAnswer: q.correctTextAnswer ?? null,
       explanation: q.explanation ?? null,
+      correctOptionIdsAnswers: q.correctOptionIdsAnswers ?? [],
       options: (q.options ?? []).map((o) => ({
         id: o.id,
         text: o.text,
