@@ -307,6 +307,7 @@ export class TestAttemptService {
       answers: true,
     });
     if (!attemptRecord?.practiceTestId || !attemptRecord.practiceTest) throw new NotFoundError('Practice attempt not found');
+    const practiceTest = attemptRecord.practiceTest!;
     if (attemptRecord.practiceTest.businessId !== businessId) throw new BadRequestError('Invalid business scope');
     if (attemptRecord.userId !== user.id) throw new BadRequestError('Forbidden');
 
@@ -330,6 +331,7 @@ export class TestAttemptService {
         includeCorrectAnswer: isSubmittedAttempt,
         includeStudentScoring: isSubmittedAttempt,
         hideStudentAnswer: false,
+        showExplanations: practiceTest.showExplanations,
       }),
     );
 
@@ -415,6 +417,7 @@ export class TestAttemptService {
       practiceTest: true,
     });
     if (!attemptRecord?.practiceTestId || !attemptRecord.practiceTest) throw new NotFoundError('Practice attempt not found');
+    const practiceTest = attemptRecord.practiceTest!;
     if (attemptRecord.practiceTest.businessId !== businessId) throw new BadRequestError('Invalid business scope');
     if (attemptRecord.userId !== user.id) throw new BadRequestError('Forbidden');
     if (attemptRecord.status !== AttemptStatus.IN_PROGRESS) {
@@ -487,7 +490,9 @@ export class TestAttemptService {
       answers: finalizedAttempt?.answers?.map(mapAttemptAnswer) ?? [],
       submittedAt: submitted,
       result: {
-        questions: questionRecords.map((q) => mapSubmittedResultQuestion(q, evaluatedByQuestionId)),
+        questions: questionRecords.map((q) =>
+          mapSubmittedResultQuestion(q, evaluatedByQuestionId, practiceTest.showExplanations),
+        ),
       },
     };
   }
@@ -614,7 +619,7 @@ export class TestAttemptService {
       answers: finalizedAttempt?.answers?.map(mapAttemptAnswer) ?? [],
       submittedAt: submitted,
       result: {
-        questions: questionRecords.map((q) => mapSubmittedResultQuestion(q, evaluatedByQuestionId)),
+        questions: questionRecords.map((q) => mapSubmittedResultQuestion(q, evaluatedByQuestionId, true)),
       },
     };
   }

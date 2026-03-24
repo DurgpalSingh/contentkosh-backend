@@ -189,8 +189,9 @@ export function buildEvaluatedByQuestionIdMap(
 
 /** Maps a question + its evaluated result into the submit response shape. */
 export function mapSubmittedResultQuestion(
-  question: { id: string; correctOptionIdsAnswers: string[] | null; correctTextAnswer: string | null },
+  question: { id: string; correctOptionIdsAnswers: string[] | null; correctTextAnswer: string | null; explanation?: string | null },
   evaluatedByQuestionId: Map<string, { isCorrect: boolean | null; obtainedMarks: number | null }>,
+  showExplanations: boolean,
 ) {
   const evaluatedResult = evaluatedByQuestionId.get(question.id);
   return {
@@ -199,6 +200,7 @@ export function mapSubmittedResultQuestion(
     obtainedMarks: evaluatedResult?.obtainedMarks ?? null,
     correctOptionIds: question.correctOptionIdsAnswers ?? [],
     correctTextAnswer: question.correctTextAnswer ?? null,
+    explanation: showExplanations ? (question.explanation ?? null) : null,
   };
 }
 

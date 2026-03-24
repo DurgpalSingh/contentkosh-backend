@@ -293,7 +293,7 @@ export const TestMapper = {
     text: string;
     mediaUrl?: string | null;
     options?: Array<{ id: string; text: string; mediaUrl?: string | null }>;
-  }): Omit<TestQuestionResponse, 'correctTextAnswer' | 'explanation'> {
+  }): Omit<TestQuestionResponse, 'correctTextAnswer' | 'explanation' | 'correctOptionIdsAnswers'> {
     return {
       id: q.id,
       type: q.type,
@@ -403,15 +403,21 @@ export const TestMapper = {
    * Correct answer is omitted until policy allows (practice after submit; exam per result visibility).
    */
   attemptQuestionForStudent(params: {
-    question: QuestionForStudentAttemptRow;
+    question: QuestionForStudentAttemptRow & { explanation?: string | null };
     answerRow: TestAttemptAnswer | undefined;
     includeCorrectAnswer: boolean;
     includeStudentScoring: boolean;
     /** When true (e.g. exam submitted before results release), omit student answer entirely. */
     hideStudentAnswer: boolean;
+    /** When false, explanation is nulled out in the returned question object. */
+    showExplanations?: boolean;
   }): StudentAttemptQuestionResponse {
-    const { question, answerRow, includeCorrectAnswer, includeStudentScoring, hideStudentAnswer } = params;
+    const { question, answerRow, includeCorrectAnswer, includeStudentScoring, hideStudentAnswer, showExplanations = true } = params;
     const questionResponse = TestMapper.question(question);
+    // Gate explanation based on showExplanations flag
+    if (!showExplanations) {
+      questionResponse.explanation = null;
+    }
     if (hideStudentAnswer) {
       return {
         question: questionResponse,
