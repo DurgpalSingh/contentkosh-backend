@@ -63,7 +63,7 @@ examTestRouter.get(
   authorize(UserRole.STUDENT),
   validateIdParam('businessId'),
   authorizeBusinessAccess,
-  examTestController.available,
+  examTestController.listAvailableExamTests,
 );
 
 /**
@@ -116,7 +116,7 @@ examTestRouter.post(
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateDto(PublishExamTestRequestDto),
-  examTestController.publish,
+  examTestController.publishExamTest,
 );
 
 /**
@@ -169,7 +169,7 @@ examTestRouter.post(
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateDto(StartExamAttemptRequestDto),
-  examTestController.startAttempt,
+  examTestController.startExamTestAttempt,
 );
 
 /**
@@ -222,7 +222,7 @@ examTestRouter.get(
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('attemptId'),
-  examTestController.getAttempt,
+  examTestController.getExamTestAttempt,
 );
 
 /**
@@ -281,7 +281,7 @@ examTestRouter.post(
   validateIdParam('businessId'),
   validateStringIdParam('attemptId'),
   validateDto(SubmitAttemptRequestDto),
-  examTestController.submitAttempt,
+  examTestController.submitExamTestAttempt,
 );
 
 /**
@@ -341,7 +341,7 @@ examTestRouter.put(
   authorizeBusinessAccess,
   validateStringIdParam('questionId'),
   validateDto(UpdateQuestionDto, true),
-  examTestController.updateQuestion,
+  examTestController.updateExamTestQuestion,
 );
 
 /**
@@ -385,7 +385,7 @@ examTestRouter.delete(
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('questionId'),
-  examTestController.deleteQuestion,
+  examTestController.deleteExamTestQuestion,
 );
 
 /**
@@ -438,7 +438,7 @@ examTestRouter.post(
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateDto(CreateExamTestDto),
-  examTestController.create,
+  examTestController.createExamTest,
 );
 
 /**
@@ -500,7 +500,7 @@ examTestRouter.get(
   authorize(UserRole.ADMIN, UserRole.TEACHER, UserRole.SUPERADMIN),
   validateIdParam('businessId'),
   authorizeBusinessAccess,
-  examTestController.list,
+  examTestController.listExamTests,
 );
 
 // Parameterized routes after all static ones
@@ -549,7 +549,7 @@ examTestRouter.get(
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('examTestId'),
-  examTestController.exportAnalytics,
+  examTestController.exportExamTestAnalytics,
 );
 
 /**
@@ -602,7 +602,7 @@ examTestRouter.get(
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('examTestId'),
-  examTestController.analytics,
+  examTestController.getExamTestAnalytics,
 );
 
 /**
@@ -657,7 +657,7 @@ examTestRouter.get(
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('examTestId'),
-  examTestController.listQuestions,
+  examTestController.listExamTestQuestions,
 );
 
 /**
@@ -717,7 +717,7 @@ examTestRouter.post(
   authorizeBusinessAccess,
   validateStringIdParam('examTestId'),
   validateDto(CreateQuestionDto),
-  examTestController.createQuestion,
+  examTestController.createExamTestQuestion,
 );
 
 /**
@@ -770,7 +770,7 @@ examTestRouter.get(
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('examTestId'),
-  examTestController.get,
+  examTestController.getExamTest,
 );
 
 /**
@@ -830,7 +830,7 @@ examTestRouter.put(
   authorizeBusinessAccess,
   validateStringIdParam('examTestId'),
   validateDto(UpdateExamTestDto, true),
-  examTestController.update,
+  examTestController.updateExamTest,
 );
 
 /**
@@ -874,6 +874,6 @@ examTestRouter.delete(
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('examTestId'),
-  examTestController.remove,
+  examTestController.deleteExamTest,
 );
 

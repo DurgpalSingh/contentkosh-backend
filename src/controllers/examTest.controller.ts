@@ -11,7 +11,7 @@ import { getBusinessId } from '../utils/request.utils';
 
 
 export const examTestController = {
-  async create(req: AuthRequest, res: Response) {
+  async createExamTest(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
       
@@ -27,7 +27,7 @@ export const examTestController = {
     }
   },
 
-  async list(req: AuthRequest, res: Response) {
+  async listExamTests(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
       const user = req.user!;
@@ -56,7 +56,7 @@ export const examTestController = {
     }
   },
 
-  async get(req: AuthRequest, res: Response) {
+  async getExamTest(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
       const user = req.user!;
@@ -79,7 +79,7 @@ export const examTestController = {
     }
   },
 
-  async update(req: AuthRequest, res: Response) {
+  async updateExamTest(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
       const examTestId = req.params.examTestId;
@@ -98,7 +98,7 @@ export const examTestController = {
     }
   },
 
-  async remove(req: AuthRequest, res: Response) {
+  async deleteExamTest(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
       const examTestId = req.params.examTestId;
@@ -116,7 +116,7 @@ export const examTestController = {
     }
   },
 
-  async publish(req: AuthRequest, res: Response) {
+  async publishExamTest(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
       
@@ -135,7 +135,7 @@ export const examTestController = {
     }
   },
 
-  async listQuestions(req: AuthRequest, res: Response) {
+  async listExamTestQuestions(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
       const examTestId = req.params.examTestId;
@@ -153,7 +153,7 @@ export const examTestController = {
     }
   },
 
-  async createQuestion(req: AuthRequest, res: Response) {
+  async createExamTestQuestion(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
       const examTestId = req.params.examTestId;
@@ -171,7 +171,7 @@ export const examTestController = {
     }
   },
 
-  async updateQuestion(req: AuthRequest, res: Response) {
+  async updateExamTestQuestion(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
       const questionId = req.params.questionId;
@@ -189,7 +189,7 @@ export const examTestController = {
     }
   },
 
-  async deleteQuestion(req: AuthRequest, res: Response) {
+  async deleteExamTestQuestion(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
       const questionId = req.params.questionId;
@@ -207,7 +207,7 @@ export const examTestController = {
     }
   },
 
-  async startAttempt(req: AuthRequest, res: Response) {
+  async startExamTestAttempt(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
   
@@ -237,7 +237,7 @@ export const examTestController = {
     }
   },
 
-  async available(req: AuthRequest, res: Response) {
+  async listAvailableExamTests(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
       
@@ -253,7 +253,7 @@ export const examTestController = {
     }
   },
 
-  async getAttempt(req: AuthRequest, res: Response) {
+  async getExamTestAttempt(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
       
@@ -280,7 +280,7 @@ export const examTestController = {
     }
   },
 
-  async submitAttempt(req: AuthRequest, res: Response) {
+  async submitExamTestAttempt(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
       
@@ -304,7 +304,7 @@ export const examTestController = {
     }
   },
 
-  async analytics(req: AuthRequest, res: Response) {
+  async getExamTestAnalytics(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
       
@@ -324,7 +324,7 @@ export const examTestController = {
     }
   },
 
-  async exportAnalytics(req: AuthRequest, res: Response) {
+  async exportExamTestAnalytics(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
       

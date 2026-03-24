@@ -129,7 +129,7 @@ describe('PracticeTest Controller', () => {
       const res = makeRes();
       practiceGetSpy.mockResolvedValue({ ...PRACTICE_TEST, questions: [MCQ_QUESTION] });
 
-      await practiceTestController.get(req as AuthRequest, res as Response);
+      await practiceTestController.getPracticeTest(req as AuthRequest, res as Response);
 
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({ success: true }),
@@ -141,7 +141,7 @@ describe('PracticeTest Controller', () => {
       const res = makeRes();
       practiceGetSpy.mockRejectedValue(new NotFoundError('Practice test not found'));
 
-      await practiceTestController.get(req as AuthRequest, res as Response);
+      await practiceTestController.getPracticeTest(req as AuthRequest, res as Response);
 
       expect(res.status).toHaveBeenCalledWith(404);
     });
@@ -150,7 +150,7 @@ describe('PracticeTest Controller', () => {
       const req = makeReq({ params: {} });
       const res = makeRes();
 
-      await practiceTestController.get(req as AuthRequest, res as Response);
+      await practiceTestController.getPracticeTest(req as AuthRequest, res as Response);
 
       expect(res.status).toHaveBeenCalledWith(400);
     });
@@ -164,7 +164,7 @@ describe('PracticeTest Controller', () => {
       const res = makeRes();
       practiceListSpy.mockResolvedValue([PRACTICE_TEST]);
 
-      await practiceTestController.list(req as AuthRequest, res as Response);
+      await practiceTestController.listPracticeTests(req as AuthRequest, res as Response);
 
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
     });
@@ -173,7 +173,7 @@ describe('PracticeTest Controller', () => {
       const req = makeReq({ query: { status: 'abc' } });
       const res = makeRes();
 
-      await practiceTestController.list(req as AuthRequest, res as Response);
+      await practiceTestController.listPracticeTests(req as AuthRequest, res as Response);
 
       expect(res.status).toHaveBeenCalledWith(400);
     });
@@ -187,7 +187,7 @@ describe('PracticeTest Controller', () => {
       const res = makeRes();
       practiceCreateSpy.mockResolvedValue(PRACTICE_TEST);
 
-      await practiceTestController.create(req as AuthRequest, res as Response);
+      await practiceTestController.createPracticeTest(req as AuthRequest, res as Response);
 
       expect(res.status).toHaveBeenCalledWith(201);
     });
@@ -197,7 +197,7 @@ describe('PracticeTest Controller', () => {
       const res = makeRes();
       practiceCreateSpy.mockRejectedValue(new BadRequestError('batchId required'));
 
-      await practiceTestController.create(req as AuthRequest, res as Response);
+      await practiceTestController.createPracticeTest(req as AuthRequest, res as Response);
 
       expect(res.status).toHaveBeenCalledWith(400);
     });
@@ -211,7 +211,7 @@ describe('PracticeTest Controller', () => {
       const res = makeRes();
       practiceUpdateSpy.mockResolvedValue(PRACTICE_TEST);
 
-      await practiceTestController.update(req as AuthRequest, res as Response);
+      await practiceTestController.updatePracticeTest(req as AuthRequest, res as Response);
 
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
     });
@@ -221,7 +221,7 @@ describe('PracticeTest Controller', () => {
       const res = makeRes();
       practiceUpdateSpy.mockRejectedValue(new NotFoundError('Practice test not found'));
 
-      await practiceTestController.update(req as AuthRequest, res as Response);
+      await practiceTestController.updatePracticeTest(req as AuthRequest, res as Response);
 
       expect(res.status).toHaveBeenCalledWith(404);
     });
@@ -235,7 +235,7 @@ describe('PracticeTest Controller', () => {
       const res = makeRes();
       practiceRemoveSpy.mockResolvedValue(undefined);
 
-      await practiceTestController.remove(req as AuthRequest, res as Response);
+      await practiceTestController.deletePracticeTest(req as AuthRequest, res as Response);
 
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
     });
@@ -245,7 +245,7 @@ describe('PracticeTest Controller', () => {
       const res = makeRes();
       practiceRemoveSpy.mockRejectedValue(new NotFoundError('Practice test not found'));
 
-      await practiceTestController.remove(req as AuthRequest, res as Response);
+      await practiceTestController.deletePracticeTest(req as AuthRequest, res as Response);
 
       expect(res.status).toHaveBeenCalledWith(404);
     });
@@ -259,7 +259,7 @@ describe('PracticeTest Controller', () => {
       const res = makeRes();
       practicePublishSpy.mockResolvedValue({ ...PRACTICE_TEST, status: 1 });
 
-      await practiceTestController.publish(req as AuthRequest, res as Response);
+      await practiceTestController.publishPracticeTest(req as AuthRequest, res as Response);
 
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
     });
@@ -269,7 +269,7 @@ describe('PracticeTest Controller', () => {
       const res = makeRes();
       practicePublishSpy.mockRejectedValue(new BadRequestError('Already published'));
 
-      await practiceTestController.publish(req as AuthRequest, res as Response);
+      await practiceTestController.publishPracticeTest(req as AuthRequest, res as Response);
 
       expect(res.status).toHaveBeenCalledWith(400);
     });
@@ -283,7 +283,7 @@ describe('PracticeTest Controller', () => {
       const res = makeRes();
       practiceListQSpy.mockResolvedValue([MCQ_QUESTION]);
 
-      await practiceTestController.listQuestions(req as AuthRequest, res as Response);
+      await practiceTestController.listPracticeTestQuestions(req as AuthRequest, res as Response);
 
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
     });
@@ -305,7 +305,7 @@ describe('PracticeTest Controller', () => {
       const res = makeRes();
       practiceCreateQSpy.mockResolvedValue(MCQ_QUESTION);
 
-      await practiceTestController.createQuestion(req as AuthRequest, res as Response);
+      await practiceTestController.createPracticeTestQuestion(req as AuthRequest, res as Response);
 
       expect(res.status).toHaveBeenCalledWith(201);
     });
@@ -315,7 +315,7 @@ describe('PracticeTest Controller', () => {
       const res = makeRes();
       practiceCreateQSpy.mockRejectedValue(new BadRequestError('Cannot modify questions after attempts have started'));
 
-      await practiceTestController.createQuestion(req as AuthRequest, res as Response);
+      await practiceTestController.createPracticeTestQuestion(req as AuthRequest, res as Response);
 
       expect(res.status).toHaveBeenCalledWith(400);
     });
@@ -327,7 +327,7 @@ describe('PracticeTest Controller', () => {
       const res = makeRes();
       practiceUpdateQSpy.mockResolvedValue(MCQ_QUESTION);
 
-      await practiceTestController.updateQuestion(req as AuthRequest, res as Response);
+      await practiceTestController.updatePracticeTestQuestion(req as AuthRequest, res as Response);
 
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
     });
@@ -337,7 +337,7 @@ describe('PracticeTest Controller', () => {
       const res = makeRes();
       practiceUpdateQSpy.mockRejectedValue(new NotFoundError('Question not found'));
 
-      await practiceTestController.updateQuestion(req as AuthRequest, res as Response);
+      await practiceTestController.updatePracticeTestQuestion(req as AuthRequest, res as Response);
 
       expect(res.status).toHaveBeenCalledWith(404);
     });
@@ -349,7 +349,7 @@ describe('PracticeTest Controller', () => {
       const res = makeRes();
       practiceDeleteQSpy.mockResolvedValue(undefined);
 
-      await practiceTestController.deleteQuestion(req as AuthRequest, res as Response);
+      await practiceTestController.deletePracticeTestQuestion(req as AuthRequest, res as Response);
 
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
     });
@@ -359,7 +359,7 @@ describe('PracticeTest Controller', () => {
       const res = makeRes();
       practiceDeleteQSpy.mockRejectedValue(new NotFoundError('Question not found'));
 
-      await practiceTestController.deleteQuestion(req as AuthRequest, res as Response);
+      await practiceTestController.deletePracticeTestQuestion(req as AuthRequest, res as Response);
 
       expect(res.status).toHaveBeenCalledWith(404);
     });
@@ -403,7 +403,7 @@ describe('ExamTest Controller', () => {
       const res = makeRes();
       examGetSpy.mockResolvedValue({ ...EXAM_TEST, questions: [MCQ_QUESTION] });
 
-      await examTestController.get(req as AuthRequest, res as Response);
+      await examTestController.getExamTest(req as AuthRequest, res as Response);
 
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
     });
@@ -413,7 +413,7 @@ describe('ExamTest Controller', () => {
       const res = makeRes();
       examGetSpy.mockRejectedValue(new NotFoundError('Exam test not found'));
 
-      await examTestController.get(req as AuthRequest, res as Response);
+      await examTestController.getExamTest(req as AuthRequest, res as Response);
 
       expect(res.status).toHaveBeenCalledWith(404);
     });
@@ -422,7 +422,7 @@ describe('ExamTest Controller', () => {
       const req = makeReq({ params: {} });
       const res = makeRes();
 
-      await examTestController.get(req as AuthRequest, res as Response);
+      await examTestController.getExamTest(req as AuthRequest, res as Response);
 
       expect(res.status).toHaveBeenCalledWith(400);
     });
@@ -434,7 +434,7 @@ describe('ExamTest Controller', () => {
       const res = makeRes();
       examListSpy.mockResolvedValue([EXAM_TEST]);
 
-      await examTestController.list(req as AuthRequest, res as Response);
+      await examTestController.listExamTests(req as AuthRequest, res as Response);
 
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
     });
@@ -443,7 +443,7 @@ describe('ExamTest Controller', () => {
       const req = makeReq({ query: { batchId: 'xyz' } });
       const res = makeRes();
 
-      await examTestController.list(req as AuthRequest, res as Response);
+      await examTestController.listExamTests(req as AuthRequest, res as Response);
 
       expect(res.status).toHaveBeenCalledWith(400);
     });
@@ -463,7 +463,7 @@ describe('ExamTest Controller', () => {
       const res = makeRes();
       examCreateSpy.mockResolvedValue(EXAM_TEST);
 
-      await examTestController.create(req as AuthRequest, res as Response);
+      await examTestController.createExamTest(req as AuthRequest, res as Response);
 
       expect(res.status).toHaveBeenCalledWith(201);
     });
@@ -473,7 +473,7 @@ describe('ExamTest Controller', () => {
       const res = makeRes();
       examCreateSpy.mockRejectedValue(new BadRequestError('batchId required'));
 
-      await examTestController.create(req as AuthRequest, res as Response);
+      await examTestController.createExamTest(req as AuthRequest, res as Response);
 
       expect(res.status).toHaveBeenCalledWith(400);
     });
@@ -485,7 +485,7 @@ describe('ExamTest Controller', () => {
       const res = makeRes();
       examUpdateSpy.mockResolvedValue(EXAM_TEST);
 
-      await examTestController.update(req as AuthRequest, res as Response);
+      await examTestController.updateExamTest(req as AuthRequest, res as Response);
 
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
     });
@@ -495,7 +495,7 @@ describe('ExamTest Controller', () => {
       const res = makeRes();
       examUpdateSpy.mockRejectedValue(new NotFoundError('Exam test not found'));
 
-      await examTestController.update(req as AuthRequest, res as Response);
+      await examTestController.updateExamTest(req as AuthRequest, res as Response);
 
       expect(res.status).toHaveBeenCalledWith(404);
     });
@@ -507,7 +507,7 @@ describe('ExamTest Controller', () => {
       const res = makeRes();
       examRemoveSpy.mockResolvedValue(undefined);
 
-      await examTestController.remove(req as AuthRequest, res as Response);
+      await examTestController.deleteExamTest(req as AuthRequest, res as Response);
 
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
     });
@@ -517,7 +517,7 @@ describe('ExamTest Controller', () => {
       const res = makeRes();
       examRemoveSpy.mockRejectedValue(new NotFoundError('Exam test not found'));
 
-      await examTestController.remove(req as AuthRequest, res as Response);
+      await examTestController.deleteExamTest(req as AuthRequest, res as Response);
 
       expect(res.status).toHaveBeenCalledWith(404);
     });
@@ -529,7 +529,7 @@ describe('ExamTest Controller', () => {
       const res = makeRes();
       examPublishSpy.mockResolvedValue({ ...EXAM_TEST, status: 1 });
 
-      await examTestController.publish(req as AuthRequest, res as Response);
+      await examTestController.publishExamTest(req as AuthRequest, res as Response);
 
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
     });
@@ -539,7 +539,7 @@ describe('ExamTest Controller', () => {
       const res = makeRes();
       examPublishSpy.mockRejectedValue(new BadRequestError('Add at least one question before publishing'));
 
-      await examTestController.publish(req as AuthRequest, res as Response);
+      await examTestController.publishExamTest(req as AuthRequest, res as Response);
 
       expect(res.status).toHaveBeenCalledWith(400);
     });
@@ -551,7 +551,7 @@ describe('ExamTest Controller', () => {
       const res = makeRes();
       examListQSpy.mockResolvedValue([MCQ_QUESTION]);
 
-      await examTestController.listQuestions(req as AuthRequest, res as Response);
+      await examTestController.listExamTestQuestions(req as AuthRequest, res as Response);
 
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
     });
@@ -571,7 +571,7 @@ describe('ExamTest Controller', () => {
       const res = makeRes();
       examCreateQSpy.mockResolvedValue(MCQ_QUESTION);
 
-      await examTestController.createQuestion(req as AuthRequest, res as Response);
+      await examTestController.createExamTestQuestion(req as AuthRequest, res as Response);
 
       expect(res.status).toHaveBeenCalledWith(201);
     });
@@ -581,7 +581,7 @@ describe('ExamTest Controller', () => {
       const res = makeRes();
       examCreateQSpy.mockRejectedValue(new BadRequestError('Cannot modify questions after attempts have started'));
 
-      await examTestController.createQuestion(req as AuthRequest, res as Response);
+      await examTestController.createExamTestQuestion(req as AuthRequest, res as Response);
 
       expect(res.status).toHaveBeenCalledWith(400);
     });
@@ -593,7 +593,7 @@ describe('ExamTest Controller', () => {
       const res = makeRes();
       examUpdateQSpy.mockResolvedValue(MCQ_QUESTION);
 
-      await examTestController.updateQuestion(req as AuthRequest, res as Response);
+      await examTestController.updateExamTestQuestion(req as AuthRequest, res as Response);
 
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
     });
@@ -603,7 +603,7 @@ describe('ExamTest Controller', () => {
       const res = makeRes();
       examUpdateQSpy.mockRejectedValue(new NotFoundError('Question not found'));
 
-      await examTestController.updateQuestion(req as AuthRequest, res as Response);
+      await examTestController.updateExamTestQuestion(req as AuthRequest, res as Response);
 
       expect(res.status).toHaveBeenCalledWith(404);
     });
@@ -615,7 +615,7 @@ describe('ExamTest Controller', () => {
       const res = makeRes();
       examDeleteQSpy.mockResolvedValue(undefined);
 
-      await examTestController.deleteQuestion(req as AuthRequest, res as Response);
+      await examTestController.deleteExamTestQuestion(req as AuthRequest, res as Response);
 
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
     });
@@ -673,7 +673,7 @@ describe('TestAttempt Controller (via practiceTest + examTest controllers)', () 
       const res = makeRes();
       startPracticeSpy.mockResolvedValue(ATTEMPT_STARTED);
 
-      await practiceTestController.startAttempt(req as AuthRequest, res as Response);
+      await practiceTestController.startPracticeTestAttempt(req as AuthRequest, res as Response);
 
       expect(res.status).toHaveBeenCalledWith(201);
       const payload = (res.json as jest.Mock).mock.calls[0][0];
@@ -688,7 +688,7 @@ describe('TestAttempt Controller (via practiceTest + examTest controllers)', () 
       const res = makeRes();
       startPracticeSpy.mockRejectedValue(new BadRequestError('Only students can start attempts'));
 
-      await practiceTestController.startAttempt(req as AuthRequest, res as Response);
+      await practiceTestController.startPracticeTestAttempt(req as AuthRequest, res as Response);
 
       expect(res.status).toHaveBeenCalledWith(400);
     });
@@ -698,7 +698,7 @@ describe('TestAttempt Controller (via practiceTest + examTest controllers)', () 
       const res = makeRes();
       startPracticeSpy.mockRejectedValue(new NotFoundError('Practice test not found'));
 
-      await practiceTestController.startAttempt(req as AuthRequest, res as Response);
+      await practiceTestController.startPracticeTestAttempt(req as AuthRequest, res as Response);
 
       expect(res.status).toHaveBeenCalledWith(404);
     });
@@ -714,7 +714,7 @@ describe('TestAttempt Controller (via practiceTest + examTest controllers)', () 
         questions: [],
       });
 
-      await practiceTestController.getAttempt(req as AuthRequest, res as Response);
+      await practiceTestController.getPracticeTestAttempt(req as AuthRequest, res as Response);
 
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
     });
@@ -724,7 +724,7 @@ describe('TestAttempt Controller (via practiceTest + examTest controllers)', () 
       const res = makeRes();
       getPracticeAttemptSpy.mockRejectedValue(new NotFoundError('Practice attempt not found'));
 
-      await practiceTestController.getAttempt(req as AuthRequest, res as Response);
+      await practiceTestController.getPracticeTestAttempt(req as AuthRequest, res as Response);
 
       expect(res.status).toHaveBeenCalledWith(404);
     });
@@ -740,7 +740,7 @@ describe('TestAttempt Controller (via practiceTest + examTest controllers)', () 
       const res = makeRes();
       submitPracticeSpy.mockResolvedValue(SUBMIT_RESULT);
 
-      await practiceTestController.submitAttempt(req as AuthRequest, res as Response);
+      await practiceTestController.submitPracticeTestAttempt(req as AuthRequest, res as Response);
 
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
     });
@@ -754,7 +754,7 @@ describe('TestAttempt Controller (via practiceTest + examTest controllers)', () 
       const res = makeRes();
       submitPracticeSpy.mockRejectedValue(new BadRequestError('Attempt already submitted'));
 
-      await practiceTestController.submitAttempt(req as AuthRequest, res as Response);
+      await practiceTestController.submitPracticeTestAttempt(req as AuthRequest, res as Response);
 
       expect(res.status).toHaveBeenCalledWith(400);
     });
@@ -773,7 +773,7 @@ describe('TestAttempt Controller (via practiceTest + examTest controllers)', () 
         questions: [MCQ_QUESTION],
       });
 
-      await examTestController.startAttempt(req as AuthRequest, res as Response);
+      await examTestController.startExamTestAttempt(req as AuthRequest, res as Response);
 
       expect(res.status).toHaveBeenCalledWith(201);
       const payload = (res.json as jest.Mock).mock.calls[0][0];
@@ -787,7 +787,7 @@ describe('TestAttempt Controller (via practiceTest + examTest controllers)', () 
       const res = makeRes();
       startExamSpy.mockRejectedValue(new BadRequestError('Exam has not started yet'));
 
-      await examTestController.startAttempt(req as AuthRequest, res as Response);
+      await examTestController.startExamTestAttempt(req as AuthRequest, res as Response);
 
       expect(res.status).toHaveBeenCalledWith(400);
     });
@@ -797,7 +797,7 @@ describe('TestAttempt Controller (via practiceTest + examTest controllers)', () 
       const res = makeRes();
       startExamSpy.mockRejectedValue(new BadRequestError('Exam deadline has passed'));
 
-      await examTestController.startAttempt(req as AuthRequest, res as Response);
+      await examTestController.startExamTestAttempt(req as AuthRequest, res as Response);
 
       expect(res.status).toHaveBeenCalledWith(400);
     });
@@ -807,7 +807,7 @@ describe('TestAttempt Controller (via practiceTest + examTest controllers)', () 
       const res = makeRes();
       startExamSpy.mockRejectedValue(new BadRequestError('You have already attempted this exam'));
 
-      await examTestController.startAttempt(req as AuthRequest, res as Response);
+      await examTestController.startExamTestAttempt(req as AuthRequest, res as Response);
 
       expect(res.status).toHaveBeenCalledWith(400);
     });
@@ -823,7 +823,7 @@ describe('TestAttempt Controller (via practiceTest + examTest controllers)', () 
         questions: [],
       });
 
-      await examTestController.getAttempt(req as AuthRequest, res as Response);
+      await examTestController.getExamTestAttempt(req as AuthRequest, res as Response);
 
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
     });
@@ -839,7 +839,7 @@ describe('TestAttempt Controller (via practiceTest + examTest controllers)', () 
       const res = makeRes();
       submitExamSpy.mockResolvedValue({ ...SUBMIT_RESULT, attemptId: 'attempt-2' });
 
-      await examTestController.submitAttempt(req as AuthRequest, res as Response);
+      await examTestController.submitExamTestAttempt(req as AuthRequest, res as Response);
 
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
     });
@@ -853,7 +853,7 @@ describe('TestAttempt Controller (via practiceTest + examTest controllers)', () 
       const res = makeRes();
       submitExamSpy.mockRejectedValue(new BadRequestError('Exam deadline has passed, submission not allowed'));
 
-      await examTestController.submitAttempt(req as AuthRequest, res as Response);
+      await examTestController.submitExamTestAttempt(req as AuthRequest, res as Response);
 
       expect(res.status).toHaveBeenCalledWith(400);
     });

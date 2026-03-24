@@ -9,7 +9,7 @@ import { testAttemptService } from '../services/testAttempt.service';
 import { getBusinessId } from '../utils/request.utils';
 
 export const practiceTestController = {
-  async create(req: AuthRequest, res: Response) {
+  async createPracticeTest(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
       const user = req.user!;
@@ -24,7 +24,7 @@ export const practiceTestController = {
     }
   },
 
-  async list(req: AuthRequest, res: Response) {
+  async listPracticeTests(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
       const user = req.user!;
@@ -52,7 +52,7 @@ export const practiceTestController = {
     }
   },
 
-  async get(req: AuthRequest, res: Response) {
+  async getPracticeTest(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
       const user = req.user!;
@@ -74,7 +74,7 @@ export const practiceTestController = {
     }
   },
 
-  async update(req: AuthRequest, res: Response) {
+  async updatePracticeTest(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
       const practiceTestId = req.params.practiceTestId;
@@ -92,7 +92,7 @@ export const practiceTestController = {
     }
   },
 
-  async remove(req: AuthRequest, res: Response) {
+  async deletePracticeTest(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
       const practiceTestId = req.params.practiceTestId;
@@ -109,7 +109,7 @@ export const practiceTestController = {
     }
   },
 
-  async publish(req: AuthRequest, res: Response) {
+  async publishPracticeTest(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
       const user = req.user!;
@@ -127,7 +127,7 @@ export const practiceTestController = {
     }
   },
 
-  async listQuestions(req: AuthRequest, res: Response) {
+  async listPracticeTestQuestions(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
       const practiceTestId = req.params.practiceTestId;
@@ -144,7 +144,7 @@ export const practiceTestController = {
     }
   },
 
-  async createQuestion(req: AuthRequest, res: Response) {
+  async createPracticeTestQuestion(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
       const practiceTestId = req.params.practiceTestId;
@@ -161,7 +161,7 @@ export const practiceTestController = {
     }
   },
 
-  async updateQuestion(req: AuthRequest, res: Response) {
+  async updatePracticeTestQuestion(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
       const questionId = req.params.questionId;
@@ -178,7 +178,7 @@ export const practiceTestController = {
     }
   },
 
-  async deleteQuestion(req: AuthRequest, res: Response) {
+  async deletePracticeTestQuestion(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
       const questionId = req.params.questionId;
@@ -195,7 +195,7 @@ export const practiceTestController = {
     }
   },
 
-  async startAttempt(req: AuthRequest, res: Response) {
+  async startPracticeTestAttempt(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
       const user = req.user!;
@@ -224,7 +224,7 @@ export const practiceTestController = {
     }
   },
 
-  async available(req: AuthRequest, res: Response) {
+  async listAvailablePracticeTests(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
       const user = req.user!;
@@ -239,7 +239,7 @@ export const practiceTestController = {
     }
   },
 
-  async getAttempt(req: AuthRequest, res: Response) {
+  async getPracticeTestAttempt(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
       const user = req.user!;
@@ -265,7 +265,7 @@ export const practiceTestController = {
     }
   },
 
-  async submitAttempt(req: AuthRequest, res: Response) {
+  async submitPracticeTestAttempt(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
       const user = req.user!;
@@ -288,7 +288,7 @@ export const practiceTestController = {
     }
   },
 
-  async analytics(req: AuthRequest, res: Response) {
+  async getPracticeTestAnalytics(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
       const user = req.user!;
@@ -307,7 +307,7 @@ export const practiceTestController = {
     }
   },
 
-  async exportAnalytics(req: AuthRequest, res: Response) {
+  async exportPracticeTestAnalytics(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
       const user = req.user!;

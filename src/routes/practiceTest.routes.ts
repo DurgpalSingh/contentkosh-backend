@@ -64,7 +64,7 @@ practiceTestRouter.get(
   authorize(UserRole.STUDENT),
   validateIdParam('businessId'),
   authorizeBusinessAccess,
-  practiceTestController.available,
+  practiceTestController.listAvailablePracticeTests,
 );
 
 /**
@@ -117,7 +117,7 @@ practiceTestRouter.post(
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateDto(PublishPracticeTestRequestDto),
-  practiceTestController.publish,
+  practiceTestController.publishPracticeTest,
 );
 
 /**
@@ -170,7 +170,7 @@ practiceTestRouter.post(
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateDto(StartPracticeAttemptRequestDto),
-  practiceTestController.startAttempt,
+  practiceTestController.startPracticeTestAttempt,
 );
 
 /**
@@ -223,7 +223,7 @@ practiceTestRouter.get(
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('attemptId'),
-  practiceTestController.getAttempt,
+  practiceTestController.getPracticeTestAttempt,
 );
 
 /**
@@ -282,7 +282,7 @@ practiceTestRouter.post(
   validateIdParam('businessId'),
   validateStringIdParam('attemptId'),
   validateDto(SubmitAttemptRequestDto),
-  practiceTestController.submitAttempt,
+  practiceTestController.submitPracticeTestAttempt,
 );
 
 /**
@@ -342,7 +342,7 @@ practiceTestRouter.put(
   authorizeBusinessAccess,
   validateStringIdParam('questionId'),
   validateDto(UpdateQuestionDto, true),
-  practiceTestController.updateQuestion,
+  practiceTestController.updatePracticeTestQuestion,
 );
 
 /**
@@ -386,7 +386,7 @@ practiceTestRouter.delete(
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('questionId'),
-  practiceTestController.deleteQuestion,
+  practiceTestController.deletePracticeTestQuestion,
 );
 
 /**
@@ -439,7 +439,7 @@ practiceTestRouter.post(
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateDto(CreatePracticeTestDto),
-  practiceTestController.create,
+  practiceTestController.createPracticeTest,
 );
 
 /**
@@ -501,7 +501,7 @@ practiceTestRouter.get(
   authorize(UserRole.ADMIN, UserRole.TEACHER, UserRole.SUPERADMIN),
   validateIdParam('businessId'),
   authorizeBusinessAccess,
-  practiceTestController.list,
+  practiceTestController.listPracticeTests,
 );
 
 // Parameterized routes after all static ones
@@ -550,7 +550,7 @@ practiceTestRouter.get(
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('practiceTestId'),
-  practiceTestController.exportAnalytics,
+  practiceTestController.exportPracticeTestAnalytics,
 );
 
 /**
@@ -603,7 +603,7 @@ practiceTestRouter.get(
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('practiceTestId'),
-  practiceTestController.analytics,
+  practiceTestController.getPracticeTestAnalytics,
 );
 
 /**
@@ -658,7 +658,7 @@ practiceTestRouter.get(
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('practiceTestId'),
-  practiceTestController.listQuestions,
+  practiceTestController.listPracticeTestQuestions,
 );
 
 /**
@@ -718,7 +718,7 @@ practiceTestRouter.post(
   authorizeBusinessAccess,
   validateStringIdParam('practiceTestId'),
   validateDto(CreateQuestionDto),
-  practiceTestController.createQuestion,
+  practiceTestController.createPracticeTestQuestion,
 );
 
 /**
@@ -771,7 +771,7 @@ practiceTestRouter.get(
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('practiceTestId'),
-  practiceTestController.get,
+  practiceTestController.getPracticeTest,
 );
 
 /**
@@ -831,7 +831,7 @@ practiceTestRouter.put(
   authorizeBusinessAccess,
   validateStringIdParam('practiceTestId'),
   validateDto(UpdatePracticeTestDto, true),
-  practiceTestController.update,
+  practiceTestController.updatePracticeTest,
 );
 
 /**
@@ -875,5 +875,5 @@ practiceTestRouter.delete(
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('practiceTestId'),
-  practiceTestController.remove,
+  practiceTestController.deletePracticeTest,
 );
