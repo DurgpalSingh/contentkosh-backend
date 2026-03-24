@@ -18,11 +18,11 @@ export class ExamTestService {
     examTestId: string,
     user: { id: number; role: UserRole },
   ) {
-    const t =
+    const examTestRecord =
       this.isElevated(user.role)
         ? await examRepo.findExamTestById(businessId, examTestId)
         : await examRepo.findExamTestByIdForUser(businessId, examTestId, user.id);
-    if (!t) {
+    if (!examTestRecord) {
       if (user.role === UserRole.TEACHER) {
         logger.warn(
           `[exam-test] getWithAccess miss (teacher batch scope) businessId=${businessId} examTestId=${examTestId} userId=${user.id}`,
@@ -30,7 +30,7 @@ export class ExamTestService {
       }
       throw new NotFoundError('Exam test not found');
     }
-    return t;
+    return examTestRecord;
   }
 
   async create(businessId: number, dto: CreateExamTestDto, user: { id: number; role: UserRole }) {
@@ -45,7 +45,7 @@ export class ExamTestService {
       throw new BadRequestError('deadlineAt must be after startAt');
     }
 
-    const created = await examRepo.createExamTest({
+    const createdExamTest = await examRepo.createExamTest({
       businessId,
       batchId: dto.batchId,
       name: dto.name,
@@ -61,7 +61,7 @@ export class ExamTestService {
       shuffleOptions: dto.shuffleOptions ?? true,
       createdBy: user.id,
     });
-    return created;
+    return createdExamTest;
   }
 
   async list(businessId: number, query: { status?: number; batchId?: number }, user: { id: number; role: UserRole }) {
@@ -72,22 +72,22 @@ export class ExamTestService {
     if (query.status !== undefined) where.status = query.status;
     if (query.batchId !== undefined) where.batchId = query.batchId;
     if (!this.isElevated(user.role)) {
-      const raw = await examRepo.findExamTestsByBusinessIdForUser(businessId, user.id, { where });
-      return raw.map((t) => TestMapper.examTest(t));
+      const examTests = await examRepo.findExamTestsByBusinessIdForUser(businessId, user.id, { where });
+      return examTests.map((examTest) => TestMapper.examTest(examTest));
     }
-    const raw = await examRepo.findExamTestsByBusinessId(businessId, { where });
-    return raw.map((t) => TestMapper.examTest(t));
+    const examTests = await examRepo.findExamTestsByBusinessId(businessId, { where });
+    return examTests.map((examTest) => TestMapper.examTest(examTest));
   }
 
   async get(businessId: number, examTestId: string, user: { id: number; role: UserRole }) {
     logger.info(`[exam-test] get businessId=${businessId} examTestId=${examTestId} userId=${user.id} role=${user.role}`);
-    const raw = await this.getWithAccess(businessId, examTestId, user);
+    const examTestRecord = await this.getWithAccess(businessId, examTestId, user);
     const canSeeQuestions = this.isElevated(user.role) || user.role === UserRole.TEACHER;
     if (canSeeQuestions) {
       const questions = await questionRepo.listExamTestQuestions(businessId, examTestId);
-      return { ...raw, questions } as typeof raw & { questions: typeof questions };
+      return { ...examTestRecord, questions } as typeof examTestRecord & { questions: typeof questions };
     }
-    return raw as typeof raw & { questions?: undefined };
+    return examTestRecord as typeof examTestRecord & { questions?: undefined };
   }
 
   async update(
@@ -119,7 +119,7 @@ export class ExamTestService {
       throw new BadRequestError('deadlineAt must be after startAt');
     }
 
-    const updated = await examRepo.updateExamTest(businessId, examTestId, {
+    const updatedExamTest = await examRepo.updateExamTest(businessId, examTestId, {
       ...(dto.batchId !== undefined ? { batchId: dto.batchId } : {}),
       ...(dto.name !== undefined ? { name: dto.name } : {}),
       ...(dto.description !== undefined ? { description: dto.description } : {}),
@@ -134,11 +134,11 @@ export class ExamTestService {
       ...(dto.shuffleOptions !== undefined ? { shuffleOptions: dto.shuffleOptions } : {}),
       updatedBy: user.id,
     });
-    if (!updated) throw new NotFoundError('Exam test not found');
+    if (!updatedExamTest) throw new NotFoundError('Exam test not found');
     if (user.role === UserRole.TEACHER) {
-      await assertTeacherInBatch(user.id, updated.batchId);
+      await assertTeacherInBatch(user.id, updatedExamTest.batchId);
     }
-    return updated;
+    return updatedExamTest;
   }
 
   async remove(businessId: number, examTestId: string, user: { id: number; role: UserRole }) {
@@ -154,8 +154,8 @@ export class ExamTestService {
     if (user.role === UserRole.TEACHER) {
       await assertTeacherInBatch(user.id, existing.batchId);
     }
-    const r = await examRepo.deleteExamTest(businessId, examTestId);
-    if (!r.count) throw new NotFoundError('Exam test not found');
+    const deleteResult = await examRepo.deleteExamTest(businessId, examTestId);
+    if (!deleteResult.count) throw new NotFoundError('Exam test not found');
     return;
   }
 
@@ -179,19 +179,19 @@ export class ExamTestService {
     if (questionCount < 1) {
       throw new BadRequestError('Add at least one question before publishing');
     }
-    const updated = await examRepo.updateExamTest(businessId, examTestId, {
+    const publishedExamTest = await examRepo.updateExamTest(businessId, examTestId, {
       status: TestStatus.PUBLISHED,
       updatedBy: user.id,
     });
-    if (!updated) throw new NotFoundError('Exam test not found');
-    return updated;
+    if (!publishedExamTest) throw new NotFoundError('Exam test not found');
+    return publishedExamTest;
   }
 
   async listQuestions(businessId: number, examTestId: string, user: { id: number; role: UserRole }) {
     logger.info(`[exam-test] listQuestions businessId=${businessId} examTestId=${examTestId} userId=${user.id}`);
-    const test = await this.getWithAccess(businessId, examTestId, user);
+    const examTestRecord = await this.getWithAccess(businessId, examTestId, user);
     if (user.role === UserRole.TEACHER) {
-      await assertTeacherInBatch(user.id, test.batchId);
+      await assertTeacherInBatch(user.id, examTestRecord.batchId);
     }
     return questionRepo.listExamTestQuestions(businessId, examTestId);
   }
@@ -205,9 +205,9 @@ export class ExamTestService {
     logger.info(
       `[exam-test] createQuestion businessId=${businessId} examTestId=${examTestId} type=${dto?.type} userId=${user.id}`,
     );
-    const test = await this.getWithAccess(businessId, examTestId, user);
+    const examTestRecord = await this.getWithAccess(businessId, examTestId, user);
     if (user.role === UserRole.TEACHER) {
-      await assertTeacherInBatch(user.id, test.batchId);
+      await assertTeacherInBatch(user.id, examTestRecord.batchId);
     }
     const hasAttempts = await questionRepo.hasAttemptsForExamTest(businessId, examTestId);
     if (hasAttempts) throw new BadRequestError('Cannot modify questions after attempts have started');
@@ -219,7 +219,7 @@ export class ExamTestService {
       options: dto.options?.map((o) => ({ text: o.text, mediaUrl: o.mediaUrl ?? null })) ?? [],
     });
 
-    const created = await questionRepo.createExamTestQuestionResolvingCorrect(businessId, examTestId, {
+    const createdQuestion = await questionRepo.createExamTestQuestionResolvingCorrect(businessId, examTestId, {
       type: dto.type,
       text: dto.questionText,
       mediaUrl: dto.mediaUrl ?? null,
@@ -228,46 +228,46 @@ export class ExamTestService {
       correctOptionRefs: dto.correctOptionIdsAnswers ?? [],
       options: dto.options?.map((o) => ({ text: o.text, mediaUrl: o.mediaUrl ?? null })) ?? [],
     });
-    if (!created) throw new NotFoundError('Exam test not found');
-    return created;
+    if (!createdQuestion) throw new NotFoundError('Exam test not found');
+    return createdQuestion;
   }
 
   async updateQuestion(businessId: number, questionId: string, dto: UpdateQuestionDto, user: { id: number; role: UserRole }) {
     const existing = await questionRepo.findQuestionById(businessId, questionId);
     if (!existing) throw new NotFoundError('Question not found');
 
-    const testId = existing.examTestId;
-    if (!testId) throw new BadRequestError('Question does not belong to an exam test');
-    const test = await this.getWithAccess(businessId, testId, user);
+    const examTestId = existing.examTestId;
+    if (!examTestId) throw new BadRequestError('Question does not belong to an exam test');
+    const examTestRecord = await this.getWithAccess(businessId, examTestId, user);
     if (user.role === UserRole.TEACHER) {
-      await assertTeacherInBatch(user.id, test.batchId);
+      await assertTeacherInBatch(user.id, examTestRecord.batchId);
     }
 
-    const hasAttempts = await questionRepo.hasAttemptsForExamTest(businessId, testId);
+    const hasAttempts = await questionRepo.hasAttemptsForExamTest(businessId, examTestId);
     if (hasAttempts) throw new BadRequestError('Cannot modify questions after attempts have started');
 
-    const newType = dto.type ?? existing.type;
-    const optionPayload = dto.options !== undefined
+    const resolvedQuestionType = dto.type ?? existing.type;
+    const optionUpdates = dto.options !== undefined
       ? dto.options.map((o) => ({
           ...(o.id !== undefined ? { id: o.id } : {}),
           text: o.text,
           mediaUrl: o.mediaUrl ?? null,
         }))
       : undefined;
-    const correctForValidation = dto.correctOptionIdsAnswers ?? existing.correctOptionIdsAnswers ?? [];
-    const correctTextAnswer = dto.correctTextAnswer ?? existing.correctTextAnswer ?? null;
+    const correctOptionIdsForValidation = dto.correctOptionIdsAnswers ?? existing.correctOptionIdsAnswers ?? [];
+    const resolvedCorrectTextAnswer = dto.correctTextAnswer ?? existing.correctTextAnswer ?? null;
 
     validateQuestionPayload({
-      type: newType,
-      correctTextAnswer,
-      correctOptionIdsAnswers: correctForValidation.map((v) => String(v)),
+      type: resolvedQuestionType,
+      correctTextAnswer: resolvedCorrectTextAnswer,
+      correctOptionIdsAnswers: correctOptionIdsForValidation.map((v) => String(v)),
       options:
-        optionPayload?.map((o) => ({ text: o.text, mediaUrl: o.mediaUrl ?? null })) ??
+        optionUpdates?.map((o) => ({ text: o.text, mediaUrl: o.mediaUrl ?? null })) ??
         existing.options?.map((o) => ({ text: o.text, mediaUrl: o.mediaUrl ?? null })) ??
         [],
     });
 
-    const updated = await questionRepo.updateQuestionAndOptions(businessId, questionId, {
+    const updatedQuestion = await questionRepo.updateQuestionAndOptions(businessId, questionId, {
       ...(dto.type !== undefined ? { type: dto.type } : {}),
       ...(dto.questionText !== undefined ? { text: dto.questionText } : {}),
       ...(dto.mediaUrl !== undefined ? { mediaUrl: dto.mediaUrl } : {}),
@@ -276,23 +276,23 @@ export class ExamTestService {
       ...(dto.correctOptionIdsAnswers !== undefined
         ? { correctOptionRefs: dto.correctOptionIdsAnswers }
         : {}),
-      ...(dto.options !== undefined ? { options: optionPayload ?? [] } : {}),
+      ...(dto.options !== undefined ? { options: optionUpdates ?? [] } : {}),
     });
-    if (!updated) throw new NotFoundError('Question not found');
-    return updated;
+    if (!updatedQuestion) throw new NotFoundError('Question not found');
+    return updatedQuestion;
   }
 
   async deleteQuestion(businessId: number, questionId: string, user: { id: number; role: UserRole }) {
     const existing = await questionRepo.findQuestionById(businessId, questionId);
     if (!existing) throw new NotFoundError('Question not found');
-    const testId = existing.examTestId;
-    if (!testId) throw new BadRequestError('Question does not belong to an exam test');
-    const test = await this.getWithAccess(businessId, testId, user);
+    const examTestId = existing.examTestId;
+    if (!examTestId) throw new BadRequestError('Question does not belong to an exam test');
+    const examTestRecord = await this.getWithAccess(businessId, examTestId, user);
     if (user.role === UserRole.TEACHER) {
-      await assertTeacherInBatch(user.id, test.batchId);
+      await assertTeacherInBatch(user.id, examTestRecord.batchId);
     }
 
-    const hasAttempts = await questionRepo.hasAttemptsForExamTest(businessId, testId);
+    const hasAttempts = await questionRepo.hasAttemptsForExamTest(businessId, examTestId);
     if (hasAttempts) throw new BadRequestError('Cannot modify questions after attempts have started');
 
     await questionRepo.deleteQuestion(businessId, questionId);

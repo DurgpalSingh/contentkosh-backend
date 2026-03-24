@@ -17,7 +17,7 @@ type AttemptRecord = Pick<
   'id' | 'practiceTestId' | 'examTestId' | 'userId' | 'status' | 'startedAt' | 'submittedAt' | 'score' | 'totalScore' | 'percentage'
 >;
 
-function stableHashToUint32(input: string): number {
+function hashStringToUint32(input: string): number {
   // FNV-1a 32-bit
   let h = 0x811c9dc5;
   for (let i = 0; i < input.length; i++) {
@@ -27,9 +27,9 @@ function stableHashToUint32(input: string): number {
   return h >>> 0;
 }
 
-function seededRng(seed: string): () => number {
+function createSeededRng(seed: string): () => number {
   // Mulberry32
-  let a = stableHashToUint32(seed) || 1;
+  let a = hashStringToUint32(seed) || 1;
   return () => {
     a |= 0;
     a = (a + 0x6d2b79f5) | 0;
@@ -39,7 +39,7 @@ function seededRng(seed: string): () => number {
   };
 }
 
-function shuffleInPlace<T>(items: T[], rand: () => number) {
+function shuffleArrayInPlace<T>(items: T[], rand: () => number) {
   for (let index = items.length - 1; index > 0; index--) {
     const swapIndex = Math.floor(rand() * (index + 1));
     const temp = items[index] as T;
@@ -59,7 +59,7 @@ function csvEscape(value: unknown): string {
 
 
 
-function mapAttemptSummary(attemptRecord: AttemptRecord) {
+function buildAttemptSummary(attemptRecord: AttemptRecord) {
   return {
     id: attemptRecord.id,
     practiceTestId: attemptRecord.practiceTestId ?? null,
@@ -74,7 +74,7 @@ function mapAttemptSummary(attemptRecord: AttemptRecord) {
   };
 }
 
-function mapAnswer(answerRow: TestAttemptAnswer) {
+function mapAttemptAnswer(answerRow: TestAttemptAnswer) {
   return {
     questionId: answerRow.questionId,
     selectedOptionIds: answerRow.selectedOptionIds ?? [],
@@ -84,7 +84,7 @@ function mapAnswer(answerRow: TestAttemptAnswer) {
   };
 }
 
-function hasExamStarted(now: Date, startAt: Date): boolean {
+function hasExamStartReached(now: Date, startAt: Date): boolean {
   const nowMs = now.getTime();
   const startAtMs = startAt.getTime();
   if (nowMs + 1000 >= startAtMs) return true;
@@ -110,74 +110,74 @@ export class TestAttemptService {
     if (user.role !== UserRole.STUDENT) throw new BadRequestError('Only students can start attempts');
     logger.info(`[test-attempt] startPracticeAttempt businessId=${businessId} userId=${user.id} practiceTestId=${practiceTestId}`);
 
-    const test = await practiceRepo.findPracticeTestById(businessId, practiceTestId);
-    if (!test) {
+    const practiceTest = await practiceRepo.findPracticeTestById(businessId, practiceTestId);
+    if (!practiceTest) {
       logger.warn(`[test-attempt] practice test not found businessId=${businessId} practiceTestId=${practiceTestId}`);
       throw new NotFoundError('Practice test not found');
     }
-    if (test.status !== TestStatus.PUBLISHED) {
-      logger.warn(`[test-attempt] practice test not published practiceTestId=${practiceTestId} status=${test.status}`);
+    if (practiceTest.status !== TestStatus.PUBLISHED) {
+      logger.warn(`[test-attempt] practice test not published practiceTestId=${practiceTestId} status=${practiceTest.status}`);
       throw new BadRequestError('Practice test is not published');
     }
 
-    await this.assertStudentInBatch(user.id, test.batchId);
+    await this.assertStudentInBatch(user.id, practiceTest.batchId);
 
-    const inProgress = await attemptRepo.findPracticeAttemptsByUser(practiceTestId, user.id, {
+    const inProgressAttempts = await attemptRepo.findPracticeAttemptsByUser(practiceTestId, user.id, {
       where: { status: AttemptStatus.IN_PROGRESS },
       take: 1,
     });
-    if (inProgress.length) {
-      const attempt = inProgress[0];
-      if (!attempt) {
+    if (inProgressAttempts.length) {
+      const inProgressAttempt = inProgressAttempts[0];
+      if (!inProgressAttempt) {
         logger.warn(`[test-attempt] practice attempt resume failed: missing attempt record practiceTestId=${practiceTestId}`);
         throw new BadRequestError('Practice attempt not found');
       }
-      const questions = (await questionRepo.listPracticeTestQuestions(businessId, practiceTestId)) as QuestionRecord[];
-      if (!questions.length) {
+      const questionRecords = (await questionRepo.listPracticeTestQuestions(businessId, practiceTestId)) as QuestionRecord[];
+      if (!questionRecords.length) {
         logger.warn(`[test-attempt] practice attempt resume blocked: no questions practiceTestId=${practiceTestId}`);
         throw new BadRequestError('Practice test has no questions');
       }
-      const rng = seededRng(`practice:${attempt.id}`);
-      const questionsInAttemptOrder = questions.map((questionRecord) => ({ ...questionRecord, options: [...questionRecord.options] }));
-      if (test.shuffleQuestions) shuffleInPlace(questionsInAttemptOrder, rng);
-      if (test.shuffleOptions) {
-        questionsInAttemptOrder.forEach((questionRecord) => shuffleInPlace(questionRecord.options, rng));
+      const randomizer = createSeededRng(`practice:${inProgressAttempt.id}`);
+      const orderedQuestions = questionRecords.map((questionRecord) => ({ ...questionRecord, options: [...questionRecord.options] }));
+      if (practiceTest.shuffleQuestions) shuffleArrayInPlace(orderedQuestions, randomizer);
+      if (practiceTest.shuffleOptions) {
+        orderedQuestions.forEach((questionRecord) => shuffleArrayInPlace(questionRecord.options, randomizer));
       }
 
-      logger.info(`[test-attempt] practice attempt resumed attemptId=${attempt.id} questions=${questionsInAttemptOrder.length}`);
+      logger.info(`[test-attempt] practice attempt resumed attemptId=${inProgressAttempt.id} questions=${orderedQuestions.length}`);
       return {
-        attemptId: attempt.id,
-        startedAt: attempt.startedAt,
-        test,
-        questions: questionsInAttemptOrder,
+        attemptId: inProgressAttempt.id,
+        startedAt: inProgressAttempt.startedAt,
+        test: practiceTest,
+        questions: orderedQuestions,
       };
     }
 
-    const attempt = await attemptRepo.createTestAttempt({
+    const newAttempt = await attemptRepo.createTestAttempt({
       practiceTestId,
       userId: user.id,
       status: AttemptStatus.IN_PROGRESS,
       startedAt: new Date(),
     });
 
-    const questions = (await questionRepo.listPracticeTestQuestions(businessId, practiceTestId)) as QuestionRecord[];
-    if (!questions.length) {
+    const questionRecords = (await questionRepo.listPracticeTestQuestions(businessId, practiceTestId)) as QuestionRecord[];
+    if (!questionRecords.length) {
       logger.warn(`[test-attempt] practice attempt blocked: no questions practiceTestId=${practiceTestId}`);
       throw new BadRequestError('Practice test has no questions');
     }
-    const rng = seededRng(`practice:${attempt.id}`);
-    const questionsInAttemptOrder = questions.map((questionRecord) => ({ ...questionRecord, options: [...questionRecord.options] }));
-    if (test.shuffleQuestions) shuffleInPlace(questionsInAttemptOrder, rng);
-    if (test.shuffleOptions) {
-      questionsInAttemptOrder.forEach((questionRecord) => shuffleInPlace(questionRecord.options, rng));
+    const randomizer = createSeededRng(`practice:${newAttempt.id}`);
+    const orderedQuestions = questionRecords.map((questionRecord) => ({ ...questionRecord, options: [...questionRecord.options] }));
+    if (practiceTest.shuffleQuestions) shuffleArrayInPlace(orderedQuestions, randomizer);
+    if (practiceTest.shuffleOptions) {
+      orderedQuestions.forEach((questionRecord) => shuffleArrayInPlace(questionRecord.options, randomizer));
     }
 
-    logger.info(`[test-attempt] practice attempt started attemptId=${attempt.id} questions=${questionsInAttemptOrder.length}`);
+    logger.info(`[test-attempt] practice attempt started attemptId=${newAttempt.id} questions=${orderedQuestions.length}`);
     return {
-      attemptId: attempt.id,
-      startedAt: attempt.startedAt,
-      test,
-      questions: questionsInAttemptOrder,
+      attemptId: newAttempt.id,
+      startedAt: newAttempt.startedAt,
+      test: practiceTest,
+      questions: orderedQuestions,
     };
   }
 
@@ -185,29 +185,29 @@ export class TestAttemptService {
     if (user.role !== UserRole.STUDENT) throw new BadRequestError('Only students can start attempts');
     logger.info(`[test-attempt] startExamAttempt businessId=${businessId} userId=${user.id} examTestId=${examTestId}`);
 
-    const test = await examRepo.findExamTestById(businessId, examTestId);
-    if (!test) {
+    const examTest = await examRepo.findExamTestById(businessId, examTestId);
+    if (!examTest) {
       logger.warn(`[test-attempt] exam test not found businessId=${businessId} examTestId=${examTestId}`);
       throw new NotFoundError('Exam test not found');
     }
-    if (test.status !== TestStatus.PUBLISHED) {
-      logger.warn(`[test-attempt] exam test not published examTestId=${examTestId} status=${test.status}`);
+    if (examTest.status !== TestStatus.PUBLISHED) {
+      logger.warn(`[test-attempt] exam test not published examTestId=${examTestId} status=${examTest.status}`);
       throw new BadRequestError('Exam test is not published');
     }
 
-    await this.assertStudentInBatch(user.id, test.batchId);
+    await this.assertStudentInBatch(user.id, examTest.batchId);
 
     const now = new Date();
     const nowMs = now.getTime();
-    const deadlineAtMs = test.deadlineAt.getTime();
-    logger.info(`[test-attempt] exam timing now=${now.toISOString()} startAt=${test.startAt.toISOString()} deadlineAt=${test.deadlineAt.toISOString()}`);
+    const deadlineAtMs = examTest.deadlineAt.getTime();
+    logger.info(`[test-attempt] exam timing now=${now.toISOString()} startAt=${examTest.startAt.toISOString()} deadlineAt=${examTest.deadlineAt.toISOString()}`);
     // 1s tolerance to avoid clock drift/jitter
-    if (!hasExamStarted(now, test.startAt)) {
-      logger.warn(`[test-attempt] exam not started examTestId=${examTestId} now=${now.toISOString()} startAt=${test.startAt.toISOString()}`);
+    if (!hasExamStartReached(now, examTest.startAt)) {
+      logger.warn(`[test-attempt] exam not started examTestId=${examTestId} now=${now.toISOString()} startAt=${examTest.startAt.toISOString()}`);
       throw new BadRequestError('Exam has not started yet');
     }
     if (nowMs > deadlineAtMs) {
-      logger.warn(`[test-attempt] exam deadline passed examTestId=${examTestId} now=${now.toISOString()} deadlineAt=${test.deadlineAt.toISOString()}`);
+      logger.warn(`[test-attempt] exam deadline passed examTestId=${examTestId} now=${now.toISOString()} deadlineAt=${examTest.deadlineAt.toISOString()}`);
       throw new BadRequestError('Exam deadline has passed');
     }
 
@@ -225,80 +225,80 @@ export class TestAttemptService {
       take: 1,
     });
     if (inProgressAttempts.length) {
-      const attempt = inProgressAttempts[0];
-      if (!attempt) {
+      const inProgressAttempt = inProgressAttempts[0];
+      if (!inProgressAttempt) {
         logger.warn(`[test-attempt] exam attempt resume failed: missing attempt record examTestId=${examTestId}`);
         throw new BadRequestError('Exam attempt not found');
       }
-      const questions = (await questionRepo.listExamTestQuestions(businessId, examTestId)) as QuestionRecord[];
-      if (!questions.length) {
+      const questionRecords = (await questionRepo.listExamTestQuestions(businessId, examTestId)) as QuestionRecord[];
+      if (!questionRecords.length) {
         logger.warn(`[test-attempt] exam attempt resume blocked: no questions examTestId=${examTestId}`);
         throw new BadRequestError('Exam test has no questions');
       }
-      const rng = seededRng(`exam:${attempt.id}`);
-      const questionsInAttemptOrder = questions.map((questionRecord) => ({ ...questionRecord, options: [...questionRecord.options] }));
-      if (test.shuffleQuestions) shuffleInPlace(questionsInAttemptOrder, rng);
-      if (test.shuffleOptions) {
-        questionsInAttemptOrder.forEach((questionRecord) => shuffleInPlace(questionRecord.options, rng));
+      const randomizer = createSeededRng(`exam:${inProgressAttempt.id}`);
+      const orderedQuestions = questionRecords.map((questionRecord) => ({ ...questionRecord, options: [...questionRecord.options] }));
+      if (examTest.shuffleQuestions) shuffleArrayInPlace(orderedQuestions, randomizer);
+      if (examTest.shuffleOptions) {
+        orderedQuestions.forEach((questionRecord) => shuffleArrayInPlace(questionRecord.options, randomizer));
       }
 
-      logger.info(`[test-attempt] exam attempt resumed attemptId=${attempt.id} questions=${questionsInAttemptOrder.length}`);
+      logger.info(`[test-attempt] exam attempt resumed attemptId=${inProgressAttempt.id} questions=${orderedQuestions.length}`);
       return {
-        attemptId: attempt.id,
-        startedAt: attempt.startedAt,
-        test,
-        questions: questionsInAttemptOrder,
+        attemptId: inProgressAttempt.id,
+        startedAt: inProgressAttempt.startedAt,
+        test: examTest,
+        questions: orderedQuestions,
       };
     }
 
-    const attempt = await attemptRepo.createTestAttempt({
+    const newAttempt = await attemptRepo.createTestAttempt({
       examTestId,
       userId: user.id,
       status: AttemptStatus.IN_PROGRESS,
       startedAt: now,
     });
 
-    const questions = (await questionRepo.listExamTestQuestions(businessId, examTestId)) as QuestionRecord[];
-    if (!questions.length) {
+    const questionRecords = (await questionRepo.listExamTestQuestions(businessId, examTestId)) as QuestionRecord[];
+    if (!questionRecords.length) {
       logger.warn(`[test-attempt] exam attempt blocked: no questions examTestId=${examTestId}`);
       throw new BadRequestError('Exam test has no questions');
     }
-    const rng = seededRng(`exam:${attempt.id}`);
-    const questionsInAttemptOrder = questions.map((questionRecord) => ({ ...questionRecord, options: [...questionRecord.options] }));
-    if (test.shuffleQuestions) shuffleInPlace(questionsInAttemptOrder, rng);
-    if (test.shuffleOptions) {
-      questionsInAttemptOrder.forEach((questionRecord) => shuffleInPlace(questionRecord.options, rng));
+    const randomizer = createSeededRng(`exam:${newAttempt.id}`);
+    const orderedQuestions = questionRecords.map((questionRecord) => ({ ...questionRecord, options: [...questionRecord.options] }));
+    if (examTest.shuffleQuestions) shuffleArrayInPlace(orderedQuestions, randomizer);
+    if (examTest.shuffleOptions) {
+      orderedQuestions.forEach((questionRecord) => shuffleArrayInPlace(questionRecord.options, randomizer));
     }
 
     logger.info(
-      `[test-attempt] exam attempt started attemptId=${attempt.id} questions=${questionsInAttemptOrder.length} effectiveWindow=${test.startAt.toISOString()}..${test.deadlineAt.toISOString()}`,
+      `[test-attempt] exam attempt started attemptId=${newAttempt.id} questions=${orderedQuestions.length} effectiveWindow=${examTest.startAt.toISOString()}..${examTest.deadlineAt.toISOString()}`,
     );
     return {
-      attemptId: attempt.id,
-      startedAt: attempt.startedAt,
-      test,
-      questions: questionsInAttemptOrder,
+      attemptId: newAttempt.id,
+      startedAt: newAttempt.startedAt,
+      test: examTest,
+      questions: orderedQuestions,
     };
   }
 
-  private computeExamEffectiveEnd(test: ExamTest, attempt: TestAttempt): Date {
-    const started = new Date(attempt.startedAt);
-    const durationMs = Number(test.durationMinutes) * 60_000;
-    const byDuration = new Date(started.getTime() + durationMs);
-    return byDuration < test.deadlineAt ? byDuration : test.deadlineAt;
+  private computeExamEffectiveEnd(examTest: ExamTest, attemptRecord: TestAttempt): Date {
+    const startedAt = new Date(attemptRecord.startedAt);
+    const durationMs = Number(examTest.durationMinutes) * 60_000;
+    const endByDuration = new Date(startedAt.getTime() + durationMs);
+    return endByDuration < examTest.deadlineAt ? endByDuration : examTest.deadlineAt;
   }
 
-  private shouldRevealExamResults(test: ExamTest, now: Date): boolean {
-    if (test.resultVisibility === ResultVisibilityExam.HIDDEN) return false;
+  private shouldRevealExamResults(examTest: ExamTest, now: Date): boolean {
+    if (examTest.resultVisibility === ResultVisibilityExam.HIDDEN) return false;
     // AFTER_DEADLINE
-    return now >= test.deadlineAt;
+    return now >= examTest.deadlineAt;
   }
 
   async getPracticeAttemptDetails(businessId: number, user: { id: number; role: UserRole }, attemptId: string) {
     if (user.role !== UserRole.STUDENT) throw new BadRequestError('Only students can view attempts');
     logger.info(`[test-attempt] getPracticeAttemptDetails businessId=${businessId} userId=${user.id} attemptId=${attemptId}`);
 
-    const attempt = await attemptRepo.findTestAttemptWithInclude(attemptId, {
+    const attemptRecord = await attemptRepo.findTestAttemptWithInclude(attemptId, {
       practiceTest: {
         include: {
           batch: { select: { id: true, displayName: true } },
@@ -306,35 +306,36 @@ export class TestAttemptService {
       },
       answers: true,
     });
-    if (!attempt?.practiceTestId || !attempt.practiceTest) throw new NotFoundError('Practice attempt not found');
-    if (attempt.practiceTest.businessId !== businessId) throw new BadRequestError('Invalid business scope');
-    if (attempt.userId !== user.id) throw new BadRequestError('Forbidden');
+    if (!attemptRecord?.practiceTestId || !attemptRecord.practiceTest) throw new NotFoundError('Practice attempt not found');
+    if (attemptRecord.practiceTest.businessId !== businessId) throw new BadRequestError('Invalid business scope');
+    if (attemptRecord.userId !== user.id) throw new BadRequestError('Forbidden');
 
-    await this.assertStudentInBatch(user.id, attempt.practiceTest.batchId);
+    await this.assertStudentInBatch(user.id, attemptRecord.practiceTest.batchId);
 
-    const questions = (await questionRepo.listPracticeTestQuestions(businessId, attempt.practiceTestId)) as QuestionRecord[];
-    const rng = seededRng(`practice:${attempt.id}`);
-    const questionsInAttemptOrder = questions.map((questionRecord) => ({ ...questionRecord, options: [...questionRecord.options] }));
-    if (attempt.practiceTest.shuffleQuestions) shuffleInPlace(questionsInAttemptOrder, rng);
-    if (attempt.practiceTest.shuffleOptions) {
-      questionsInAttemptOrder.forEach((questionRecord) => shuffleInPlace(questionRecord.options, rng));
+    const questionRecords = (await questionRepo.listPracticeTestQuestions(businessId, attemptRecord.practiceTestId)) as QuestionRecord[];
+    const randomizer = createSeededRng(`practice:${attemptRecord.id}`);
+    const orderedQuestions = questionRecords.map((questionRecord) => ({ ...questionRecord, options: [...questionRecord.options] }));
+    if (attemptRecord.practiceTest.shuffleQuestions) shuffleArrayInPlace(orderedQuestions, randomizer);
+    if (attemptRecord.practiceTest.shuffleOptions) {
+      orderedQuestions.forEach((questionRecord) => shuffleArrayInPlace(questionRecord.options, randomizer));
     }
 
-    const answersByQuestionId = buildAnswersByQuestionIdMap(attempt.answers);
-    const isSubmitted = attempt.status === AttemptStatus.SUBMITTED || attempt.status === AttemptStatus.AUTO_SUBMITTED;
-    const questionsWithAnswers = questionsInAttemptOrder.map((questionRecord) =>
+    const answersByQuestionId = buildAnswersByQuestionIdMap(attemptRecord.answers);
+    const isSubmittedAttempt =
+      attemptRecord.status === AttemptStatus.SUBMITTED || attemptRecord.status === AttemptStatus.AUTO_SUBMITTED;
+    const questionsWithAnswers = orderedQuestions.map((questionRecord) =>
       TestMapper.attemptQuestionForStudent({
         question: questionRecord,
         answerRow: answersByQuestionId.get(questionRecord.id),
-        includeCorrectAnswer: isSubmitted,
-        includeStudentScoring: isSubmitted,
+        includeCorrectAnswer: isSubmittedAttempt,
+        includeStudentScoring: isSubmittedAttempt,
         hideStudentAnswer: false,
       }),
     );
 
     return {
-      attempt: mapAttemptSummary(attempt),
-      test: attempt.practiceTest,
+      attempt: buildAttemptSummary(attemptRecord),
+      test: attemptRecord.practiceTest,
       questions: questionsWithAnswers,
     };
   }
@@ -343,7 +344,7 @@ export class TestAttemptService {
     if (user.role !== UserRole.STUDENT) throw new BadRequestError('Only students can view attempts');
     logger.info(`[test-attempt] getExamAttemptDetails businessId=${businessId} userId=${user.id} attemptId=${attemptId}`);
 
-    const attempt = await attemptRepo.findTestAttemptWithInclude(attemptId, {
+    const attemptRecord = await attemptRepo.findTestAttemptWithInclude(attemptId, {
       examTest: {
         include: {
           batch: { select: { id: true, displayName: true } },
@@ -351,51 +352,52 @@ export class TestAttemptService {
       },
       answers: true,
     });
-    if (!attempt?.examTestId || !attempt.examTest) throw new NotFoundError('Exam attempt not found');
-    if (attempt.examTest.businessId !== businessId) throw new BadRequestError('Invalid business scope');
-    if (attempt.userId !== user.id) throw new BadRequestError('Forbidden');
+    if (!attemptRecord?.examTestId || !attemptRecord.examTest) throw new NotFoundError('Exam attempt not found');
+    if (attemptRecord.examTest.businessId !== businessId) throw new BadRequestError('Invalid business scope');
+    if (attemptRecord.userId !== user.id) throw new BadRequestError('Forbidden');
 
-    await this.assertStudentInBatch(user.id, attempt.examTest.batchId);
+    await this.assertStudentInBatch(user.id, attemptRecord.examTest.batchId);
 
-    const questions = (await questionRepo.listExamTestQuestions(businessId, attempt.examTestId)) as QuestionRecord[];
-    const rng = seededRng(`exam:${attempt.id}`);
-    const questionsInAttemptOrder = questions.map((questionRecord) => ({ ...questionRecord, options: [...questionRecord.options] }));
-    if (attempt.examTest.shuffleQuestions) shuffleInPlace(questionsInAttemptOrder, rng);
-    if (attempt.examTest.shuffleOptions) {
-      questionsInAttemptOrder.forEach((questionRecord) => shuffleInPlace(questionRecord.options, rng));
+    const questionRecords = (await questionRepo.listExamTestQuestions(businessId, attemptRecord.examTestId)) as QuestionRecord[];
+    const randomizer = createSeededRng(`exam:${attemptRecord.id}`);
+    const orderedQuestions = questionRecords.map((questionRecord) => ({ ...questionRecord, options: [...questionRecord.options] }));
+    if (attemptRecord.examTest.shuffleQuestions) shuffleArrayInPlace(orderedQuestions, randomizer);
+    if (attemptRecord.examTest.shuffleOptions) {
+      orderedQuestions.forEach((questionRecord) => shuffleArrayInPlace(questionRecord.options, randomizer));
     }
 
     const now = new Date();
-    const reveal = this.shouldRevealExamResults(attempt.examTest, now);
+    const shouldRevealResults = this.shouldRevealExamResults(attemptRecord.examTest, now);
 
-    const maskedAttempt: AttemptRecord = reveal
-      ? attempt
-      : { ...attempt, score: null, totalScore: null, percentage: null };
+    const maskedAttempt: AttemptRecord = shouldRevealResults
+      ? attemptRecord
+      : { ...attemptRecord, score: null, totalScore: null, percentage: null };
 
-    const answersByQuestionId = buildAnswersByQuestionIdMap(attempt.answers);
-    const isSubmitted = attempt.status === AttemptStatus.SUBMITTED || attempt.status === AttemptStatus.AUTO_SUBMITTED;
-    const hideStudentAnswer = !reveal && isSubmitted;
+    const answersByQuestionId = buildAnswersByQuestionIdMap(attemptRecord.answers);
+    const isSubmittedAttempt =
+      attemptRecord.status === AttemptStatus.SUBMITTED || attemptRecord.status === AttemptStatus.AUTO_SUBMITTED;
+    const hideStudentAnswer = !shouldRevealResults && isSubmittedAttempt;
 
-    const questionsWithAnswers = questionsInAttemptOrder.map((questionRecord) =>
+    const questionsWithAnswers = orderedQuestions.map((questionRecord) =>
       TestMapper.attemptQuestionForStudent({
         question: questionRecord,
         answerRow: answersByQuestionId.get(questionRecord.id),
-        includeCorrectAnswer: reveal && isSubmitted,
-        includeStudentScoring: reveal && isSubmitted,
+        includeCorrectAnswer: shouldRevealResults && isSubmittedAttempt,
+        includeStudentScoring: shouldRevealResults && isSubmittedAttempt,
         hideStudentAnswer,
       }),
     );
 
     // Compute timeRemainingSeconds for in-progress attempts
     let timeRemainingSeconds: number | null = null;
-    if (attempt.status === AttemptStatus.IN_PROGRESS) {
-      const effectiveEnd = this.computeExamEffectiveEnd(attempt.examTest, attempt);
+    if (attemptRecord.status === AttemptStatus.IN_PROGRESS) {
+      const effectiveEnd = this.computeExamEffectiveEnd(attemptRecord.examTest, attemptRecord);
       timeRemainingSeconds = Math.max(0, Math.floor((effectiveEnd.getTime() - now.getTime()) / 1000));
     }
 
     return {
-      attempt: { ...mapAttemptSummary(maskedAttempt), ...(timeRemainingSeconds !== null ? { timeRemainingSeconds } : {}) },
-      test: attempt.examTest,
+      attempt: { ...buildAttemptSummary(maskedAttempt), ...(timeRemainingSeconds !== null ? { timeRemainingSeconds } : {}) },
+      test: attemptRecord.examTest,
       questions: questionsWithAnswers,
     };
   }
@@ -409,61 +411,61 @@ export class TestAttemptService {
     if (user.role !== UserRole.STUDENT) throw new BadRequestError('Only students can submit attempts');
     logger.info(`[test-attempt] submitPracticeAttempt businessId=${businessId} userId=${user.id} attemptId=${attemptId} answers=${answers?.length ?? 0}`);
 
-    const attempt = await attemptRepo.findTestAttemptWithInclude(attemptId, {
+    const attemptRecord = await attemptRepo.findTestAttemptWithInclude(attemptId, {
       practiceTest: true,
     });
-    if (!attempt?.practiceTestId || !attempt.practiceTest) throw new NotFoundError('Practice attempt not found');
-    if (attempt.practiceTest.businessId !== businessId) throw new BadRequestError('Invalid business scope');
-    if (attempt.userId !== user.id) throw new BadRequestError('Forbidden');
-    if (attempt.status !== AttemptStatus.IN_PROGRESS) {
-      logger.info(`[test-attempt] practice attempt already submitted attemptId=${attemptId} status=${attempt.status}`);
-      const existing = await attemptRepo.findTestAttemptWithInclude(attemptId, { answers: true });
-      const submittedAt = attempt.submittedAt ?? existing?.submittedAt ?? new Date();
+    if (!attemptRecord?.practiceTestId || !attemptRecord.practiceTest) throw new NotFoundError('Practice attempt not found');
+    if (attemptRecord.practiceTest.businessId !== businessId) throw new BadRequestError('Invalid business scope');
+    if (attemptRecord.userId !== user.id) throw new BadRequestError('Forbidden');
+    if (attemptRecord.status !== AttemptStatus.IN_PROGRESS) {
+      logger.info(`[test-attempt] practice attempt already submitted attemptId=${attemptId} status=${attemptRecord.status}`);
+      const existingAttempt = await attemptRepo.findTestAttemptWithInclude(attemptId, { answers: true });
+      const submittedAt = attemptRecord.submittedAt ?? existingAttempt?.submittedAt ?? new Date();
       return {
         attemptId,
-        status: attempt.status,
-        score: attempt.score ?? 0,
-        totalScore: attempt.totalScore ?? 0,
-        percentage: attempt.percentage ?? 0,
-        answers: existing?.answers?.map(mapAnswer) ?? [],
+        status: attemptRecord.status,
+        score: attemptRecord.score ?? 0,
+        totalScore: attemptRecord.totalScore ?? 0,
+        percentage: attemptRecord.percentage ?? 0,
+        answers: existingAttempt?.answers?.map(mapAttemptAnswer) ?? [],
         submittedAt,
       };
     }
 
-    await this.assertStudentInBatch(user.id, attempt.practiceTest.batchId);
+    await this.assertStudentInBatch(user.id, attemptRecord.practiceTest.batchId);
 
-    const questions = (await questionRepo.listPracticeTestQuestions(businessId, attempt.practiceTestId)) as QuestionRecord[];
-    const questionIds = new Set(questions.map((q) => q.id));
-    const providedAnswers = answers ?? [];
-    const invalidAnswer = providedAnswers.find((a) => !questionIds.has(a.questionId));
-    if (invalidAnswer) {
-      throw new BadRequestError(`Invalid questionId in answers: ${invalidAnswer.questionId}`);
+    const questionRecords = (await questionRepo.listPracticeTestQuestions(businessId, attemptRecord.practiceTestId)) as QuestionRecord[];
+    const questionIdSet = new Set(questionRecords.map((q) => q.id));
+    const submittedAnswers = answers ?? [];
+    const invalidAnswerPayload = submittedAnswers.find((a) => !questionIdSet.has(a.questionId));
+    if (invalidAnswerPayload) {
+      throw new BadRequestError(`Invalid questionId in answers: ${invalidAnswerPayload.questionId}`);
     }
 
-    const byQuestion = new Map<string, SubmitAnswerPayload>(providedAnswers.map((a) => [a.questionId, a]));
+    const answersByQuestionId = new Map<string, SubmitAnswerPayload>(submittedAnswers.map((a) => [a.questionId, a]));
 
-    const rawDefaultMarks = Number(attempt.practiceTest.defaultMarksPerQuestion);
-    const defaultMarksPerQuestion = Number.isFinite(rawDefaultMarks) ? rawDefaultMarks : 1;
-    const totalScore = defaultMarksPerQuestion * questions.length;
+    const rawDefaultMarksValue = Number(attemptRecord.practiceTest.defaultMarksPerQuestion);
+    const defaultMarksPerQuestion = Number.isFinite(rawDefaultMarksValue) ? rawDefaultMarksValue : 1;
+    const totalScore = defaultMarksPerQuestion * questionRecords.length;
 
-    const evaluated = questions.map((q) => {
-      const ev = evaluateQuestion({
+    const evaluatedAnswers = questionRecords.map((q) => {
+      const evaluation = evaluateQuestion({
         question: q,
-        provided: byQuestion.get(q.id),
+        provided: answersByQuestionId.get(q.id),
         isExam: false,
         defaultMarksPerQuestion,
         negativeMarksPerQuestion: 0,
       });
-      return { questionId: q.id, ...ev };
+      return { questionId: q.id, ...evaluation };
     });
 
-    const score = evaluated.reduce((sum, e) => sum + (e.obtainedMarks ?? 0), 0);
+    const score = evaluatedAnswers.reduce((sum, e) => sum + (e.obtainedMarks ?? 0), 0);
     const percentage = totalScore > 0 ? (score / totalScore) * 100 : 0;
     const submittedAt = new Date();
 
-    const updatedAttempt = await attemptRepo.upsertAttemptAnswersAndFinalize({
+    const finalizedAttempt = await attemptRepo.upsertAttemptAnswersAndFinalize({
       attemptId,
-      evaluated,
+      evaluated: evaluatedAnswers,
       attemptUpdate: {
         status: AttemptStatus.SUBMITTED,
         submittedAt,
@@ -474,18 +476,18 @@ export class TestAttemptService {
     });
 
     logger.info(`[test-attempt] practice attempt evaluated attemptId=${attemptId} score=${score} totalScore=${totalScore} percentage=${percentage}`);
-    const submitted = updatedAttempt?.submittedAt ?? submittedAt;
-    const evaluatedByQ = buildEvaluatedByQuestionIdMap(evaluated);
+    const submitted = finalizedAttempt?.submittedAt ?? submittedAt;
+    const evaluatedByQuestionId = buildEvaluatedByQuestionIdMap(evaluatedAnswers);
     return {
       attemptId,
-      status: updatedAttempt?.status ?? AttemptStatus.SUBMITTED,
+      status: finalizedAttempt?.status ?? AttemptStatus.SUBMITTED,
       score,
       totalScore,
       percentage,
-      answers: updatedAttempt?.answers?.map(mapAnswer) ?? [],
+      answers: finalizedAttempt?.answers?.map(mapAttemptAnswer) ?? [],
       submittedAt: submitted,
       result: {
-        questions: questions.map((q) => mapSubmittedResultQuestion(q, evaluatedByQ)),
+        questions: questionRecords.map((q) => mapSubmittedResultQuestion(q, evaluatedByQuestionId)),
       },
     };
   }
@@ -499,84 +501,84 @@ export class TestAttemptService {
     if (user.role !== UserRole.STUDENT) throw new BadRequestError('Only students can submit attempts');
     logger.info(`[test-attempt] submitExamAttempt businessId=${businessId} userId=${user.id} attemptId=${attemptId} answers=${answers?.length ?? 0}`);
 
-    const attempt = await attemptRepo.findTestAttemptWithInclude(attemptId, {
+    const attemptRecord = await attemptRepo.findTestAttemptWithInclude(attemptId, {
       examTest: true,
     });
-    if (!attempt?.examTestId || !attempt.examTest) throw new NotFoundError('Exam attempt not found');
-    if (attempt.examTest.businessId !== businessId) throw new BadRequestError('Invalid business scope');
-    if (attempt.userId !== user.id) throw new BadRequestError('Forbidden');
-    if (attempt.status !== AttemptStatus.IN_PROGRESS) {
-      logger.info(`[test-attempt] exam attempt already submitted attemptId=${attemptId} status=${attempt.status}`);
-      const existing = await attemptRepo.findTestAttemptWithInclude(attemptId, { answers: true });
-      const submittedAt = attempt.submittedAt ?? existing?.submittedAt ?? new Date();
+    if (!attemptRecord?.examTestId || !attemptRecord.examTest) throw new NotFoundError('Exam attempt not found');
+    if (attemptRecord.examTest.businessId !== businessId) throw new BadRequestError('Invalid business scope');
+    if (attemptRecord.userId !== user.id) throw new BadRequestError('Forbidden');
+    if (attemptRecord.status !== AttemptStatus.IN_PROGRESS) {
+      logger.info(`[test-attempt] exam attempt already submitted attemptId=${attemptId} status=${attemptRecord.status}`);
+      const existingAttempt = await attemptRepo.findTestAttemptWithInclude(attemptId, { answers: true });
+      const submittedAt = attemptRecord.submittedAt ?? existingAttempt?.submittedAt ?? new Date();
       const now = new Date();
-      const reveal = this.shouldRevealExamResults(attempt.examTest, now);
-      if (!reveal) {
+      const shouldRevealResults = this.shouldRevealExamResults(attemptRecord.examTest, now);
+      if (!shouldRevealResults) {
         return {
           attemptId,
-          status: attempt.status,
+          status: attemptRecord.status,
           submittedAt,
         };
       }
       return {
         attemptId,
-        status: attempt.status,
-        score: attempt.score ?? 0,
-        totalScore: attempt.totalScore ?? 0,
-        percentage: attempt.percentage ?? 0,
-        answers: existing?.answers?.map(mapAnswer) ?? [],
+        status: attemptRecord.status,
+        score: attemptRecord.score ?? 0,
+        totalScore: attemptRecord.totalScore ?? 0,
+        percentage: attemptRecord.percentage ?? 0,
+        answers: existingAttempt?.answers?.map(mapAttemptAnswer) ?? [],
         submittedAt,
       };
     }
 
-    await this.assertStudentInBatch(user.id, attempt.examTest.batchId);
+    await this.assertStudentInBatch(user.id, attemptRecord.examTest.batchId);
 
     const now = new Date();
-    if (now > attempt.examTest.deadlineAt) {
+    if (now > attemptRecord.examTest.deadlineAt) {
       logger.warn(
         `[test-attempt] submitExamAttempt rejected: deadline passed attemptId=${attemptId} ` +
-        `now=${now.toISOString()} deadlineAt=${attempt.examTest.deadlineAt.toISOString()}`
+        `now=${now.toISOString()} deadlineAt=${attemptRecord.examTest.deadlineAt.toISOString()}`
       );
       throw new BadRequestError('Exam deadline has passed, submission not allowed');
     }
 
-    const questions = (await questionRepo.listExamTestQuestions(businessId, attempt.examTestId)) as QuestionRecord[];
-    const questionIds = new Set(questions.map((q) => q.id));
-    const providedAnswers = answers ?? [];
-    const invalidAnswer = providedAnswers.find((a) => !questionIds.has(a.questionId));
-    if (invalidAnswer) {
-      throw new BadRequestError(`Invalid questionId in answers: ${invalidAnswer.questionId}`);
+    const questionRecords = (await questionRepo.listExamTestQuestions(businessId, attemptRecord.examTestId)) as QuestionRecord[];
+    const questionIdSet = new Set(questionRecords.map((q) => q.id));
+    const submittedAnswers = answers ?? [];
+    const invalidAnswerPayload = submittedAnswers.find((a) => !questionIdSet.has(a.questionId));
+    if (invalidAnswerPayload) {
+      throw new BadRequestError(`Invalid questionId in answers: ${invalidAnswerPayload.questionId}`);
     }
 
-    const byQuestion = new Map<string, SubmitAnswerPayload>(providedAnswers.map((a) => [a.questionId, a]));
+    const answersByQuestionId = new Map<string, SubmitAnswerPayload>(submittedAnswers.map((a) => [a.questionId, a]));
 
-    const rawDefaultMarks = Number(attempt.examTest.defaultMarksPerQuestion);
-    const defaultMarksPerQuestion = Number.isFinite(rawDefaultMarks) ? rawDefaultMarks : 1;
-    const rawNegativeMarks = Number(attempt.examTest.negativeMarksPerQuestion);
-    const negativeMarksPerQuestion = Number.isFinite(rawNegativeMarks) ? rawNegativeMarks : 0;
-    const totalScore = defaultMarksPerQuestion * questions.length;
+    const rawDefaultMarksValue = Number(attemptRecord.examTest.defaultMarksPerQuestion);
+    const defaultMarksPerQuestion = Number.isFinite(rawDefaultMarksValue) ? rawDefaultMarksValue : 1;
+    const rawNegativeMarksValue = Number(attemptRecord.examTest.negativeMarksPerQuestion);
+    const negativeMarksPerQuestion = Number.isFinite(rawNegativeMarksValue) ? rawNegativeMarksValue : 0;
+    const totalScore = defaultMarksPerQuestion * questionRecords.length;
 
-    const evaluated = questions.map((q) => {
-      const ev = evaluateQuestion({
+    const evaluatedAnswers = questionRecords.map((q) => {
+      const evaluation = evaluateQuestion({
         question: q,
-        provided: byQuestion.get(q.id),
+        provided: answersByQuestionId.get(q.id),
         isExam: true,
         defaultMarksPerQuestion,
         negativeMarksPerQuestion,
       });
-      return { questionId: q.id, ...ev };
+      return { questionId: q.id, ...evaluation };
     });
 
-    const score = evaluated.reduce((sum, e) => sum + (e.obtainedMarks ?? 0), 0);
+    const score = evaluatedAnswers.reduce((sum, e) => sum + (e.obtainedMarks ?? 0), 0);
     const percentage = totalScore > 0 ? (score / totalScore) * 100 : 0;
     const submittedAt = new Date();
 
-    const effectiveEnd = this.computeExamEffectiveEnd(attempt.examTest, attempt);
+    const effectiveEnd = this.computeExamEffectiveEnd(attemptRecord.examTest, attemptRecord);
     const status = submittedAt > effectiveEnd ? AttemptStatus.AUTO_SUBMITTED : AttemptStatus.SUBMITTED;
 
-    const updatedAttempt = await attemptRepo.upsertAttemptAnswersAndFinalize({
+    const finalizedAttempt = await attemptRepo.upsertAttemptAnswersAndFinalize({
       attemptId,
-      evaluated,
+      evaluated: evaluatedAnswers,
       attemptUpdate: {
         status,
         submittedAt,
@@ -587,32 +589,32 @@ export class TestAttemptService {
     });
 
     // const now = new Date();
-    const reveal = this.shouldRevealExamResults(attempt.examTest, now);
+    const shouldRevealResults = this.shouldRevealExamResults(attemptRecord.examTest, now);
     logger.info(
-      `[test-attempt] exam attempt evaluated attemptId=${attemptId} status=${status} score=${score} totalScore=${totalScore} percentage=${percentage} reveal=${reveal} effectiveEndAt=${effectiveEnd.toISOString()}`,
+      `[test-attempt] exam attempt evaluated attemptId=${attemptId} status=${status} score=${score} totalScore=${totalScore} percentage=${percentage} reveal=${shouldRevealResults} effectiveEndAt=${effectiveEnd.toISOString()}`,
     );
 
-    const submitted = updatedAttempt?.submittedAt ?? submittedAt;
-    if (!reveal) {
+    const submitted = finalizedAttempt?.submittedAt ?? submittedAt;
+    if (!shouldRevealResults) {
       return {
         attemptId,
-        status: updatedAttempt?.status ?? status,
+        status: finalizedAttempt?.status ?? status,
         submittedAt: submitted,
-        resultAvailableAt: attempt.examTest.deadlineAt,
+        resultAvailableAt: attemptRecord.examTest.deadlineAt,
       };
     }
 
-    const evaluatedByQ = buildEvaluatedByQuestionIdMap(evaluated);
+    const evaluatedByQuestionId = buildEvaluatedByQuestionIdMap(evaluatedAnswers);
     return {
       attemptId,
-      status: updatedAttempt?.status ?? status,
+      status: finalizedAttempt?.status ?? status,
       score,
       totalScore,
       percentage,
-      answers: updatedAttempt?.answers?.map(mapAnswer) ?? [],
+      answers: finalizedAttempt?.answers?.map(mapAttemptAnswer) ?? [],
       submittedAt: submitted,
       result: {
-        questions: questions.map((q) => mapSubmittedResultQuestion(q, evaluatedByQ)),
+        questions: questionRecords.map((q) => mapSubmittedResultQuestion(q, evaluatedByQuestionId)),
       },
     };
   }
@@ -620,47 +622,57 @@ export class TestAttemptService {
   async listAvailablePracticeTests(businessId: number, user: { id: number; role: UserRole }) {
     if (user.role !== UserRole.STUDENT) throw new BadRequestError('Only students can access available tests');
     logger.info(`[test-attempt] listAvailablePracticeTests businessId=${businessId} userId=${user.id}`);
-    const tests = (await practiceRepo.findPublishedPracticeTestsForStudent(businessId, user.id)) as Array<
+    const availableTests = (await practiceRepo.findPublishedPracticeTestsForStudent(businessId, user.id)) as Array<
       PracticeTest & { _count?: { questions?: number } }
     >;
-    logger.info(`[test-attempt] available practice tests count=${tests.length} businessId=${businessId} userId=${user.id}`);
-    const statsByTestId = await attemptRepo.getPracticeAttemptStatsByUserForTests(
-      tests.map((t) => t.id),
+    logger.info(`[test-attempt] available practice tests count=${availableTests.length} businessId=${businessId} userId=${user.id}`);
+    const attemptStatsByTestId = await attemptRepo.getPracticeAttemptStatsByUserForTests(
+      availableTests.map((testRecord) => testRecord.id),
       user.id,
     );
 
-    return tests.map((t) => {
-      const stats = statsByTestId.get(t.id) ?? { attemptCount: 0, bestScore: null, lastAttemptAt: null, lastAttemptId: null, lastAttemptStatus: null, lastAttemptStartedAt: null };
-      const totalQuestions = t._count?.questions ?? 0;
-      const totalMarks = totalQuestions * Number(t.defaultMarksPerQuestion ?? 0);
-      const hasAttempt = stats.attemptCount > 0;
-      const isInProgress = stats.lastAttemptStatus === AttemptStatus.IN_PROGRESS;
+    return availableTests.map((testRecord) => {
+      const attemptStats =
+        attemptStatsByTestId.get(testRecord.id) ?? {
+          attemptCount: 0,
+          bestScore: null,
+          lastAttemptAt: null,
+          lastAttemptId: null,
+          lastAttemptStatus: null,
+          lastAttemptStartedAt: null,
+        };
+      const totalQuestionCount = testRecord._count?.questions ?? 0;
+      const totalMarksAvailable = totalQuestionCount * Number(testRecord.defaultMarksPerQuestion ?? 0);
+      const hasPreviousAttempt = attemptStats.attemptCount > 0;
+      const isInProgress = attemptStats.lastAttemptStatus === AttemptStatus.IN_PROGRESS;
       const canResume = isInProgress;
       const canStart = !isInProgress;
-      const batch = 'batch' in t ? (t as { batch?: { displayName: string } | null }).batch : undefined;
+      const batchInfo = 'batch' in testRecord
+        ? (testRecord as { batch?: { displayName: string } | null }).batch
+        : undefined;
       return {
-        id: t.id,
+        id: testRecord.id,
         businessId,
-        batchId: t.batchId,
-        ...(batch?.displayName !== undefined ? { batchName: batch.displayName } : {}),
-        name: t.name,
-        description: t.description ?? null,
-        status: t.status,
-        isPublished: t.status === TestStatus.PUBLISHED,
-        questionCount: totalQuestions,
-        totalQuestions,
-        totalMarks,
-        defaultMarksPerQuestion: t.defaultMarksPerQuestion,
+        batchId: testRecord.batchId,
+        ...(batchInfo?.displayName !== undefined ? { batchName: batchInfo.displayName } : {}),
+        name: testRecord.name,
+        description: testRecord.description ?? null,
+        status: testRecord.status,
+        isPublished: testRecord.status === TestStatus.PUBLISHED,
+        questionCount: totalQuestionCount,
+        totalQuestions: totalQuestionCount,
+        totalMarks: totalMarksAvailable,
+        defaultMarksPerQuestion: testRecord.defaultMarksPerQuestion,
         canAttempt: true,
         canStart,
         canResume,
-        attemptId: stats.lastAttemptId ?? null,
-        attemptStatus: stats.lastAttemptStatus ?? null,
-        ...(hasAttempt
+        attemptId: attemptStats.lastAttemptId ?? null,
+        attemptStatus: attemptStats.lastAttemptStatus ?? null,
+        ...(hasPreviousAttempt
           ? {
-              attemptCount: stats.attemptCount,
-              bestScore: stats.bestScore,
-              lastAttemptAt: stats.lastAttemptAt,
+              attemptCount: attemptStats.attemptCount,
+              bestScore: attemptStats.bestScore,
+              lastAttemptAt: attemptStats.lastAttemptAt,
             }
           : {}),
       };
@@ -670,33 +682,41 @@ export class TestAttemptService {
   async listAvailableExamTests(businessId: number, user: { id: number; role: UserRole }) {
     if (user.role !== UserRole.STUDENT) throw new BadRequestError('Only students can access available tests');
     logger.info(`[test-attempt] listAvailableExamTests businessId=${businessId} userId=${user.id}`);
-    const tests = (await examRepo.findPublishedExamTestsForStudent(businessId, user.id)) as Array<
+    const availableTests = (await examRepo.findPublishedExamTestsForStudent(businessId, user.id)) as Array<
       ExamTest & { _count?: { questions?: number } }
     >;
-    logger.info(`[test-attempt] available exam tests count=${tests.length} businessId=${businessId} userId=${user.id}`);
+    logger.info(`[test-attempt] available exam tests count=${availableTests.length} businessId=${businessId} userId=${user.id}`);
 
     const now = new Date();
     const nowMs = now.getTime();
 
-    const statsByTestId = await attemptRepo.getExamAttemptStatsByUserForTests(
-      tests.map((t) => t.id),
+    const attemptStatsByTestId = await attemptRepo.getExamAttemptStatsByUserForTests(
+      availableTests.map((testRecord) => testRecord.id),
       user.id,
     );
 
-    return tests.map((t) => {
-      const stats = statsByTestId.get(t.id) ?? { attemptCount: 0, bestScore: null, lastAttemptAt: null, lastAttemptId: null, lastAttemptStatus: null, lastAttemptStartedAt: null };
+    return availableTests.map((testRecord) => {
+      const attemptStats =
+        attemptStatsByTestId.get(testRecord.id) ?? {
+          attemptCount: 0,
+          bestScore: null,
+          lastAttemptAt: null,
+          lastAttemptId: null,
+          lastAttemptStatus: null,
+          lastAttemptStartedAt: null,
+        };
       const attemptsAllowed = 1;
-      const attemptsUsed = stats.attemptCount;
+      const attemptsUsed = attemptStats.attemptCount;
       const hasAttempt = attemptsUsed > 0;
-      const totalQuestions = t._count?.questions ?? 0;
-      const totalMarks = totalQuestions * Number(t.defaultMarksPerQuestion ?? 0);
+      const totalQuestionCount = testRecord._count?.questions ?? 0;
+      const totalMarksAvailable = totalQuestionCount * Number(testRecord.defaultMarksPerQuestion ?? 0);
 
       let canAttempt = true;
       let lockedReason: number | null = null;
 
-      const deadlineAtMs = t.deadlineAt.getTime();
+      const deadlineAtMs = testRecord.deadlineAt.getTime();
 
-      if (!hasExamStarted(now, t.startAt)) {
+      if (!hasExamStartReached(now, testRecord.startAt)) {
         canAttempt = false;
         lockedReason = LockedReason.NOT_STARTED;
       } else if (nowMs > deadlineAtMs) {
@@ -709,41 +729,43 @@ export class TestAttemptService {
 
       // Compute timeRemainingSeconds for in-progress attempts
       let timeRemainingSeconds: number | null = null;
-      const isInProgress = stats.lastAttemptStatus === AttemptStatus.IN_PROGRESS;
-      if (isInProgress && stats.lastAttemptStartedAt) {
-        const durationMs = Number(t.durationMinutes) * 60_000;
-        const byDurationMs = stats.lastAttemptStartedAt.getTime() + durationMs;
+      const isInProgress = attemptStats.lastAttemptStatus === AttemptStatus.IN_PROGRESS;
+      if (isInProgress && attemptStats.lastAttemptStartedAt) {
+        const durationMs = Number(testRecord.durationMinutes) * 60_000;
+        const byDurationMs = attemptStats.lastAttemptStartedAt.getTime() + durationMs;
         const effectiveEndMs = Math.min(byDurationMs, deadlineAtMs);
         timeRemainingSeconds = Math.max(0, Math.floor((effectiveEndMs - nowMs) / 1000));
       }
 
-      const batch = 'batch' in t ? (t as { batch?: { displayName: string } | null }).batch : undefined;
+      const batchInfo = 'batch' in testRecord
+        ? (testRecord as { batch?: { displayName: string } | null }).batch
+        : undefined;
       return {
-        id: t.id,
+        id: testRecord.id,
         businessId,
-        batchId: t.batchId,
-        ...(batch?.displayName !== undefined ? { batchName: batch.displayName } : {}),
-        name: t.name,
-        description: t.description ?? null,
-        status: t.status,
-        isPublished: t.status === TestStatus.PUBLISHED,
-        questionCount: totalQuestions,
-        startAt: t.startAt,
-        deadlineAt: t.deadlineAt,
-        durationMinutes: t.durationMinutes,
-        totalQuestions,
-        totalMarks,
-        defaultMarksPerQuestion: t.defaultMarksPerQuestion,
-        negativeMarksPerQuestion: t.negativeMarksPerQuestion,
-        resultVisibility: t.resultVisibility,
+        batchId: testRecord.batchId,
+        ...(batchInfo?.displayName !== undefined ? { batchName: batchInfo.displayName } : {}),
+        name: testRecord.name,
+        description: testRecord.description ?? null,
+        status: testRecord.status,
+        isPublished: testRecord.status === TestStatus.PUBLISHED,
+        questionCount: totalQuestionCount,
+        startAt: testRecord.startAt,
+        deadlineAt: testRecord.deadlineAt,
+        durationMinutes: testRecord.durationMinutes,
+        totalQuestions: totalQuestionCount,
+        totalMarks: totalMarksAvailable,
+        defaultMarksPerQuestion: testRecord.defaultMarksPerQuestion,
+        negativeMarksPerQuestion: testRecord.negativeMarksPerQuestion,
+        resultVisibility: testRecord.resultVisibility,
         canAttempt,
         lockedReason,
         attemptsAllowed,
         attemptsUsed,
         hasAttempt,
-        attemptId: stats.lastAttemptId ?? null,
-        attemptStatus: stats.lastAttemptStatus ?? null,
-        lastAttemptAt: stats.lastAttemptAt,
+        attemptId: attemptStats.lastAttemptId ?? null,
+        attemptStatus: attemptStats.lastAttemptStatus ?? null,
+        lastAttemptAt: attemptStats.lastAttemptAt,
         ...(timeRemainingSeconds !== null ? { timeRemainingSeconds } : {}),
       };
     });
@@ -760,26 +782,26 @@ export class TestAttemptService {
 
     this.assertTeacherOrAdmin(user);
 
-    const test = await practiceRepo.findPracticeTestById(businessId, practiceTestId);
-    if (!test) throw new NotFoundError('Practice test not found');
+    const practiceTest = await practiceRepo.findPracticeTestById(businessId, practiceTestId);
+    if (!practiceTest) throw new NotFoundError('Practice test not found');
     if (user.role === UserRole.TEACHER) {
-      const ok = await batchUserRepo.isActiveUserInBatch(user.id, test.batchId);
+      const ok = await batchUserRepo.isActiveUserInBatch(user.id, practiceTest.batchId);
       if (!ok) throw new NotFoundError('Practice test not found');
     }
 
-    const attemptStatuses = [AttemptStatus.SUBMITTED, AttemptStatus.AUTO_SUBMITTED];
-    const attempts = await attemptRepo.getPracticeTestAnalyticsAttempts(practiceTestId, attemptStatuses);
+    const finalAttemptStatuses = [AttemptStatus.SUBMITTED, AttemptStatus.AUTO_SUBMITTED];
+    const attemptRecords = await attemptRepo.getPracticeTestAnalyticsAttempts(practiceTestId, finalAttemptStatuses);
 
-    const questionIds = await attemptRepo.getPracticeTestQuestionIds(practiceTestId);
-    const correctCountsRows = await attemptRepo.getPracticeTestCorrectCountsByQuestion(practiceTestId, attemptStatuses);
-    const correctCounts = new Map(correctCountsRows.map((r) => [r.questionId, r.correctCount]));
+    const questionIdList = await attemptRepo.getPracticeTestQuestionIds(practiceTestId);
+    const correctCountRows = await attemptRepo.getPracticeTestCorrectCountsByQuestion(practiceTestId, finalAttemptStatuses);
+    const correctCountsByQuestionId = new Map(correctCountRows.map((r) => [r.questionId, r.correctCount]));
 
     const PASS_THRESHOLD_PERCENT_PRACTICE = 33;
-    const summaryStats = computeAttemptSummaryStats(attempts, { passThresholdPercent: PASS_THRESHOLD_PERCENT_PRACTICE });
+    const summaryStats = computeAttemptSummaryStats(attemptRecords, { passThresholdPercent: PASS_THRESHOLD_PERCENT_PRACTICE });
     const { totalAttempts, averageScore, averagePercentage, passRate, highestScore, lowestScore } = summaryStats;
 
-    const questionStats = questionIds.map((questionId) => {
-      const correctCount = correctCounts.get(questionId) ?? 0;
+    const questionStats = questionIdList.map((questionId) => {
+      const correctCount = correctCountsByQuestionId.get(questionId) ?? 0;
       const accuracy = totalAttempts ? (correctCount / totalAttempts) * 100 : 0;
       return {
         questionId,
@@ -798,24 +820,24 @@ export class TestAttemptService {
         highestScore,
         lowestScore,
       },
-      attempts: attempts.map((a) => {
-        const startedAt = a.startedAt;
-        const submittedAt = a.submittedAt;
+      attempts: attemptRecords.map((attemptRecord) => {
+        const startedAt = attemptRecord.startedAt;
+        const submittedAt = attemptRecord.submittedAt;
         const timeTakenMinutes =
           submittedAt && startedAt
             ? Math.max(0, Math.round((submittedAt.getTime() - startedAt.getTime()) / 60000))
             : null;
         return {
-          attemptId: a.id,
-          userId: String(a.userId),
-          studentName: 'user' in a && a.user?.name ? a.user.name : '',
-          studentEmail: 'user' in a && a.user?.email ? a.user.email : '',
-          status: a.status,
-          startedAt: a.startedAt,
-          submittedAt: a.submittedAt,
-          score: a.score ?? 0,
-          totalScore: a.totalScore ?? 0,
-          percentage: a.percentage ?? 0,
+          attemptId: attemptRecord.id,
+          userId: String(attemptRecord.userId),
+          studentName: 'user' in attemptRecord && attemptRecord.user?.name ? attemptRecord.user.name : '',
+          studentEmail: 'user' in attemptRecord && attemptRecord.user?.email ? attemptRecord.user.email : '',
+          status: attemptRecord.status,
+          startedAt: attemptRecord.startedAt,
+          submittedAt: attemptRecord.submittedAt,
+          score: attemptRecord.score ?? 0,
+          totalScore: attemptRecord.totalScore ?? 0,
+          percentage: attemptRecord.percentage ?? 0,
           timeTakenMinutes,
         };
       }),
@@ -834,28 +856,28 @@ export class TestAttemptService {
 
     this.assertTeacherOrAdmin(user);
 
-    const test = await practiceRepo.findPracticeTestById(businessId, practiceTestId);
-    if (!test) throw new NotFoundError('Practice test not found');
+    const practiceTest = await practiceRepo.findPracticeTestById(businessId, practiceTestId);
+    if (!practiceTest) throw new NotFoundError('Practice test not found');
     if (user.role === UserRole.TEACHER) {
-      const ok = await batchUserRepo.isActiveUserInBatch(user.id, test.batchId);
+      const ok = await batchUserRepo.isActiveUserInBatch(user.id, practiceTest.batchId);
       if (!ok) throw new NotFoundError('Practice test not found');
     }
 
-    const attemptStatuses = [AttemptStatus.SUBMITTED, AttemptStatus.AUTO_SUBMITTED];
-    const attempts = await attemptRepo.getPracticeTestAnalyticsAttemptsForExport(practiceTestId, attemptStatuses);
+    const finalAttemptStatuses = [AttemptStatus.SUBMITTED, AttemptStatus.AUTO_SUBMITTED];
+    const attemptRecords = await attemptRepo.getPracticeTestAnalyticsAttemptsForExport(practiceTestId, finalAttemptStatuses);
 
     const header = ['attemptId', 'userId', 'userName', 'userEmail', 'status', 'score', 'totalScore', 'percentage', 'startedAt', 'submittedAt'];
-    const rows = attempts.map((a) => [
-      a.id,
-      String(a.userId),
-      a.user?.name ?? '',
-      a.user?.email ?? '',
-      a.status,
-      a.score ?? 0,
-      a.totalScore ?? 0,
-      a.percentage ?? 0,
-      a.startedAt?.toISOString?.() ?? '',
-      a.submittedAt?.toISOString?.() ?? '',
+    const rows = attemptRecords.map((attemptRecord) => [
+      attemptRecord.id,
+      String(attemptRecord.userId),
+      attemptRecord.user?.name ?? '',
+      attemptRecord.user?.email ?? '',
+      attemptRecord.status,
+      attemptRecord.score ?? 0,
+      attemptRecord.totalScore ?? 0,
+      attemptRecord.percentage ?? 0,
+      attemptRecord.startedAt?.toISOString?.() ?? '',
+      attemptRecord.submittedAt?.toISOString?.() ?? '',
     ]);
 
     return [header.join(','), ...rows.map((r) => r.map(csvEscape).join(','))].join('\n');
@@ -872,26 +894,26 @@ export class TestAttemptService {
 
     this.assertTeacherOrAdmin(user);
 
-    const test = await examRepo.findExamTestById(businessId, examTestId);
-    if (!test) throw new NotFoundError('Exam test not found');
+    const examTest = await examRepo.findExamTestById(businessId, examTestId);
+    if (!examTest) throw new NotFoundError('Exam test not found');
     if (user.role === UserRole.TEACHER) {
-      const ok = await batchUserRepo.isActiveUserInBatch(user.id, test.batchId);
+      const ok = await batchUserRepo.isActiveUserInBatch(user.id, examTest.batchId);
       if (!ok) throw new NotFoundError('Exam test not found');
     }
 
-    const attemptStatuses = [AttemptStatus.SUBMITTED, AttemptStatus.AUTO_SUBMITTED];
-    const attempts = await attemptRepo.getExamTestAnalyticsAttempts(examTestId, attemptStatuses);
+    const finalAttemptStatuses = [AttemptStatus.SUBMITTED, AttemptStatus.AUTO_SUBMITTED];
+    const attemptRecords = await attemptRepo.getExamTestAnalyticsAttempts(examTestId, finalAttemptStatuses);
 
-    const questionIds = await attemptRepo.getExamTestQuestionIds(examTestId);
-    const correctCountsRows = await attemptRepo.getExamTestCorrectCountsByQuestion(examTestId, attemptStatuses);
-    const correctCounts = new Map(correctCountsRows.map((r) => [r.questionId, r.correctCount]));
+    const questionIdList = await attemptRepo.getExamTestQuestionIds(examTestId);
+    const correctCountRows = await attemptRepo.getExamTestCorrectCountsByQuestion(examTestId, finalAttemptStatuses);
+    const correctCountsByQuestionId = new Map(correctCountRows.map((r) => [r.questionId, r.correctCount]));
 
     const PASS_THRESHOLD_PERCENT_EXAM = 40;
-    const summaryStats = computeAttemptSummaryStats(attempts, { passThresholdPercent: PASS_THRESHOLD_PERCENT_EXAM });
+    const summaryStats = computeAttemptSummaryStats(attemptRecords, { passThresholdPercent: PASS_THRESHOLD_PERCENT_EXAM });
     const { totalAttempts, averageScore, averagePercentage, passRate, highestScore, lowestScore } = summaryStats;
 
-    const questionStats = questionIds.map((questionId) => {
-      const correctCount = correctCounts.get(questionId) ?? 0;
+    const questionStats = questionIdList.map((questionId) => {
+      const correctCount = correctCountsByQuestionId.get(questionId) ?? 0;
       const accuracy = totalAttempts ? (correctCount / totalAttempts) * 100 : 0;
       return {
         questionId,
@@ -910,24 +932,24 @@ export class TestAttemptService {
         highestScore,
         lowestScore,
       },
-      attempts: attempts.map((a) => {
-        const startedAt = a.startedAt;
-        const submittedAt = a.submittedAt;
+      attempts: attemptRecords.map((attemptRecord) => {
+        const startedAt = attemptRecord.startedAt;
+        const submittedAt = attemptRecord.submittedAt;
         const timeTakenMinutes =
           submittedAt && startedAt
             ? Math.max(0, Math.round((submittedAt.getTime() - startedAt.getTime()) / 60000))
             : null;
         return {
-          attemptId: a.id,
-          userId: String(a.userId),
-          studentName: 'user' in a && a.user?.name ? a.user.name : '',
-          studentEmail: 'user' in a && a.user?.email ? a.user.email : '',
-          status: a.status,
-          startedAt: a.startedAt,
-          submittedAt: a.submittedAt,
-          score: a.score ?? 0,
-          totalScore: a.totalScore ?? 0,
-          percentage: a.percentage ?? 0,
+          attemptId: attemptRecord.id,
+          userId: String(attemptRecord.userId),
+          studentName: 'user' in attemptRecord && attemptRecord.user?.name ? attemptRecord.user.name : '',
+          studentEmail: 'user' in attemptRecord && attemptRecord.user?.email ? attemptRecord.user.email : '',
+          status: attemptRecord.status,
+          startedAt: attemptRecord.startedAt,
+          submittedAt: attemptRecord.submittedAt,
+          score: attemptRecord.score ?? 0,
+          totalScore: attemptRecord.totalScore ?? 0,
+          percentage: attemptRecord.percentage ?? 0,
           timeTakenMinutes,
         };
       }),
@@ -946,28 +968,28 @@ export class TestAttemptService {
 
     this.assertTeacherOrAdmin(user);
 
-    const test = await examRepo.findExamTestById(businessId, examTestId);
-    if (!test) throw new NotFoundError('Exam test not found');
+    const examTest = await examRepo.findExamTestById(businessId, examTestId);
+    if (!examTest) throw new NotFoundError('Exam test not found');
     if (user.role === UserRole.TEACHER) {
-      const ok = await batchUserRepo.isActiveUserInBatch(user.id, test.batchId);
+      const ok = await batchUserRepo.isActiveUserInBatch(user.id, examTest.batchId);
       if (!ok) throw new NotFoundError('Exam test not found');
     }
 
-    const attemptStatuses = [AttemptStatus.SUBMITTED, AttemptStatus.AUTO_SUBMITTED];
-    const attempts = await attemptRepo.getExamTestAnalyticsAttemptsForExport(examTestId, attemptStatuses);
+    const finalAttemptStatuses = [AttemptStatus.SUBMITTED, AttemptStatus.AUTO_SUBMITTED];
+    const attemptRecords = await attemptRepo.getExamTestAnalyticsAttemptsForExport(examTestId, finalAttemptStatuses);
 
     const header = ['attemptId', 'userId', 'userName', 'userEmail', 'status', 'score', 'totalScore', 'percentage', 'startedAt', 'submittedAt'];
-    const rows = attempts.map((a) => [
-      a.id,
-      String(a.userId),
-      a.user?.name ?? '',
-      a.user?.email ?? '',
-      a.status,
-      a.score ?? 0,
-      a.totalScore ?? 0,
-      a.percentage ?? 0,
-      a.startedAt?.toISOString?.() ?? '',
-      a.submittedAt?.toISOString?.() ?? '',
+    const rows = attemptRecords.map((attemptRecord) => [
+      attemptRecord.id,
+      String(attemptRecord.userId),
+      attemptRecord.user?.name ?? '',
+      attemptRecord.user?.email ?? '',
+      attemptRecord.status,
+      attemptRecord.score ?? 0,
+      attemptRecord.totalScore ?? 0,
+      attemptRecord.percentage ?? 0,
+      attemptRecord.startedAt?.toISOString?.() ?? '',
+      attemptRecord.submittedAt?.toISOString?.() ?? '',
     ]);
 
     return [header.join(','), ...rows.map((r) => r.map(csvEscape).join(','))].join('\n');

@@ -3,10 +3,10 @@ import logger from '../utils/logger';
 import { ApiResponseHandler } from '../utils/apiResponse';
 import { AuthRequest } from '../dtos/auth.dto';
 import { BadRequestError, NotFoundError } from '../errors/api.errors';
-import { examTestService as service } from '../services/examTest.service';
+import { examTestService } from '../services/examTest.service';
 import { TestMapper } from '../mappers/test.mapper';
 import { PublishExamTestRequestDto } from '../dtos/test.dto';
-import { testAttemptService as attemptService } from '../services/testAttempt.service';
+import { testAttemptService } from '../services/testAttempt.service';
 import { getBusinessId } from '../utils/request.utils';
 
 
@@ -15,11 +15,10 @@ export const examTestController = {
     try {
       const businessId = getBusinessId(req);
       
-      const user = req.user;
-      if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
+      const user = req.user!;
 
-      const created = await service.create(businessId, req.body, { id: user.id, role: user.role });
-      return ApiResponseHandler.success(res, TestMapper.examTest(created), 'Exam test created successfully', 201);
+      const createdExamTest = await examTestService.create(businessId, req.body, { id: user.id, role: user.role });
+      return ApiResponseHandler.success(res, TestMapper.examTest(createdExamTest), 'Exam test created successfully', 201);
     } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
       const message = e instanceof Error ? e.message : 'Unknown error';
@@ -31,25 +30,24 @@ export const examTestController = {
   async list(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      const user = req.user;
-      if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
+      const user = req.user!;
       
-      const status = req.query.status !== undefined ? Number(req.query.status) : undefined;
-      const batchId = req.query.batchId !== undefined ? Number(req.query.batchId) : undefined;
+      const statusFilter = req.query.status !== undefined ? Number(req.query.status) : undefined;
+      const batchIdFilter = req.query.batchId !== undefined ? Number(req.query.batchId) : undefined;
 
-      if (status !== undefined && (Number.isNaN(status) || !Number.isInteger(status))) {
+      if (statusFilter !== undefined && (Number.isNaN(statusFilter) || !Number.isInteger(statusFilter))) {
         return ApiResponseHandler.badRequest(res, 'Invalid status');
       }
-      if (batchId !== undefined && (Number.isNaN(batchId) || !Number.isInteger(batchId))) {
+      if (batchIdFilter !== undefined && (Number.isNaN(batchIdFilter) || !Number.isInteger(batchIdFilter))) {
         return ApiResponseHandler.badRequest(res, 'Invalid batchId');
       }
 
-      const q: { status?: number; batchId?: number } = {};
-      if (status !== undefined) q.status = status;
-      if (batchId !== undefined) q.batchId = batchId;
+      const filters: { status?: number; batchId?: number } = {};
+      if (statusFilter !== undefined) filters.status = statusFilter;
+      if (batchIdFilter !== undefined) filters.batchId = batchIdFilter;
 
-      const list = await service.list(businessId, q, { id: user.id, role: user.role });
-      return ApiResponseHandler.success(res, list.map(TestMapper.examTest), 'Exam tests fetched successfully');
+      const examTests = await examTestService.list(businessId, filters, { id: user.id, role: user.role });
+      return ApiResponseHandler.success(res, examTests.map(TestMapper.examTest), 'Exam tests fetched successfully');
     } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
       const message = e instanceof Error ? e.message : 'Unknown error';
@@ -61,18 +59,17 @@ export const examTestController = {
   async get(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      const user = req.user;
-      if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
+      const user = req.user!;
       
       const examTestId = req.params.examTestId;
       if (!examTestId) return ApiResponseHandler.badRequest(res, 'examTestId is required');
-      const t = await service.get(businessId, examTestId, { id: user.id, role: user.role });
-      const { questions, ...testData } = t;
-      const response = {
+      const examTestRecord = await examTestService.get(businessId, examTestId, { id: user.id, role: user.role });
+      const { questions, ...testData } = examTestRecord;
+      const responsePayload = {
         ...TestMapper.examTest(testData),
         ...(questions ? { questions: questions.map(TestMapper.question) } : {}),
       };
-      return ApiResponseHandler.success(res, response, 'Exam test fetched successfully');
+      return ApiResponseHandler.success(res, responsePayload, 'Exam test fetched successfully');
     } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
       if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
@@ -88,11 +85,10 @@ export const examTestController = {
       const examTestId = req.params.examTestId;
       
       if (!examTestId) return ApiResponseHandler.badRequest(res, 'examTestId is required');
-      const user = req.user;
-      if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
+      const user = req.user!;
 
-      const updated = await service.update(businessId, examTestId, req.body, { id: user.id, role: user.role });
-      return ApiResponseHandler.success(res, TestMapper.examTest(updated), 'Exam test updated successfully');
+      const updatedExamTest = await examTestService.update(businessId, examTestId, req.body, { id: user.id, role: user.role });
+      return ApiResponseHandler.success(res, TestMapper.examTest(updatedExamTest), 'Exam test updated successfully');
     } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
       if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
@@ -108,9 +104,8 @@ export const examTestController = {
       const examTestId = req.params.examTestId;
       
       if (!examTestId) return ApiResponseHandler.badRequest(res, 'examTestId is required');
-      const user = req.user;
-      if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
-      await service.remove(businessId, examTestId, { id: user.id, role: user.role });
+      const user = req.user!;
+      await examTestService.remove(businessId, examTestId, { id: user.id, role: user.role });
       return ApiResponseHandler.success(res, null, 'Exam test deleted successfully');
     } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
@@ -125,13 +120,12 @@ export const examTestController = {
     try {
       const businessId = getBusinessId(req);
       
-      const user = req.user;
-      if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
+      const user = req.user!;
 
       const examTestId: string | undefined = (req.body as PublishExamTestRequestDto).examTestId;
       if (!examTestId) return ApiResponseHandler.badRequest(res, 'examTestId is required');
-      const updated = await service.publish(businessId, examTestId, { id: user.id, role: user.role });
-      return ApiResponseHandler.success(res, TestMapper.examTest(updated), 'Exam test published successfully');
+      const publishedExamTest = await examTestService.publish(businessId, examTestId, { id: user.id, role: user.role });
+      return ApiResponseHandler.success(res, TestMapper.examTest(publishedExamTest), 'Exam test published successfully');
     } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
       if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
@@ -147,10 +141,9 @@ export const examTestController = {
       const examTestId = req.params.examTestId;
       
       if (!examTestId) return ApiResponseHandler.badRequest(res, 'examTestId is required');
-      const user = req.user;
-      if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
-      const qs = await service.listQuestions(businessId, examTestId, { id: user.id, role: user.role });
-      return ApiResponseHandler.success(res, qs.map(TestMapper.question), 'Questions fetched successfully');
+      const user = req.user!;
+      const questions = await examTestService.listQuestions(businessId, examTestId, { id: user.id, role: user.role });
+      return ApiResponseHandler.success(res, questions.map(TestMapper.question), 'Questions fetched successfully');
     } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
       if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
@@ -166,10 +159,9 @@ export const examTestController = {
       const examTestId = req.params.examTestId;
       
       if (!examTestId) return ApiResponseHandler.badRequest(res, 'examTestId is required');
-      const user = req.user;
-      if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
-      const created = await service.createQuestion(businessId, examTestId, req.body, { id: user.id, role: user.role });
-      return ApiResponseHandler.success(res, TestMapper.question(created), 'Question created successfully', 201);
+      const user = req.user!;
+      const createdQuestion = await examTestService.createQuestion(businessId, examTestId, req.body, { id: user.id, role: user.role });
+      return ApiResponseHandler.success(res, TestMapper.question(createdQuestion), 'Question created successfully', 201);
     } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
       if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
@@ -185,10 +177,9 @@ export const examTestController = {
       const questionId = req.params.questionId;
       
       if (!questionId) return ApiResponseHandler.badRequest(res, 'questionId is required');
-      const user = req.user;
-      if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
-      const updated = await service.updateQuestion(businessId, questionId, req.body, { id: user.id, role: user.role });
-      return ApiResponseHandler.success(res, TestMapper.question(updated), 'Question updated successfully');
+      const user = req.user!;
+      const updatedQuestion = await examTestService.updateQuestion(businessId, questionId, req.body, { id: user.id, role: user.role });
+      return ApiResponseHandler.success(res, TestMapper.question(updatedQuestion), 'Question updated successfully');
     } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
       if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
@@ -204,9 +195,8 @@ export const examTestController = {
       const questionId = req.params.questionId;
       
       if (!questionId) return ApiResponseHandler.badRequest(res, 'questionId is required');
-      const user = req.user;
-      if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
-      await service.deleteQuestion(businessId, questionId, { id: user.id, role: user.role });
+      const user = req.user!;
+      await examTestService.deleteQuestion(businessId, questionId, { id: user.id, role: user.role });
       return ApiResponseHandler.success(res, { id: questionId }, 'Question deleted successfully', 200);
     } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
@@ -221,20 +211,19 @@ export const examTestController = {
     try {
       const businessId = getBusinessId(req);
   
-      const user = req.user;
-      if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
+      const user = req.user!;
 
       const examTestId: string | undefined = req.body.examTestId;
       if (!examTestId) return ApiResponseHandler.badRequest(res, 'examTestId is required');
 
-      const started = await attemptService.startExamAttempt(businessId, { id: user.id, role: user.role }, examTestId);
+      const attemptStart = await testAttemptService.startExamAttempt(businessId, { id: user.id, role: user.role }, examTestId);
       return ApiResponseHandler.success(
         res,
         {
-          attemptId: started.attemptId,
-          startedAt: started.startedAt,
-          test: TestMapper.examAvailableTest({ ...started.test, totalQuestions: started.questions.length }),
-          questions: started.questions.map(TestMapper.questionForAttempt),
+          attemptId: attemptStart.attemptId,
+          startedAt: attemptStart.startedAt,
+          test: TestMapper.examAvailableTest({ ...attemptStart.test, totalQuestions: attemptStart.questions.length }),
+          questions: attemptStart.questions.map(TestMapper.questionForAttempt),
         },
         'Exam attempt started successfully',
         201,
@@ -252,11 +241,10 @@ export const examTestController = {
     try {
       const businessId = getBusinessId(req);
       
-      const user = req.user;
-      if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
+      const user = req.user!;
 
-      const list = await attemptService.listAvailableExamTests(businessId, { id: user.id, role: user.role });
-      return ApiResponseHandler.success(res, list, 'Available exam tests fetched successfully');
+      const availableExamTests = await testAttemptService.listAvailableExamTests(businessId, { id: user.id, role: user.role });
+      return ApiResponseHandler.success(res, availableExamTests, 'Available exam tests fetched successfully');
     } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
       const message = e instanceof Error ? e.message : 'Unknown error';
@@ -269,18 +257,17 @@ export const examTestController = {
     try {
       const businessId = getBusinessId(req);
       
-      const user = req.user;
-      if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
+      const user = req.user!;
       const attemptId = req.params.attemptId;
       if (!attemptId) return ApiResponseHandler.badRequest(res, 'attemptId is required');
 
-      const details = await attemptService.getExamAttemptDetails(businessId, { id: user.id, role: user.role }, attemptId);
+      const attemptDetails = await testAttemptService.getExamAttemptDetails(businessId, { id: user.id, role: user.role }, attemptId);
       return ApiResponseHandler.success(
         res,
         {
-          attempt: details.attempt,
-          test: TestMapper.examAvailableTest({ ...details.test, totalQuestions: details.questions.length }),
-          questions: details.questions,
+          attempt: attemptDetails.attempt,
+          test: TestMapper.examAvailableTest({ ...attemptDetails.test, totalQuestions: attemptDetails.questions.length }),
+          questions: attemptDetails.questions,
         },
         'Exam attempt fetched successfully',
       );
@@ -297,18 +284,17 @@ export const examTestController = {
     try {
       const businessId = getBusinessId(req);
       
-      const user = req.user;
-      if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
+      const user = req.user!;
       const attemptId = req.params.attemptId;
       if (!attemptId) return ApiResponseHandler.badRequest(res, 'attemptId is required');
 
-      const result = await attemptService.submitExamAttempt(
+      const submissionResult = await testAttemptService.submitExamAttempt(
         businessId,
         { id: user.id, role: user.role },
         attemptId,
         Array.isArray(req.body.answers) ? req.body.answers : [],
       );
-      return ApiResponseHandler.success(res, result, 'Exam attempt submitted successfully');
+      return ApiResponseHandler.success(res, submissionResult, 'Exam attempt submitted successfully');
     } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
       if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
@@ -322,14 +308,13 @@ export const examTestController = {
     try {
       const businessId = getBusinessId(req);
       
-      const user = req.user;
-      if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
+      const user = req.user!;
 
       const examTestId = req.params.examTestId;
       if (!examTestId) return ApiResponseHandler.badRequest(res, 'examTestId is required');
 
-      const analytics = await attemptService.getExamTestAnalytics(businessId, { id: user.id, role: user.role }, examTestId);
-      return ApiResponseHandler.success(res, analytics, 'Exam test analytics fetched successfully');
+      const analyticsData = await testAttemptService.getExamTestAnalytics(businessId, { id: user.id, role: user.role }, examTestId);
+      return ApiResponseHandler.success(res, analyticsData, 'Exam test analytics fetched successfully');
     } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
       if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
@@ -343,16 +328,15 @@ export const examTestController = {
     try {
       const businessId = getBusinessId(req);
       
-      const user = req.user;
-      if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
+      const user = req.user!;
 
       const examTestId = req.params.examTestId;
       if (!examTestId) return ApiResponseHandler.badRequest(res, 'examTestId is required');
 
-      const csv = await attemptService.exportExamTestAnalyticsCSV(businessId, { id: user.id, role: user.role }, examTestId);
+      const analyticsCsv = await testAttemptService.exportExamTestAnalyticsCSV(businessId, { id: user.id, role: user.role }, examTestId);
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="exam-test-${examTestId}-analytics.csv"`);
-      return res.status(200).send(csv);
+      return res.status(200).send(analyticsCsv);
     } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
       if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);

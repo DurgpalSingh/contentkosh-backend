@@ -3,20 +3,19 @@ import logger from '../utils/logger';
 import { ApiResponseHandler } from '../utils/apiResponse';
 import { AuthRequest } from '../dtos/auth.dto';
 import { BadRequestError, NotFoundError } from '../errors/api.errors';
-import { practiceTestService as service } from '../services/practiceTest.service';
+import { practiceTestService } from '../services/practiceTest.service';
 import { TestMapper } from '../mappers/test.mapper';
-import { testAttemptService as attemptService } from '../services/testAttempt.service';
+import { testAttemptService } from '../services/testAttempt.service';
 import { getBusinessId } from '../utils/request.utils';
 
 export const practiceTestController = {
   async create(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      const user = req.user;
-      if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
+      const user = req.user!;
 
-      const created = await service.create(businessId, req.body, { id: user.id, role: user.role });
-      return ApiResponseHandler.success(res, TestMapper.practiceTest(created), 'Practice test created successfully', 201);
+      const createdPracticeTest = await practiceTestService.create(businessId, req.body, { id: user.id, role: user.role });
+      return ApiResponseHandler.success(res, TestMapper.practiceTest(createdPracticeTest), 'Practice test created successfully', 201);
     } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
       const message = e instanceof Error ? e.message : 'Unknown error';
@@ -28,24 +27,23 @@ export const practiceTestController = {
   async list(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      const user = req.user;
-      if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
-      const status = req.query.status !== undefined ? Number(req.query.status) : undefined;
-      const batchId = req.query.batchId !== undefined ? Number(req.query.batchId) : undefined;
+      const user = req.user!;
+      const statusFilter = req.query.status !== undefined ? Number(req.query.status) : undefined;
+      const batchIdFilter = req.query.batchId !== undefined ? Number(req.query.batchId) : undefined;
 
-      if (status !== undefined && (Number.isNaN(status) || !Number.isInteger(status))) {
+      if (statusFilter !== undefined && (Number.isNaN(statusFilter) || !Number.isInteger(statusFilter))) {
         return ApiResponseHandler.badRequest(res, 'Invalid status');
       }
-      if (batchId !== undefined && (Number.isNaN(batchId) || !Number.isInteger(batchId))) {
+      if (batchIdFilter !== undefined && (Number.isNaN(batchIdFilter) || !Number.isInteger(batchIdFilter))) {
         return ApiResponseHandler.badRequest(res, 'Invalid batchId');
       }
 
-      const q: { status?: number; batchId?: number } = {};
-      if (status !== undefined) q.status = status;
-      if (batchId !== undefined) q.batchId = batchId;
+      const filters: { status?: number; batchId?: number } = {};
+      if (statusFilter !== undefined) filters.status = statusFilter;
+      if (batchIdFilter !== undefined) filters.batchId = batchIdFilter;
 
-      const list = await service.list(businessId, q, { id: user.id, role: user.role });
-      return ApiResponseHandler.success(res, list.map(TestMapper.practiceTest), 'Practice tests fetched successfully');
+      const practiceTests = await practiceTestService.list(businessId, filters, { id: user.id, role: user.role });
+      return ApiResponseHandler.success(res, practiceTests.map(TestMapper.practiceTest), 'Practice tests fetched successfully');
     } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
       const message = e instanceof Error ? e.message : 'Unknown error';
@@ -57,17 +55,16 @@ export const practiceTestController = {
   async get(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      const user = req.user;
-      if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
+      const user = req.user!;
       const practiceTestId = req.params.practiceTestId;
       if (!practiceTestId) return ApiResponseHandler.badRequest(res, 'practiceTestId is required');
-      const t = await service.get(businessId, practiceTestId, { id: user.id, role: user.role });
-      const { questions, ...testData } = t;
-      const response = {
+      const practiceTestRecord = await practiceTestService.get(businessId, practiceTestId, { id: user.id, role: user.role });
+      const { questions, ...testData } = practiceTestRecord;
+      const responsePayload = {
         ...TestMapper.practiceTest(testData),
         ...(questions ? { questions: questions.map(TestMapper.question) } : {}),
       };
-      return ApiResponseHandler.success(res, response, 'Practice test fetched successfully');
+      return ApiResponseHandler.success(res, responsePayload, 'Practice test fetched successfully');
     } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
       if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
@@ -82,11 +79,10 @@ export const practiceTestController = {
       const businessId = getBusinessId(req);
       const practiceTestId = req.params.practiceTestId;
       if (!practiceTestId) return ApiResponseHandler.badRequest(res, 'practiceTestId is required');
-      const user = req.user;
-      if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
+      const user = req.user!;
 
-      const updated = await service.update(businessId, practiceTestId, req.body, { id: user.id, role: user.role });
-      return ApiResponseHandler.success(res, TestMapper.practiceTest(updated), 'Practice test updated successfully');
+      const updatedPracticeTest = await practiceTestService.update(businessId, practiceTestId, req.body, { id: user.id, role: user.role });
+      return ApiResponseHandler.success(res, TestMapper.practiceTest(updatedPracticeTest), 'Practice test updated successfully');
     } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
       if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
@@ -101,9 +97,8 @@ export const practiceTestController = {
       const businessId = getBusinessId(req);
       const practiceTestId = req.params.practiceTestId;
       if (!practiceTestId) return ApiResponseHandler.badRequest(res, 'practiceTestId is required');
-      const user = req.user;
-      if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
-      await service.remove(businessId, practiceTestId, { id: user.id, role: user.role });
+      const user = req.user!;
+      await practiceTestService.remove(businessId, practiceTestId, { id: user.id, role: user.role });
       return ApiResponseHandler.success(res, null, 'Practice test deleted successfully');
     } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
@@ -117,13 +112,12 @@ export const practiceTestController = {
   async publish(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      const user = req.user;
-      if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
+      const user = req.user!;
 
       const practiceTestId: string | undefined = req.body.practiceTestId;
       if (!practiceTestId) return ApiResponseHandler.badRequest(res, 'practiceTestId is required');
-      const updated = await service.publish(businessId, practiceTestId, { id: user.id, role: user.role });
-      return ApiResponseHandler.success(res, TestMapper.practiceTest(updated), 'Practice test published successfully');
+      const publishedPracticeTest = await practiceTestService.publish(businessId, practiceTestId, { id: user.id, role: user.role });
+      return ApiResponseHandler.success(res, TestMapper.practiceTest(publishedPracticeTest), 'Practice test published successfully');
     } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
       if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
@@ -138,10 +132,9 @@ export const practiceTestController = {
       const businessId = getBusinessId(req);
       const practiceTestId = req.params.practiceTestId;
       if (!practiceTestId) return ApiResponseHandler.badRequest(res, 'practiceTestId is required');
-      const user = req.user;
-      if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
-      const qs = await service.listQuestions(businessId, practiceTestId, { id: user.id, role: user.role });
-      return ApiResponseHandler.success(res, qs.map(TestMapper.question), 'Questions fetched successfully');
+      const user = req.user!;
+      const questions = await practiceTestService.listQuestions(businessId, practiceTestId, { id: user.id, role: user.role });
+      return ApiResponseHandler.success(res, questions.map(TestMapper.question), 'Questions fetched successfully');
     } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
       if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
@@ -156,10 +149,9 @@ export const practiceTestController = {
       const businessId = getBusinessId(req);
       const practiceTestId = req.params.practiceTestId;
       if (!practiceTestId) return ApiResponseHandler.badRequest(res, 'practiceTestId is required');
-      const user = req.user;
-      if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
-      const created = await service.createQuestion(businessId, practiceTestId, req.body, { id: user.id, role: user.role });
-      return ApiResponseHandler.success(res, TestMapper.question(created), 'Question created successfully', 201);
+      const user = req.user!;
+      const createdQuestion = await practiceTestService.createQuestion(businessId, practiceTestId, req.body, { id: user.id, role: user.role });
+      return ApiResponseHandler.success(res, TestMapper.question(createdQuestion), 'Question created successfully', 201);
     } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
       if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
@@ -174,10 +166,9 @@ export const practiceTestController = {
       const businessId = getBusinessId(req);
       const questionId = req.params.questionId;
       if (!questionId) return ApiResponseHandler.badRequest(res, 'questionId is required');
-      const user = req.user;
-      if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
-      const updated = await service.updateQuestion(businessId, questionId, req.body, { id: user.id, role: user.role });
-      return ApiResponseHandler.success(res, TestMapper.question(updated), 'Question updated successfully');
+      const user = req.user!;
+      const updatedQuestion = await practiceTestService.updateQuestion(businessId, questionId, req.body, { id: user.id, role: user.role });
+      return ApiResponseHandler.success(res, TestMapper.question(updatedQuestion), 'Question updated successfully');
     } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
       if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
@@ -192,9 +183,8 @@ export const practiceTestController = {
       const businessId = getBusinessId(req);
       const questionId = req.params.questionId;
       if (!questionId) return ApiResponseHandler.badRequest(res, 'questionId is required');
-      const user = req.user;
-      if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
-      await service.deleteQuestion(businessId, questionId, { id: user.id, role: user.role });
+      const user = req.user!;
+      await practiceTestService.deleteQuestion(businessId, questionId, { id: user.id, role: user.role });
       return ApiResponseHandler.success(res, { id: questionId }, 'Question deleted successfully', 200);
     } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
@@ -208,20 +198,19 @@ export const practiceTestController = {
   async startAttempt(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      const user = req.user;
-      if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
+      const user = req.user!;
 
       const practiceTestId: string | undefined = req.body.practiceTestId;
       if (!practiceTestId) return ApiResponseHandler.badRequest(res, 'practiceTestId is required');
 
-      const started = await attemptService.startPracticeAttempt(businessId, { id: user.id, role: user.role }, practiceTestId);
+      const attemptStart = await testAttemptService.startPracticeAttempt(businessId, { id: user.id, role: user.role }, practiceTestId);
       return ApiResponseHandler.success(
         res,
         {
-          attemptId: started.attemptId,
-          startedAt: started.startedAt,
-          test: TestMapper.practiceAvailableTest({ ...started.test, totalQuestions: started.questions.length }),
-          questions: started.questions.map(TestMapper.questionForAttempt),
+          attemptId: attemptStart.attemptId,
+          startedAt: attemptStart.startedAt,
+          test: TestMapper.practiceAvailableTest({ ...attemptStart.test, totalQuestions: attemptStart.questions.length }),
+          questions: attemptStart.questions.map(TestMapper.questionForAttempt),
         },
         'Practice attempt started successfully',
         201,
@@ -238,11 +227,10 @@ export const practiceTestController = {
   async available(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      const user = req.user;
-      if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
+      const user = req.user!;
 
-      const list = await attemptService.listAvailablePracticeTests(businessId, { id: user.id, role: user.role });
-      return ApiResponseHandler.success(res, list, 'Available practice tests fetched successfully');
+      const availablePracticeTests = await testAttemptService.listAvailablePracticeTests(businessId, { id: user.id, role: user.role });
+      return ApiResponseHandler.success(res, availablePracticeTests, 'Available practice tests fetched successfully');
     } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
       const message = e instanceof Error ? e.message : 'Unknown error';
@@ -254,18 +242,17 @@ export const practiceTestController = {
   async getAttempt(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      const user = req.user;
-      if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
+      const user = req.user!;
       const attemptId = req.params.attemptId;
       if (!attemptId) return ApiResponseHandler.badRequest(res, 'attemptId is required');
 
-      const details = await attemptService.getPracticeAttemptDetails(businessId, { id: user.id, role: user.role }, attemptId);
+      const attemptDetails = await testAttemptService.getPracticeAttemptDetails(businessId, { id: user.id, role: user.role }, attemptId);
       return ApiResponseHandler.success(
         res,
         {
-          attempt: details.attempt,
-          test: TestMapper.practiceAvailableTest({ ...details.test, totalQuestions: details.questions.length }),
-          questions: details.questions,
+          attempt: attemptDetails.attempt,
+          test: TestMapper.practiceAvailableTest({ ...attemptDetails.test, totalQuestions: attemptDetails.questions.length }),
+          questions: attemptDetails.questions,
         },
         'Practice attempt fetched successfully',
       );
@@ -281,18 +268,17 @@ export const practiceTestController = {
   async submitAttempt(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      const user = req.user;
-      if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
+      const user = req.user!;
       const attemptId = req.params.attemptId;
       if (!attemptId) return ApiResponseHandler.badRequest(res, 'attemptId is required');
 
-      const result = await attemptService.submitPracticeAttempt(
+      const submissionResult = await testAttemptService.submitPracticeAttempt(
         businessId,
         { id: user.id, role: user.role },
         attemptId,
         Array.isArray(req.body.answers) ? req.body.answers : [],
       );
-      return ApiResponseHandler.success(res, result, 'Practice attempt submitted successfully');
+      return ApiResponseHandler.success(res, submissionResult, 'Practice attempt submitted successfully');
     } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
       if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
@@ -305,14 +291,13 @@ export const practiceTestController = {
   async analytics(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      const user = req.user;
-      if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
+      const user = req.user!;
 
       const practiceTestId = req.params.practiceTestId;
       if (!practiceTestId) return ApiResponseHandler.badRequest(res, 'practiceTestId is required');
 
-      const analytics = await attemptService.getPracticeTestAnalytics(businessId, { id: user.id, role: user.role }, practiceTestId);
-      return ApiResponseHandler.success(res, analytics, 'Practice test analytics fetched successfully');
+      const analyticsData = await testAttemptService.getPracticeTestAnalytics(businessId, { id: user.id, role: user.role }, practiceTestId);
+      return ApiResponseHandler.success(res, analyticsData, 'Practice test analytics fetched successfully');
     } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
       if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
@@ -325,16 +310,15 @@ export const practiceTestController = {
   async exportAnalytics(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      const user = req.user;
-      if (!user) return ApiResponseHandler.unauthorized(res, 'User not authenticated');
+      const user = req.user!;
 
       const practiceTestId = req.params.practiceTestId;
       if (!practiceTestId) return ApiResponseHandler.badRequest(res, 'practiceTestId is required');
 
-      const csv = await attemptService.exportPracticeTestAnalyticsCSV(businessId, { id: user.id, role: user.role }, practiceTestId);
+      const analyticsCsv = await testAttemptService.exportPracticeTestAnalyticsCSV(businessId, { id: user.id, role: user.role }, practiceTestId);
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="practice-test-${practiceTestId}-analytics.csv"`);
-      return res.status(200).send(csv);
+      return res.status(200).send(analyticsCsv);
     } catch (e: unknown) {
       if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
       if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
