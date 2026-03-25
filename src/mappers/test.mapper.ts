@@ -412,11 +412,25 @@ export const TestMapper = {
     /** When false, explanation is nulled out in the returned question object. */
     showExplanations?: boolean;
   }): StudentAttemptQuestionResponse {
-    const { question, answerRow, includeCorrectAnswer, includeStudentScoring, hideStudentAnswer, showExplanations = true } = params;
-    const questionResponse = TestMapper.question(question);
-    // Gate explanation based on showExplanations flag
-    if (!showExplanations) {
-      questionResponse.explanation = null;
+    const {
+      question,
+      answerRow,
+      includeCorrectAnswer,
+      includeStudentScoring,
+      hideStudentAnswer,
+      showExplanations = true,
+    } = params;
+
+    const questionResponse: TestQuestionResponse = includeCorrectAnswer
+      ? TestMapper.question({
+          ...question,
+          ...(showExplanations ? {} : { explanation: null }),
+        })
+      : (TestMapper.questionForAttempt(question) as unknown as TestQuestionResponse);
+
+    if (includeCorrectAnswer && !showExplanations) {
+      // Ensure explanation is omitted (not null) when not allowed.
+      delete (questionResponse as Partial<TestQuestionResponse>).explanation;
     }
     if (hideStudentAnswer) {
       return {

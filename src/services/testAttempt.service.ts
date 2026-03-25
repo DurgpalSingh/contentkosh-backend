@@ -646,33 +646,12 @@ export class TestAttemptService {
           lastAttemptStatus: null,
           lastAttemptStartedAt: null,
         };
-      const totalQuestionCount = testRecord._count?.questions ?? 0;
-      const totalMarksAvailable = totalQuestionCount * Number(testRecord.defaultMarksPerQuestion ?? 0);
       const hasPreviousAttempt = attemptStats.attemptCount > 0;
       const isInProgress = attemptStats.lastAttemptStatus === AttemptStatus.IN_PROGRESS;
       const canResume = isInProgress;
       const canStart = !isInProgress;
-      const batchInfo = 'batch' in testRecord
-        ? (testRecord as { batch?: { displayName: string } | null }).batch
-        : undefined;
-      return {
-        id: testRecord.id,
-        businessId,
-        batchId: testRecord.batchId,
-        ...(batchInfo?.displayName !== undefined ? { batchName: batchInfo.displayName } : {}),
-        name: testRecord.name,
-        description: testRecord.description ?? null,
-        status: testRecord.status,
-        isPublished: testRecord.status === TestStatus.PUBLISHED,
-        questionCount: totalQuestionCount,
-        totalQuestions: totalQuestionCount,
-        totalMarks: totalMarksAvailable,
-        defaultMarksPerQuestion: testRecord.defaultMarksPerQuestion,
+      const base = TestMapper.practiceAvailableTest(testRecord, {
         canAttempt: true,
-        canStart,
-        canResume,
-        attemptId: attemptStats.lastAttemptId ?? null,
-        attemptStatus: attemptStats.lastAttemptStatus ?? null,
         ...(hasPreviousAttempt
           ? {
               attemptCount: attemptStats.attemptCount,
@@ -680,6 +659,17 @@ export class TestAttemptService {
               lastAttemptAt: attemptStats.lastAttemptAt,
             }
           : {}),
+      });
+
+      const questionCount = testRecord._count?.questions ?? base.totalQuestions;
+      return {
+        ...base,
+        isPublished: testRecord.status === TestStatus.PUBLISHED,
+        questionCount,
+        canStart,
+        canResume,
+        attemptId: attemptStats.lastAttemptId ?? null,
+        attemptStatus: attemptStats.lastAttemptStatus ?? null,
       };
     });
   }
@@ -713,8 +703,6 @@ export class TestAttemptService {
       const attemptsAllowed = 1;
       const attemptsUsed = attemptStats.attemptCount;
       const hasAttempt = attemptsUsed > 0;
-      const totalQuestionCount = testRecord._count?.questions ?? 0;
-      const totalMarksAvailable = totalQuestionCount * Number(testRecord.defaultMarksPerQuestion ?? 0);
 
       let canAttempt = true;
       let lockedReason: number | null = null;
@@ -742,35 +730,22 @@ export class TestAttemptService {
         timeRemainingSeconds = Math.max(0, Math.floor((effectiveEndMs - nowMs) / 1000));
       }
 
-      const batchInfo = 'batch' in testRecord
-        ? (testRecord as { batch?: { displayName: string } | null }).batch
-        : undefined;
-      return {
-        id: testRecord.id,
-        businessId,
-        batchId: testRecord.batchId,
-        ...(batchInfo?.displayName !== undefined ? { batchName: batchInfo.displayName } : {}),
-        name: testRecord.name,
-        description: testRecord.description ?? null,
-        status: testRecord.status,
-        isPublished: testRecord.status === TestStatus.PUBLISHED,
-        questionCount: totalQuestionCount,
-        startAt: testRecord.startAt,
-        deadlineAt: testRecord.deadlineAt,
-        durationMinutes: testRecord.durationMinutes,
-        totalQuestions: totalQuestionCount,
-        totalMarks: totalMarksAvailable,
-        defaultMarksPerQuestion: testRecord.defaultMarksPerQuestion,
-        negativeMarksPerQuestion: testRecord.negativeMarksPerQuestion,
-        resultVisibility: testRecord.resultVisibility,
+      const base = TestMapper.examAvailableTest(testRecord, {
         canAttempt,
         lockedReason,
         attemptsAllowed,
         attemptsUsed,
         hasAttempt,
+        lastAttemptAt: attemptStats.lastAttemptAt,
+      });
+
+      const questionCount = testRecord._count?.questions ?? base.totalQuestions;
+      return {
+        ...base,
+        isPublished: testRecord.status === TestStatus.PUBLISHED,
+        questionCount,
         attemptId: attemptStats.lastAttemptId ?? null,
         attemptStatus: attemptStats.lastAttemptStatus ?? null,
-        lastAttemptAt: attemptStats.lastAttemptAt,
         ...(timeRemainingSeconds !== null ? { timeRemainingSeconds } : {}),
       };
     });
