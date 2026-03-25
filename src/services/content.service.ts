@@ -1,6 +1,7 @@
-import { Prisma, Content, ContentType, ContentStatus, UserRole } from '@prisma/client';
+import { Prisma, Content, ContentType, ContentStatus, UserRole, SubjectStatus } from '@prisma/client';
 import * as contentRepo from '../repositories/content.repo';
 import * as batchRepo from '../repositories/batch.repo';
+import * as subjectRepo from '../repositories/subject.repo';
 import { CreateContentDto, UpdateContentDto, ContentQueryDto } from '../dtos/content.dto';
 import { NotFoundError, BadRequestError, ForbiddenError } from '../errors/api.errors';
 import { IUser } from '../dtos/auth.dto';
@@ -29,6 +30,7 @@ export class ContentService {
     this.validateFilePath(data.filePath, data.type);
 
     try {
+      await this.validateSubjectForBatch(batchId, data.subjectId, user);
       const createData: Prisma.ContentCreateInput = {
         title: data.title,
         type: data.type,
@@ -38,11 +40,20 @@ export class ContentService {
         batch: {
           connect: { id: batchId }
         },
+        subject: {
+          connect: { id: data.subjectId }
+        },
         uploader: {
           connect: { id: user.id }
         }
       };
       const content = await contentRepo.createContent(createData);
+      logger.info('ContentService: Content created', {
+        contentId: content.id,
+        batchId,
+        userId: user.id,
+        subjectId: data.subjectId
+      });
       return ContentMapper.toResponse(content);
     } catch (error: any) {
       if (data.filePath) { // If DB creation fails, delete the uploaded file
@@ -108,9 +119,14 @@ export class ContentService {
       throw new ForbiddenError('You can only update content you uploaded');
     }
 
+    await this.validateSubjectForBatch(existingContent.batchId, data.subjectId, user);
+
     const updateData: Prisma.ContentUpdateInput = {
       ...(data.title && { title: data.title }),
       ...(data.status !== undefined && { status: data.status }),
+      subject: {
+        connect: { id: data.subjectId }
+      },
       updater: {
         connect: { id: user.id }
       },
@@ -118,6 +134,11 @@ export class ContentService {
     };
 
     const content = await contentRepo.updateContent(id, updateData);
+    logger.info('ContentService: Content updated', {
+      contentId: content.id,
+      userId: user.id,
+      subjectId: data.subjectId
+    });
     return ContentMapper.toResponse(content);
   }
 
@@ -274,6 +295,62 @@ export class ContentService {
     }
 
     throw new ForbiddenError('You can only access content you uploaded');
+  }
+
+  private async validateSubjectForBatch(
+    batchId: number,
+    subjectId: number,
+    user: IUser
+  ): Promise<void> {
+    logger.info('ContentService: Validating subject for batch', {
+      batchId,
+      subjectId,
+      userId: user.id
+    });
+
+    const batch = await batchRepo.findBatchById(batchId, {
+      include: { course: { include: { exam: true } } }
+    }) as any;
+
+    if (!batch) {
+      logger.warn('ContentService: Batch not found during subject validation', {
+        batchId,
+        subjectId,
+        userId: user.id
+      });
+      throw new NotFoundError('Batch not found');
+    }
+
+    const businessId = batch.course?.exam?.businessId;
+
+    const subject = await subjectRepo.findSubjectById(subjectId);
+    if (!subject) {
+      logger.warn('ContentService: Subject not found', { subjectId, batchId, userId: user.id, businessId });
+      throw new NotFoundError('Subject not found');
+    }
+
+    if (subject.courseId !== batch.courseId) {
+      logger.warn('ContentService: Subject course mismatch', {
+        batchId,
+        batchCourseId: batch.courseId,
+        subjectId,
+        subjectCourseId: subject.courseId,
+        userId: user.id,
+        businessId
+      });
+      throw new BadRequestError('Subject does not belong to this batch');
+    }
+
+    if (subject.status !== SubjectStatus.ACTIVE) {
+      logger.warn('ContentService: Subject is inactive', {
+        batchId,
+        subjectId,
+        status: subject.status,
+        userId: user.id,
+        businessId
+      });
+      throw new BadRequestError('Subject must be active');
+    }
   }
 
   private async batchAccessContext(batchId: number, user: IUser) {

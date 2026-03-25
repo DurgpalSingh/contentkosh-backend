@@ -7,6 +7,7 @@ import { UserRole } from '@prisma/client';
 import { validateDto } from '../middlewares/validation/dto.middleware';
 import { CreateBusinessDto, UpdateBusinessDto } from '../dtos/business.dto';
 import { validateIdParam } from '../middlewares/validation.middleware';
+import { getSubjectsByUserId } from '../controllers/subject.controller';
 
 const router = Router();
 
@@ -297,6 +298,35 @@ router.get('/:businessId/exams', authorize(), getExamsByBusiness);
 router.get('/:businessId/exams/:id', getExam);
 router.put('/:businessId/exams/:id', authorize(UserRole.ADMIN), validateDto(UpdateExamDto, true), updateExam);
 router.delete('/:businessId/exams/:id', authorize(UserRole.ADMIN), deleteExam);
+
+
+/**
+ * @swagger
+ * /api/subjects/user/{userId}:
+ *   get:
+ *     summary: Get subjects available for a user (role-aware)
+ *     tags: [Subjects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Target user ID
+ *     responses:
+ *       200:
+ *         description: Subjects fetched successfully
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: User not found
+ */
+router.get(
+  '/subjects/all',
+  getSubjectsByUserId
+);
 
 // ==================== BUSINESS ROUTES ====================
 

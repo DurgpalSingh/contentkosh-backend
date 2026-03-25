@@ -17,6 +17,12 @@ const contentDefaultInclude: Prisma.ContentInclude = {
   batch: {
     select: batchBasicSelect
   },
+  subject: {
+    select: {
+      id: true,
+      name: true
+    }
+  },
   uploader: {
     select: userBasicSelect
   },
@@ -88,10 +94,7 @@ export const findContentsByBatchId = async (
     orderBy: options.orderBy || { createdAt: 'desc' },
     ...(options.skip !== undefined && { skip: options.skip }),
     ...(options.take !== undefined && { take: options.take }),
-    include: options.include || {
-      uploader: { select: userBasicSelect },
-      updater: { select: userBasicSelect }
-    }
+    include: options.include || contentDefaultInclude
   });
 };
 

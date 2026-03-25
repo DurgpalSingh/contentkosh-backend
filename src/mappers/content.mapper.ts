@@ -5,6 +5,7 @@ export class ContentMapper {
     return {
       id: content.id,
       batchId: content.batchId,
+      subjectId: content.subjectId,
       title: content.title,
       type: content.type,
       filePath: content.filePath,
@@ -21,6 +22,7 @@ export class ContentMapper {
     return {
       id: content.id,
       batchId: content.batchId,
+      subjectId: content.subjectId,
       title: content.title,
       type: content.type,
       filePath: content.filePath,
@@ -34,6 +36,10 @@ export class ContentMapper {
         id: content.batch.id,
         codeName: content.batch.codeName,
         displayName: content.batch.displayName
+      } : undefined,
+      subject: content.subject ? {
+        id: content.subject.id,
+        name: content.subject.name
       } : undefined,
       uploader: content.uploader ? {
         id: content.uploader.id,

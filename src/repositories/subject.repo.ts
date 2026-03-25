@@ -1,5 +1,6 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, SubjectStatus, UserRole } from '@prisma/client';
 import { prisma } from '../config/database';
+import type { IUser } from '../dtos/auth.dto';
 
 export interface SubjectFindOptions {
   select?: Prisma.SubjectSelect;
@@ -34,6 +35,57 @@ export async function findSubjectsByCourseId(courseId: number, options: SubjectF
     orderBy: options.orderBy || { name: 'asc' },
     ...otherOptions,
   });
+}
+
+export async function findSubjectsByUserId(
+  requestingUser: IUser,
+  options: SubjectFindOptions = {}
+) {
+  const { where, orderBy, skip, take, ...otherOptions } = options;
+
+  const status =
+    where && 'status' in where && where.status !== undefined
+      ? where.status
+      : SubjectStatus.ACTIVE;
+
+  const isSelfTeacherOrStudent =
+    requestingUser.role === UserRole.TEACHER || requestingUser.role === UserRole.STUDENT;
+
+  const subjects = await prisma.subject.findMany({
+    where: {
+      ...(where ?? {}),
+      status,
+      // Role-aware scoping:
+      // - TEACHER/STUDENT: subjects from active batches where user is a member
+      // - ADMIN/SUPERADMIN: subjects from active batches in their business (no batch membership required)
+      course: {
+        ...(requestingUser.role !== UserRole.SUPERADMIN
+          ? { exam: { businessId: requestingUser.businessId! } }
+          : {}),
+        batches: {
+          some: {
+            isActive: true,
+            ...(isSelfTeacherOrStudent
+              ? {
+                batchUsers: {
+                  some: {
+                    userId: requestingUser.id,
+                    isActive: true
+                  }
+                }
+              }
+              : {})
+          }
+        }
+      }
+    },
+    orderBy: orderBy || { name: 'asc' },
+    ...(skip !== undefined && { skip }),
+    ...(take !== undefined && { take }),
+    ...otherOptions
+  });
+
+  return subjects;
 }
 
 export async function updateSubject(id: number, data: Prisma.SubjectUpdateInput) {
