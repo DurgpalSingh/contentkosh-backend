@@ -4,8 +4,8 @@
  * Covers: question validation, access guards, scoring, attempt result mapping, analytics summary.
  */
 
-import { TestOption, TestQuestion, TestAttemptAnswer } from '@prisma/client';
-import { BadRequestError, ForbiddenError } from '../errors/api.errors';
+import { TestOption, TestQuestion, TestAttemptAnswer, UserRole } from '@prisma/client';
+import { BadRequestError, ForbiddenError, NotFoundError } from '../errors/api.errors';
 import { QuestionType } from '../constants/test-enums';
 import * as batchRepo from '../repositories/batch.repo';
 import logger from './logger';
@@ -44,6 +44,49 @@ export function validateQuestionPayload(payload: {
 // ---------------------------------------------------------------------------
 // Access Guards
 // ---------------------------------------------------------------------------
+
+
+type AccessUser = {
+  id: number;
+  role: UserRole;
+};
+
+type AssertTestBatchAccessParams = {
+  user: AccessUser;
+  batchId: number;
+  businessId: number;
+  entityLabel: string;
+  entityId: string;
+};
+
+export async function assertTestBatchAccess(params: AssertTestBatchAccessParams): Promise<void> {
+  const { user, batchId, businessId, entityLabel, entityId } = params;
+
+  logger.info(
+    `[test-access] assertTestBatchAccess businessId=${businessId} userId=${user.id} role=${user.role} batchId=${batchId} entityLabel=${entityLabel} entityId=${entityId}`,
+  );
+
+  if (user.role === UserRole.ADMIN || user.role === UserRole.SUPERADMIN) {
+    return;
+  }
+
+  if (user.role === UserRole.TEACHER || user.role === UserRole.STUDENT) {
+    const isActiveUserInBatch = await batchRepo.isActiveUserInBatch(user.id, batchId);
+    if (!isActiveUserInBatch) {
+      logger.warn(
+        `[test-access] assertTestBatchAccess not-found businessId=${businessId} userId=${user.id} role=${user.role} batchId=${batchId} entityLabel=${entityLabel} entityId=${entityId}`,
+      );
+      throw new NotFoundError(`${entityLabel} not found`);
+    }
+    return;
+  }
+
+  logger.warn(
+    `[test-access] assertTestBatchAccess forbidden role businessId=${businessId} userId=${user.id} role=${user.role} entityLabel=${entityLabel} entityId=${entityId}`,
+  );
+  throw new ForbiddenError('Access denied');
+}
+
 
 export async function assertTeacherInBatch(userId: number, batchId: number): Promise<void> {
   const isTeacherActiveMember = await batchRepo.isActiveUserInBatch(userId, batchId);

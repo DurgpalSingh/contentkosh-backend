@@ -5,8 +5,9 @@ import { TestStatus, ResultVisibilityExam } from '../constants/test-enums';
 import logger from '../utils/logger';
 import { CreateExamTestDto, CreateQuestionDto, UpdateExamTestDto, UpdateQuestionDto } from '../dtos/test.dto';
 import { UserRole } from '@prisma/client';
-import { validateQuestionPayload, assertTeacherInBatch, assertBatchBelongsToBusiness } from '../utils/test.utils';
+import { validateQuestionPayload, assertBatchBelongsToBusiness } from '../utils/test.utils';
 import { TestMapper } from '../mappers/test.mapper';
+import { assertTestBatchAccess } from '../utils/test.utils';
 
 export class ExamTestService {
   private isElevated(role: UserRole) {
@@ -18,27 +19,30 @@ export class ExamTestService {
     examTestId: string,
     user: { id: number; role: UserRole },
   ) {
-    const examTestRecord =
-      this.isElevated(user.role)
-        ? await examRepo.findExamTestById(businessId, examTestId)
-        : await examRepo.findExamTestByIdForUser(businessId, examTestId, user.id);
+    const examTestRecord = await examRepo.findExamTestById(businessId, examTestId);
     if (!examTestRecord) {
-      if (user.role === UserRole.TEACHER) {
-        logger.warn(
-          `[exam-test] getWithAccess miss (teacher batch scope) businessId=${businessId} examTestId=${examTestId} userId=${user.id}`,
-        );
-      }
       throw new NotFoundError('Exam test not found');
     }
+    await assertTestBatchAccess({
+      user,
+      batchId: examTestRecord.batchId,
+      businessId,
+      entityLabel: 'Exam test',
+      entityId: examTestId,
+    });
     return examTestRecord;
   }
 
   async create(businessId: number, dto: CreateExamTestDto, user: { id: number; role: UserRole }) {
     logger.info(`[exam-test] create businessId=${businessId} userId=${user.id} batchId=${dto?.batchId}`);
     await assertBatchBelongsToBusiness(businessId, dto.batchId);
-    if (user.role === UserRole.TEACHER) {
-      await assertTeacherInBatch(user.id, dto.batchId);
-    }
+    await assertTestBatchAccess({
+      user,
+      batchId: dto.batchId,
+      businessId,
+      entityLabel: 'Exam test',
+      entityId: 'create',
+    });
     const startAt = new Date(dto.startAt);
     const deadlineAt = new Date(dto.deadlineAt);
     if (!(deadlineAt > startAt)) {
@@ -71,12 +75,21 @@ export class ExamTestService {
     const where: { status?: number; batchId?: number } = {};
     if (query.status !== undefined) where.status = query.status;
     if (query.batchId !== undefined) where.batchId = query.batchId;
+    if (query.batchId !== undefined) {
+      await assertTestBatchAccess({
+        user,
+        batchId: query.batchId,
+        businessId,
+        entityLabel: 'Exam test',
+        entityId: 'list',
+      });
+    }
     if (!this.isElevated(user.role)) {
       const examTests = await examRepo.findExamTestsByBusinessIdForUser(businessId, user.id, { where });
       return examTests.map((examTest) => TestMapper.examTest(examTest));
     }
     const examTests = await examRepo.findExamTestsByBusinessId(businessId, { where });
-    return examTests.map((examTest) => TestMapper.examTest(examTest));
+    return examTests;
   }
 
   async get(businessId: number, examTestId: string, user: { id: number; role: UserRole }) {
@@ -97,20 +110,17 @@ export class ExamTestService {
     user: { id: number; role: UserRole },
   ) {
     logger.info(`[exam-test] update businessId=${businessId} examTestId=${examTestId} userId=${user.id}`);
-    if (user.role === UserRole.TEACHER) {
-      const exists = await examRepo.findExamTestById(businessId, examTestId);
-      if (exists) {
-        await assertTeacherInBatch(user.id, exists.batchId); // throws ForbiddenError (403) if not in batch
-      }
-      // If !exists, fall through — getWithAccess will throw 404
-    }
     const existing = await this.getWithAccess(businessId, examTestId, user);
 
     if (dto.batchId !== undefined) {
       await assertBatchBelongsToBusiness(businessId, dto.batchId);
-      if (user.role === UserRole.TEACHER) {
-        await assertTeacherInBatch(user.id, dto.batchId);
-      }
+      await assertTestBatchAccess({
+        user,
+        batchId: dto.batchId,
+        businessId,
+        entityLabel: 'Exam test',
+        entityId: examTestId,
+      });
     }
 
     const startAt = dto.startAt !== undefined ? new Date(dto.startAt) : existing.startAt;
@@ -135,25 +145,12 @@ export class ExamTestService {
       updatedBy: user.id,
     });
     if (!updatedExamTest) throw new NotFoundError('Exam test not found');
-    if (user.role === UserRole.TEACHER) {
-      await assertTeacherInBatch(user.id, updatedExamTest.batchId);
-    }
     return updatedExamTest;
   }
 
   async remove(businessId: number, examTestId: string, user: { id: number; role: UserRole }) {
     logger.info(`[exam-test] remove businessId=${businessId} examTestId=${examTestId} userId=${user.id}`);
-    if (user.role === UserRole.TEACHER) {
-      const exists = await examRepo.findExamTestById(businessId, examTestId);
-      if (exists) {
-        await assertTeacherInBatch(user.id, exists.batchId); // throws ForbiddenError (403) if not in batch
-      }
-      // If !exists, fall through — getWithAccess will throw 404
-    }
-    const existing = await this.getWithAccess(businessId, examTestId, user);
-    if (user.role === UserRole.TEACHER) {
-      await assertTeacherInBatch(user.id, existing.batchId);
-    }
+    await this.getWithAccess(businessId, examTestId, user);
     const deleteResult = await examRepo.deleteExamTest(businessId, examTestId);
     if (!deleteResult.count) throw new NotFoundError('Exam test not found');
     return;
@@ -163,9 +160,6 @@ export class ExamTestService {
     logger.info(`[exam-test] publish businessId=${businessId} examTestId=${examTestId} userId=${user.id}`);
     const existing = await this.getWithAccess(businessId, examTestId, user);
     await assertBatchBelongsToBusiness(businessId, existing.batchId);
-    if (user.role === UserRole.TEACHER) {
-      await assertTeacherInBatch(user.id, existing.batchId);
-    }
     if (existing.status !== TestStatus.DRAFT) {
       throw new BadRequestError('Only draft tests can be published');
     }
@@ -189,10 +183,7 @@ export class ExamTestService {
 
   async listQuestions(businessId: number, examTestId: string, user: { id: number; role: UserRole }) {
     logger.info(`[exam-test] listQuestions businessId=${businessId} examTestId=${examTestId} userId=${user.id}`);
-    const examTestRecord = await this.getWithAccess(businessId, examTestId, user);
-    if (user.role === UserRole.TEACHER) {
-      await assertTeacherInBatch(user.id, examTestRecord.batchId);
-    }
+    await this.getWithAccess(businessId, examTestId, user);
     return questionRepo.listExamTestQuestions(businessId, examTestId);
   }
 
@@ -205,10 +196,7 @@ export class ExamTestService {
     logger.info(
       `[exam-test] createQuestion businessId=${businessId} examTestId=${examTestId} type=${dto?.type} userId=${user.id}`,
     );
-    const examTestRecord = await this.getWithAccess(businessId, examTestId, user);
-    if (user.role === UserRole.TEACHER) {
-      await assertTeacherInBatch(user.id, examTestRecord.batchId);
-    }
+    await this.getWithAccess(businessId, examTestId, user);
     const hasAttempts = await questionRepo.hasAttemptsForExamTest(businessId, examTestId);
     if (hasAttempts) throw new BadRequestError('Cannot modify questions after attempts have started');
 
@@ -238,10 +226,7 @@ export class ExamTestService {
 
     const examTestId = existing.examTestId;
     if (!examTestId) throw new BadRequestError('Question does not belong to an exam test');
-    const examTestRecord = await this.getWithAccess(businessId, examTestId, user);
-    if (user.role === UserRole.TEACHER) {
-      await assertTeacherInBatch(user.id, examTestRecord.batchId);
-    }
+    await this.getWithAccess(businessId, examTestId, user);
 
     const hasAttempts = await questionRepo.hasAttemptsForExamTest(businessId, examTestId);
     if (hasAttempts) throw new BadRequestError('Cannot modify questions after attempts have started');
@@ -287,10 +272,7 @@ export class ExamTestService {
     if (!existing) throw new NotFoundError('Question not found');
     const examTestId = existing.examTestId;
     if (!examTestId) throw new BadRequestError('Question does not belong to an exam test');
-    const examTestRecord = await this.getWithAccess(businessId, examTestId, user);
-    if (user.role === UserRole.TEACHER) {
-      await assertTeacherInBatch(user.id, examTestRecord.batchId);
-    }
+    await this.getWithAccess(businessId, examTestId, user);
 
     const hasAttempts = await questionRepo.hasAttemptsForExamTest(businessId, examTestId);
     if (hasAttempts) throw new BadRequestError('Cannot modify questions after attempts have started');

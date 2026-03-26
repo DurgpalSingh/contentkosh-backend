@@ -7,8 +7,7 @@ import { examTestService } from '../services/examTest.service';
 import { TestMapper } from '../mappers/test.mapper';
 import { PublishExamTestRequestDto } from '../dtos/test.dto';
 import { testAttemptService } from '../services/testAttempt.service';
-import { getBusinessId } from '../utils/request.utils';
-import { handleTestControllerError, parseOptionalIntQueryParam } from '../utils/testController.utils';
+import { handleTestControllerError, parseOptionalIntQueryParam, getBusinessId } from '../utils/testController.utils';
 
 
 export const examTestController = {

@@ -2,6 +2,16 @@ import { Response } from 'express';
 import logger from './logger';
 import { ApiResponseHandler } from './apiResponse';
 import { BadRequestError, NotFoundError } from '../errors/api.errors';
+import { Request } from 'express';
+
+export function getBusinessId(req: Request): number {
+  const businessId = Number(req.params.businessId);
+  if (!businessId || !Number.isInteger(businessId)) {
+    throw new BadRequestError('Invalid businessId');
+  }
+  return businessId;
+}
+
 
 export function parseOptionalIntQueryParam(value: unknown, paramName: string): number | undefined {
   if (value === undefined || value === null) return undefined;

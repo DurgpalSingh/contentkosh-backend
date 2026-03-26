@@ -6,8 +6,7 @@ import { BadRequestError, NotFoundError } from '../errors/api.errors';
 import { practiceTestService } from '../services/practiceTest.service';
 import { TestMapper } from '../mappers/test.mapper';
 import { testAttemptService } from '../services/testAttempt.service';
-import { getBusinessId } from '../utils/request.utils';
-import { handleTestControllerError, parseOptionalIntQueryParam } from '../utils/testController.utils';
+import { handleTestControllerError, parseOptionalIntQueryParam, getBusinessId } from '../utils/testController.utils';
 
 export const practiceTestController = {
   async createPracticeTest(req: AuthRequest, res: Response) {
