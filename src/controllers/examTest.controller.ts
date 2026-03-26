@@ -8,6 +8,7 @@ import { TestMapper } from '../mappers/test.mapper';
 import { PublishExamTestRequestDto } from '../dtos/test.dto';
 import { testAttemptService } from '../services/testAttempt.service';
 import { getBusinessId } from '../utils/request.utils';
+import { handleTestControllerError, parseOptionalIntQueryParam } from '../utils/testController.utils';
 
 
 export const examTestController = {
@@ -18,12 +19,9 @@ export const examTestController = {
       const user = req.user!;
 
       const createdExamTest = await examTestService.create(businessId, req.body, { id: user.id, role: user.role });
-      return ApiResponseHandler.success(res, TestMapper.examTest(createdExamTest), 'Exam test created successfully', 201);
+      return ApiResponseHandler.created(res, TestMapper.examTest(createdExamTest), 'Exam test created successfully');
     } catch (e: unknown) {
-      if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
-      const message = e instanceof Error ? e.message : 'Unknown error';
-      logger.error(`Error creating exam test: ${message}`);
-      return ApiResponseHandler.serverError(res, 'Failed to create exam test');
+      return handleTestControllerError({ res, error: e, endpoint: 'createExamTest', serverErrorMessage: 'Failed to create exam test' });
     }
   },
 
@@ -32,27 +30,18 @@ export const examTestController = {
       const businessId = getBusinessId(req);
       const user = req.user!;
       
-      const statusFilter = req.query.status !== undefined ? Number(req.query.status) : undefined;
-      const batchIdFilter = req.query.batchId !== undefined ? Number(req.query.batchId) : undefined;
+      const statusFilter = parseOptionalIntQueryParam(req.query.status, 'status');
+      const batchIdFilter = parseOptionalIntQueryParam(req.query.batchId, 'batchId');
 
-      if (statusFilter !== undefined && (Number.isNaN(statusFilter) || !Number.isInteger(statusFilter))) {
-        return ApiResponseHandler.badRequest(res, 'Invalid status');
-      }
-      if (batchIdFilter !== undefined && (Number.isNaN(batchIdFilter) || !Number.isInteger(batchIdFilter))) {
-        return ApiResponseHandler.badRequest(res, 'Invalid batchId');
-      }
-
-      const filters: { status?: number; batchId?: number } = {};
-      if (statusFilter !== undefined) filters.status = statusFilter;
-      if (batchIdFilter !== undefined) filters.batchId = batchIdFilter;
+      const filters: { status?: number; batchId?: number } = {
+        ...(statusFilter !== undefined ? { status: statusFilter } : {}),
+        ...(batchIdFilter !== undefined ? { batchId: batchIdFilter } : {}),
+      };
 
       const examTests = await examTestService.list(businessId, filters, { id: user.id, role: user.role });
       return ApiResponseHandler.success(res, examTests.map(TestMapper.examTest), 'Exam tests fetched successfully');
     } catch (e: unknown) {
-      if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
-      const message = e instanceof Error ? e.message : 'Unknown error';
-      logger.error(`Error listing exam tests: ${message}`);
-      return ApiResponseHandler.serverError(res, 'Failed to fetch exam tests');
+      return handleTestControllerError({ res, error: e, endpoint: 'listExamTests', serverErrorMessage: 'Failed to fetch exam tests' });
     }
   },
 
@@ -61,8 +50,7 @@ export const examTestController = {
       const businessId = getBusinessId(req);
       const user = req.user!;
       
-      const examTestId = req.params.examTestId;
-      if (!examTestId) return ApiResponseHandler.badRequest(res, 'examTestId is required');
+      const examTestId = req.params.examTestId!;
       const examTestRecord = await examTestService.get(businessId, examTestId, { id: user.id, role: user.role });
       const { questions, ...testData } = examTestRecord;
       const responsePayload = {
@@ -71,48 +59,34 @@ export const examTestController = {
       };
       return ApiResponseHandler.success(res, responsePayload, 'Exam test fetched successfully');
     } catch (e: unknown) {
-      if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
-      if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
-      const message = e instanceof Error ? e.message : 'Unknown error';
-      logger.error(`Error fetching exam test: ${message}`);
-      return ApiResponseHandler.serverError(res, 'Failed to fetch exam test');
+      return handleTestControllerError({ res, error: e, endpoint: 'getExamTest', serverErrorMessage: 'Failed to fetch exam test' });
     }
   },
 
   async updateExamTest(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      const examTestId = req.params.examTestId;
+      const examTestId = req.params.examTestId!;
       
-      if (!examTestId) return ApiResponseHandler.badRequest(res, 'examTestId is required');
       const user = req.user!;
 
       const updatedExamTest = await examTestService.update(businessId, examTestId, req.body, { id: user.id, role: user.role });
       return ApiResponseHandler.success(res, TestMapper.examTest(updatedExamTest), 'Exam test updated successfully');
     } catch (e: unknown) {
-      if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
-      if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
-      const message = e instanceof Error ? e.message : 'Unknown error';
-      logger.error(`Error updating exam test: ${message}`);
-      return ApiResponseHandler.serverError(res, 'Failed to update exam test');
+      return handleTestControllerError({ res, error: e, endpoint: 'updateExamTest', serverErrorMessage: 'Failed to update exam test' });
     }
   },
 
   async deleteExamTest(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      const examTestId = req.params.examTestId;
+      const examTestId = req.params.examTestId!;
       
-      if (!examTestId) return ApiResponseHandler.badRequest(res, 'examTestId is required');
       const user = req.user!;
       await examTestService.remove(businessId, examTestId, { id: user.id, role: user.role });
       return ApiResponseHandler.success(res, null, 'Exam test deleted successfully');
     } catch (e: unknown) {
-      if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
-      if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
-      const message = e instanceof Error ? e.message : 'Unknown error';
-      logger.error(`Error deleting exam test: ${message}`);
-      return ApiResponseHandler.serverError(res, 'Failed to delete exam test');
+      return handleTestControllerError({ res, error: e, endpoint: 'deleteExamTest', serverErrorMessage: 'Failed to delete exam test' });
     }
   },
 
@@ -123,87 +97,62 @@ export const examTestController = {
       const user = req.user!;
 
       const examTestId: string | undefined = (req.body as PublishExamTestRequestDto).examTestId;
-      if (!examTestId) return ApiResponseHandler.badRequest(res, 'examTestId is required');
       const publishedExamTest = await examTestService.publish(businessId, examTestId, { id: user.id, role: user.role });
       return ApiResponseHandler.success(res, TestMapper.examTest(publishedExamTest), 'Exam test published successfully');
     } catch (e: unknown) {
-      if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
-      if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
-      const message = e instanceof Error ? e.message : 'Unknown error';
-      logger.error(`Error publishing exam test: ${message}`);
-      return ApiResponseHandler.serverError(res, 'Failed to publish exam test');
+      return handleTestControllerError({ res, error: e, endpoint: 'publishExamTest', serverErrorMessage: 'Failed to publish exam test' });
     }
   },
 
   async listExamTestQuestions(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      const examTestId = req.params.examTestId;
+      const examTestId = req.params.examTestId!;
       
-      if (!examTestId) return ApiResponseHandler.badRequest(res, 'examTestId is required');
       const user = req.user!;
       const questions = await examTestService.listQuestions(businessId, examTestId, { id: user.id, role: user.role });
       return ApiResponseHandler.success(res, questions.map(TestMapper.question), 'Questions fetched successfully');
     } catch (e: unknown) {
-      if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
-      if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
-      const message = e instanceof Error ? e.message : 'Unknown error';
-      logger.error(`Error listing exam questions: ${message}`);
-      return ApiResponseHandler.serverError(res, 'Failed to fetch questions');
+      return handleTestControllerError({ res, error: e, endpoint: 'listExamTestQuestions', serverErrorMessage: 'Failed to fetch questions' });
     }
   },
 
   async createExamTestQuestion(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      const examTestId = req.params.examTestId;
+      const examTestId = req.params.examTestId!;
       
-      if (!examTestId) return ApiResponseHandler.badRequest(res, 'examTestId is required');
       const user = req.user!;
       const createdQuestion = await examTestService.createQuestion(businessId, examTestId, req.body, { id: user.id, role: user.role });
-      return ApiResponseHandler.success(res, TestMapper.question(createdQuestion), 'Question created successfully', 201);
+      return ApiResponseHandler.created(res, TestMapper.question(createdQuestion), 'Question created successfully');
     } catch (e: unknown) {
-      if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
-      if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
-      const message = e instanceof Error ? e.message : 'Unknown error';
-      logger.error(`Error creating exam question: ${message}`);
-      return ApiResponseHandler.serverError(res, 'Failed to create question');
+      return handleTestControllerError({ res, error: e, endpoint: 'createExamTestQuestion', serverErrorMessage: 'Failed to create question' });
     }
   },
 
   async updateExamTestQuestion(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      const questionId = req.params.questionId;
+      const questionId = req.params.questionId!;
       
-      if (!questionId) return ApiResponseHandler.badRequest(res, 'questionId is required');
       const user = req.user!;
       const updatedQuestion = await examTestService.updateQuestion(businessId, questionId, req.body, { id: user.id, role: user.role });
       return ApiResponseHandler.success(res, TestMapper.question(updatedQuestion), 'Question updated successfully');
     } catch (e: unknown) {
-      if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
-      if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
-      const message = e instanceof Error ? e.message : 'Unknown error';
-      logger.error(`Error updating exam question: ${message}`);
-      return ApiResponseHandler.serverError(res, 'Failed to update question');
+      return handleTestControllerError({ res, error: e, endpoint: 'updateExamTestQuestion', serverErrorMessage: 'Failed to update question' });
     }
   },
 
   async deleteExamTestQuestion(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      const questionId = req.params.questionId;
+      const questionId = req.params.questionId!;
       
-      if (!questionId) return ApiResponseHandler.badRequest(res, 'questionId is required');
       const user = req.user!;
       await examTestService.deleteQuestion(businessId, questionId, { id: user.id, role: user.role });
       return ApiResponseHandler.success(res, { id: questionId }, 'Question deleted successfully', 200);
     } catch (e: unknown) {
-      if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
-      if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
-      const message = e instanceof Error ? e.message : 'Unknown error';
-      logger.error(`Error deleting exam question: ${message}`);
-      return ApiResponseHandler.serverError(res, 'Failed to delete question');
+      return handleTestControllerError({ res, error: e, endpoint: 'deleteExamTestQuestion', serverErrorMessage: 'Failed to delete question' });
     }
   },
 
@@ -213,11 +162,10 @@ export const examTestController = {
   
       const user = req.user!;
 
-      const examTestId: string | undefined = req.body.examTestId;
-      if (!examTestId) return ApiResponseHandler.badRequest(res, 'examTestId is required');
+      const examTestId = req.body.examTestId!;
 
       const attemptStart = await testAttemptService.startExamAttempt(businessId, { id: user.id, role: user.role }, examTestId);
-      return ApiResponseHandler.success(
+      return ApiResponseHandler.created(
         res,
         {
           attemptId: attemptStart.attemptId,
@@ -226,14 +174,9 @@ export const examTestController = {
           questions: attemptStart.questions.map(TestMapper.questionForAttempt),
         },
         'Exam attempt started successfully',
-        201,
       );
     } catch (e: unknown) {
-      if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
-      if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
-      const message = e instanceof Error ? e.message : 'Unknown error';
-      logger.error(`Error starting exam attempt: ${message}`);
-      return ApiResponseHandler.serverError(res, 'Failed to start exam attempt');
+      return handleTestControllerError({ res, error: e, endpoint: 'startExamTestAttempt', serverErrorMessage: 'Failed to start exam attempt' });
     }
   },
 
@@ -246,10 +189,12 @@ export const examTestController = {
       const availableExamTests = await testAttemptService.listAvailableExamTests(businessId, { id: user.id, role: user.role });
       return ApiResponseHandler.success(res, availableExamTests, 'Available exam tests fetched successfully');
     } catch (e: unknown) {
-      if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
-      const message = e instanceof Error ? e.message : 'Unknown error';
-      logger.error(`Error fetching available exam tests: ${message}`);
-      return ApiResponseHandler.serverError(res, 'Failed to fetch available exam tests');
+      return handleTestControllerError({
+        res,
+        error: e,
+        endpoint: 'listAvailableExamTests',
+        serverErrorMessage: 'Failed to fetch available exam tests',
+      });
     }
   },
 
@@ -258,8 +203,7 @@ export const examTestController = {
       const businessId = getBusinessId(req);
       
       const user = req.user!;
-      const attemptId = req.params.attemptId;
-      if (!attemptId) return ApiResponseHandler.badRequest(res, 'attemptId is required');
+      const attemptId = req.params.attemptId!;
 
       const attemptDetails = await testAttemptService.getExamAttemptDetails(businessId, { id: user.id, role: user.role }, attemptId);
       return ApiResponseHandler.success(
@@ -272,11 +216,7 @@ export const examTestController = {
         'Exam attempt fetched successfully',
       );
     } catch (e: unknown) {
-      if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
-      if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
-      const message = e instanceof Error ? e.message : 'Unknown error';
-      logger.error(`Error fetching exam attempt: ${message}`);
-      return ApiResponseHandler.serverError(res, 'Failed to fetch exam attempt');
+      return handleTestControllerError({ res, error: e, endpoint: 'getExamTestAttempt', serverErrorMessage: 'Failed to fetch exam attempt' });
     }
   },
 
@@ -285,8 +225,7 @@ export const examTestController = {
       const businessId = getBusinessId(req);
       
       const user = req.user!;
-      const attemptId = req.params.attemptId;
-      if (!attemptId) return ApiResponseHandler.badRequest(res, 'attemptId is required');
+      const attemptId = req.params.attemptId!;
 
       const submissionResult = await testAttemptService.submitExamAttempt(
         businessId,
@@ -296,11 +235,12 @@ export const examTestController = {
       );
       return ApiResponseHandler.success(res, submissionResult, 'Exam attempt submitted successfully');
     } catch (e: unknown) {
-      if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
-      if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
-      const message = e instanceof Error ? e.message : 'Unknown error';
-      logger.error(`Error submitting exam attempt: ${message}`);
-      return ApiResponseHandler.serverError(res, 'Failed to submit exam attempt');
+      return handleTestControllerError({
+        res,
+        error: e,
+        endpoint: 'submitExamTestAttempt',
+        serverErrorMessage: 'Failed to submit exam attempt',
+      });
     }
   },
 
@@ -310,17 +250,17 @@ export const examTestController = {
       
       const user = req.user!;
 
-      const examTestId = req.params.examTestId;
-      if (!examTestId) return ApiResponseHandler.badRequest(res, 'examTestId is required');
+      const examTestId = req.params.examTestId!;
 
       const analyticsData = await testAttemptService.getExamTestAnalytics(businessId, { id: user.id, role: user.role }, examTestId);
       return ApiResponseHandler.success(res, analyticsData, 'Exam test analytics fetched successfully');
     } catch (e: unknown) {
-      if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
-      if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
-      const message = e instanceof Error ? e.message : 'Unknown error';
-      logger.error(`Error fetching exam test analytics: ${message}`);
-      return ApiResponseHandler.serverError(res, 'Failed to fetch exam test analytics');
+      return handleTestControllerError({
+        res,
+        error: e,
+        endpoint: 'getExamTestAnalytics',
+        serverErrorMessage: 'Failed to fetch exam test analytics',
+      });
     }
   },
 
@@ -330,19 +270,19 @@ export const examTestController = {
       
       const user = req.user!;
 
-      const examTestId = req.params.examTestId;
-      if (!examTestId) return ApiResponseHandler.badRequest(res, 'examTestId is required');
+      const examTestId = req.params.examTestId!;
 
       const analyticsCsv = await testAttemptService.exportExamTestAnalyticsCSV(businessId, { id: user.id, role: user.role }, examTestId);
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="exam-test-${examTestId}-analytics.csv"`);
       return res.status(200).send(analyticsCsv);
     } catch (e: unknown) {
-      if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
-      if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
-      const message = e instanceof Error ? e.message : 'Unknown error';
-      logger.error(`Error exporting exam test analytics: ${message}`);
-      return ApiResponseHandler.serverError(res, 'Failed to export exam test analytics');
+      return handleTestControllerError({
+        res,
+        error: e,
+        endpoint: 'exportExamTestAnalytics',
+        serverErrorMessage: 'Failed to export exam test analytics',
+      });
     }
   },
 };

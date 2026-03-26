@@ -7,6 +7,7 @@ import { practiceTestService } from '../services/practiceTest.service';
 import { TestMapper } from '../mappers/test.mapper';
 import { testAttemptService } from '../services/testAttempt.service';
 import { getBusinessId } from '../utils/request.utils';
+import { handleTestControllerError, parseOptionalIntQueryParam } from '../utils/testController.utils';
 
 export const practiceTestController = {
   async createPracticeTest(req: AuthRequest, res: Response) {
@@ -15,12 +16,14 @@ export const practiceTestController = {
       const user = req.user!;
 
       const createdPracticeTest = await practiceTestService.create(businessId, req.body, { id: user.id, role: user.role });
-      return ApiResponseHandler.success(res, TestMapper.practiceTest(createdPracticeTest), 'Practice test created successfully', 201);
+      return ApiResponseHandler.created(res, TestMapper.practiceTest(createdPracticeTest), 'Practice test created successfully');
     } catch (e: unknown) {
-      if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
-      const message = e instanceof Error ? e.message : 'Unknown error';
-      logger.error(`Error creating practice test: ${message}`);
-      return ApiResponseHandler.serverError(res, 'Failed to create practice test');
+      return handleTestControllerError({
+        res,
+        error: e,
+        endpoint: 'createPracticeTest',
+        serverErrorMessage: 'Failed to create practice test',
+      });
     }
   },
 
@@ -28,27 +31,23 @@ export const practiceTestController = {
     try {
       const businessId = getBusinessId(req);
       const user = req.user!;
-      const statusFilter = req.query.status !== undefined ? Number(req.query.status) : undefined;
-      const batchIdFilter = req.query.batchId !== undefined ? Number(req.query.batchId) : undefined;
+      const statusFilter = parseOptionalIntQueryParam(req.query.status, 'status');
+      const batchIdFilter = parseOptionalIntQueryParam(req.query.batchId, 'batchId');
 
-      if (statusFilter !== undefined && (Number.isNaN(statusFilter) || !Number.isInteger(statusFilter))) {
-        return ApiResponseHandler.badRequest(res, 'Invalid status');
-      }
-      if (batchIdFilter !== undefined && (Number.isNaN(batchIdFilter) || !Number.isInteger(batchIdFilter))) {
-        return ApiResponseHandler.badRequest(res, 'Invalid batchId');
-      }
-
-      const filters: { status?: number; batchId?: number } = {};
-      if (statusFilter !== undefined) filters.status = statusFilter;
-      if (batchIdFilter !== undefined) filters.batchId = batchIdFilter;
+      const filters: { status?: number; batchId?: number } = {
+        ...(statusFilter !== undefined ? { status: statusFilter } : {}),
+        ...(batchIdFilter !== undefined ? { batchId: batchIdFilter } : {}),
+      };
 
       const practiceTests = await practiceTestService.list(businessId, filters, { id: user.id, role: user.role });
       return ApiResponseHandler.success(res, practiceTests.map(TestMapper.practiceTest), 'Practice tests fetched successfully');
     } catch (e: unknown) {
-      if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
-      const message = e instanceof Error ? e.message : 'Unknown error';
-      logger.error(`Error listing practice tests: ${message}`);
-      return ApiResponseHandler.serverError(res, 'Failed to fetch practice tests');
+      return handleTestControllerError({
+        res,
+        error: e,
+        endpoint: 'listPracticeTests',
+        serverErrorMessage: 'Failed to fetch practice tests',
+      });
     }
   },
 
@@ -56,8 +55,7 @@ export const practiceTestController = {
     try {
       const businessId = getBusinessId(req);
       const user = req.user!;
-      const practiceTestId = req.params.practiceTestId;
-      if (!practiceTestId) return ApiResponseHandler.badRequest(res, 'practiceTestId is required');
+      const practiceTestId = req.params.practiceTestId!;
       const practiceTestRecord = await practiceTestService.get(businessId, practiceTestId, { id: user.id, role: user.role });
       const { questions, ...testData } = practiceTestRecord;
       const responsePayload = {
@@ -66,46 +64,47 @@ export const practiceTestController = {
       };
       return ApiResponseHandler.success(res, responsePayload, 'Practice test fetched successfully');
     } catch (e: unknown) {
-      if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
-      if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
-      const message = e instanceof Error ? e.message : 'Unknown error';
-      logger.error(`Error fetching practice test: ${message}`);
-      return ApiResponseHandler.serverError(res, 'Failed to fetch practice test');
+      return handleTestControllerError({
+        res,
+        error: e,
+        endpoint: 'getPracticeTest',
+        serverErrorMessage: 'Failed to fetch practice test',
+      });
     }
   },
 
   async updatePracticeTest(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      const practiceTestId = req.params.practiceTestId;
-      if (!practiceTestId) return ApiResponseHandler.badRequest(res, 'practiceTestId is required');
+      const practiceTestId = req.params.practiceTestId!;
       const user = req.user!;
 
       const updatedPracticeTest = await practiceTestService.update(businessId, practiceTestId, req.body, { id: user.id, role: user.role });
       return ApiResponseHandler.success(res, TestMapper.practiceTest(updatedPracticeTest), 'Practice test updated successfully');
     } catch (e: unknown) {
-      if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
-      if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
-      const message = e instanceof Error ? e.message : 'Unknown error';
-      logger.error(`Error updating practice test: ${message}`);
-      return ApiResponseHandler.serverError(res, 'Failed to update practice test');
+      return handleTestControllerError({
+        res,
+        error: e,
+        endpoint: 'updatePracticeTest',
+        serverErrorMessage: 'Failed to update practice test',
+      });
     }
   },
 
   async deletePracticeTest(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      const practiceTestId = req.params.practiceTestId;
-      if (!practiceTestId) return ApiResponseHandler.badRequest(res, 'practiceTestId is required');
+      const practiceTestId = req.params.practiceTestId!;
       const user = req.user!;
       await practiceTestService.remove(businessId, practiceTestId, { id: user.id, role: user.role });
       return ApiResponseHandler.success(res, null, 'Practice test deleted successfully');
     } catch (e: unknown) {
-      if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
-      if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
-      const message = e instanceof Error ? e.message : 'Unknown error';
-      logger.error(`Error deleting practice test: ${message}`);
-      return ApiResponseHandler.serverError(res, 'Failed to delete practice test');
+      return handleTestControllerError({
+        res,
+        error: e,
+        endpoint: 'deletePracticeTest',
+        serverErrorMessage: 'Failed to delete practice test',
+      });
     }
   },
 
@@ -114,84 +113,84 @@ export const practiceTestController = {
       const businessId = getBusinessId(req);
       const user = req.user!;
 
-      const practiceTestId: string | undefined = req.body.practiceTestId;
-      if (!practiceTestId) return ApiResponseHandler.badRequest(res, 'practiceTestId is required');
+      const practiceTestId = req.body.practiceTestId!;
       const publishedPracticeTest = await practiceTestService.publish(businessId, practiceTestId, { id: user.id, role: user.role });
       return ApiResponseHandler.success(res, TestMapper.practiceTest(publishedPracticeTest), 'Practice test published successfully');
     } catch (e: unknown) {
-      if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
-      if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
-      const message = e instanceof Error ? e.message : 'Unknown error';
-      logger.error(`Error publishing practice test: ${message}`);
-      return ApiResponseHandler.serverError(res, 'Failed to publish practice test');
+      return handleTestControllerError({
+        res,
+        error: e,
+        endpoint: 'publishPracticeTest',
+        serverErrorMessage: 'Failed to publish practice test',
+      });
     }
   },
 
   async listPracticeTestQuestions(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      const practiceTestId = req.params.practiceTestId;
-      if (!practiceTestId) return ApiResponseHandler.badRequest(res, 'practiceTestId is required');
+      const practiceTestId = req.params.practiceTestId!;
       const user = req.user!;
       const questions = await practiceTestService.listQuestions(businessId, practiceTestId, { id: user.id, role: user.role });
       return ApiResponseHandler.success(res, questions.map(TestMapper.question), 'Questions fetched successfully');
     } catch (e: unknown) {
-      if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
-      if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
-      const message = e instanceof Error ? e.message : 'Unknown error';
-      logger.error(`Error listing practice questions: ${message}`);
-      return ApiResponseHandler.serverError(res, 'Failed to fetch questions');
+      return handleTestControllerError({
+        res,
+        error: e,
+        endpoint: 'listPracticeTestQuestions',
+        serverErrorMessage: 'Failed to fetch questions',
+      });
     }
   },
 
   async createPracticeTestQuestion(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      const practiceTestId = req.params.practiceTestId;
-      if (!practiceTestId) return ApiResponseHandler.badRequest(res, 'practiceTestId is required');
+      const practiceTestId = req.params.practiceTestId!;
       const user = req.user!;
       const createdQuestion = await practiceTestService.createQuestion(businessId, practiceTestId, req.body, { id: user.id, role: user.role });
-      return ApiResponseHandler.success(res, TestMapper.question(createdQuestion), 'Question created successfully', 201);
+      return ApiResponseHandler.created(res, TestMapper.question(createdQuestion), 'Question created successfully');
     } catch (e: unknown) {
-      if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
-      if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
-      const message = e instanceof Error ? e.message : 'Unknown error';
-      logger.error(`Error creating practice question: ${message}`);
-      return ApiResponseHandler.serverError(res, 'Failed to create question');
+      return handleTestControllerError({
+        res,
+        error: e,
+        endpoint: 'createPracticeTestQuestion',
+        serverErrorMessage: 'Failed to create question',
+      });
     }
   },
 
   async updatePracticeTestQuestion(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      const questionId = req.params.questionId;
-      if (!questionId) return ApiResponseHandler.badRequest(res, 'questionId is required');
+      const questionId = req.params.questionId!;
       const user = req.user!;
       const updatedQuestion = await practiceTestService.updateQuestion(businessId, questionId, req.body, { id: user.id, role: user.role });
       return ApiResponseHandler.success(res, TestMapper.question(updatedQuestion), 'Question updated successfully');
     } catch (e: unknown) {
-      if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
-      if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
-      const message = e instanceof Error ? e.message : 'Unknown error';
-      logger.error(`Error updating practice question: ${message}`);
-      return ApiResponseHandler.serverError(res, 'Failed to update question');
+      return handleTestControllerError({
+        res,
+        error: e,
+        endpoint: 'updatePracticeTestQuestion',
+        serverErrorMessage: 'Failed to update question',
+      });
     }
   },
 
   async deletePracticeTestQuestion(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      const questionId = req.params.questionId;
-      if (!questionId) return ApiResponseHandler.badRequest(res, 'questionId is required');
+      const questionId = req.params.questionId!;
       const user = req.user!;
       await practiceTestService.deleteQuestion(businessId, questionId, { id: user.id, role: user.role });
       return ApiResponseHandler.success(res, { id: questionId }, 'Question deleted successfully', 200);
     } catch (e: unknown) {
-      if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
-      if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
-      const message = e instanceof Error ? e.message : 'Unknown error';
-      logger.error(`Error deleting practice question: ${message}`);
-      return ApiResponseHandler.serverError(res, 'Failed to delete question');
+      return handleTestControllerError({
+        res,
+        error: e,
+        endpoint: 'deletePracticeTestQuestion',
+        serverErrorMessage: 'Failed to delete question',
+      });
     }
   },
 
@@ -200,11 +199,10 @@ export const practiceTestController = {
       const businessId = getBusinessId(req);
       const user = req.user!;
 
-      const practiceTestId: string | undefined = req.body.practiceTestId;
-      if (!practiceTestId) return ApiResponseHandler.badRequest(res, 'practiceTestId is required');
+      const practiceTestId = req.body.practiceTestId!;
 
       const attemptStart = await testAttemptService.startPracticeAttempt(businessId, { id: user.id, role: user.role }, practiceTestId);
-      return ApiResponseHandler.success(
+      return ApiResponseHandler.created(
         res,
         {
           attemptId: attemptStart.attemptId,
@@ -213,14 +211,14 @@ export const practiceTestController = {
           questions: attemptStart.questions.map(TestMapper.questionForAttempt),
         },
         'Practice attempt started successfully',
-        201,
       );
     } catch (e: unknown) {
-      if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
-      if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
-      const message = e instanceof Error ? e.message : 'Unknown error';
-      logger.error(`Error starting practice attempt: ${message}`);
-      return ApiResponseHandler.serverError(res, 'Failed to start practice attempt');
+      return handleTestControllerError({
+        res,
+        error: e,
+        endpoint: 'startPracticeTestAttempt',
+        serverErrorMessage: 'Failed to start practice attempt',
+      });
     }
   },
 
@@ -232,10 +230,12 @@ export const practiceTestController = {
       const availablePracticeTests = await testAttemptService.listAvailablePracticeTests(businessId, { id: user.id, role: user.role });
       return ApiResponseHandler.success(res, availablePracticeTests, 'Available practice tests fetched successfully');
     } catch (e: unknown) {
-      if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
-      const message = e instanceof Error ? e.message : 'Unknown error';
-      logger.error(`Error fetching available practice tests: ${message}`);
-      return ApiResponseHandler.serverError(res, 'Failed to fetch available practice tests');
+      return handleTestControllerError({
+        res,
+        error: e,
+        endpoint: 'listAvailablePracticeTests',
+        serverErrorMessage: 'Failed to fetch available practice tests',
+      });
     }
   },
 
@@ -243,8 +243,7 @@ export const practiceTestController = {
     try {
       const businessId = getBusinessId(req);
       const user = req.user!;
-      const attemptId = req.params.attemptId;
-      if (!attemptId) return ApiResponseHandler.badRequest(res, 'attemptId is required');
+      const attemptId = req.params.attemptId!;
 
       const attemptDetails = await testAttemptService.getPracticeAttemptDetails(businessId, { id: user.id, role: user.role }, attemptId);
       return ApiResponseHandler.success(
@@ -257,11 +256,12 @@ export const practiceTestController = {
         'Practice attempt fetched successfully',
       );
     } catch (e: unknown) {
-      if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
-      if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
-      const message = e instanceof Error ? e.message : 'Unknown error';
-      logger.error(`Error fetching practice attempt: ${message}`);
-      return ApiResponseHandler.serverError(res, 'Failed to fetch practice attempt');
+      return handleTestControllerError({
+        res,
+        error: e,
+        endpoint: 'getPracticeTestAttempt',
+        serverErrorMessage: 'Failed to fetch practice attempt',
+      });
     }
   },
 
@@ -269,8 +269,7 @@ export const practiceTestController = {
     try {
       const businessId = getBusinessId(req);
       const user = req.user!;
-      const attemptId = req.params.attemptId;
-      if (!attemptId) return ApiResponseHandler.badRequest(res, 'attemptId is required');
+      const attemptId = req.params.attemptId!;
 
       const submissionResult = await testAttemptService.submitPracticeAttempt(
         businessId,
@@ -280,11 +279,12 @@ export const practiceTestController = {
       );
       return ApiResponseHandler.success(res, submissionResult, 'Practice attempt submitted successfully');
     } catch (e: unknown) {
-      if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
-      if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
-      const message = e instanceof Error ? e.message : 'Unknown error';
-      logger.error(`Error submitting practice attempt: ${message}`);
-      return ApiResponseHandler.serverError(res, 'Failed to submit practice attempt');
+      return handleTestControllerError({
+        res,
+        error: e,
+        endpoint: 'submitPracticeTestAttempt',
+        serverErrorMessage: 'Failed to submit practice attempt',
+      });
     }
   },
 
@@ -293,17 +293,17 @@ export const practiceTestController = {
       const businessId = getBusinessId(req);
       const user = req.user!;
 
-      const practiceTestId = req.params.practiceTestId;
-      if (!practiceTestId) return ApiResponseHandler.badRequest(res, 'practiceTestId is required');
+      const practiceTestId = req.params.practiceTestId!;
 
       const analyticsData = await testAttemptService.getPracticeTestAnalytics(businessId, { id: user.id, role: user.role }, practiceTestId);
       return ApiResponseHandler.success(res, analyticsData, 'Practice test analytics fetched successfully');
     } catch (e: unknown) {
-      if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
-      if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
-      const message = e instanceof Error ? e.message : 'Unknown error';
-      logger.error(`Error fetching practice test analytics: ${message}`);
-      return ApiResponseHandler.serverError(res, 'Failed to fetch practice test analytics');
+      return handleTestControllerError({
+        res,
+        error: e,
+        endpoint: 'getPracticeTestAnalytics',
+        serverErrorMessage: 'Failed to fetch practice test analytics',
+      });
     }
   },
 
@@ -312,19 +312,19 @@ export const practiceTestController = {
       const businessId = getBusinessId(req);
       const user = req.user!;
 
-      const practiceTestId = req.params.practiceTestId;
-      if (!practiceTestId) return ApiResponseHandler.badRequest(res, 'practiceTestId is required');
+      const practiceTestId = req.params.practiceTestId!;
 
       const analyticsCsv = await testAttemptService.exportPracticeTestAnalyticsCSV(businessId, { id: user.id, role: user.role }, practiceTestId);
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="practice-test-${practiceTestId}-analytics.csv"`);
       return res.status(200).send(analyticsCsv);
     } catch (e: unknown) {
-      if (e instanceof BadRequestError) return ApiResponseHandler.badRequest(res, e.message);
-      if (e instanceof NotFoundError) return ApiResponseHandler.notFound(res, e.message);
-      const message = e instanceof Error ? e.message : 'Unknown error';
-      logger.error(`Error exporting practice test analytics: ${message}`);
-      return ApiResponseHandler.serverError(res, 'Failed to export practice test analytics');
+      return handleTestControllerError({
+        res,
+        error: e,
+        endpoint: 'exportPracticeTestAnalytics',
+        serverErrorMessage: 'Failed to export practice test analytics',
+      });
     }
   },
 };
