@@ -2,6 +2,7 @@ import { Response } from 'express';
 
 export enum ApiCode {
     SUCCESS = 'SUCCESS',
+    SUCCESS_CREATED = 'SUCCESS_CREATED',
     ERR_GENERIC = 'ERR_GENERIC',
     ERR_NOT_FOUND = 'ERR_NOT_FOUND',
     ERR_BAD_REQUEST = 'ERR_BAD_REQUEST',
@@ -25,6 +26,16 @@ export class ApiResponseHandler {
             apiCode: ApiCode.SUCCESS
         };
         res.status(statusCode).json(response);
+    }
+
+    static created<T>(res: Response, data?: T, message?: string): void {
+        const response: ApiResponse<T> = {
+            success: true,
+            ...(message && { message }),
+            ...(data && { data }),
+            apiCode: ApiCode.SUCCESS_CREATED
+        };
+        res.status(201).json(response);
     }
 
     static successWithExtraProps<T>(res: Response, data?: T, extraProps: Object = {}, message?: string, statusCode: number = 200): void {
