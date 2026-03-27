@@ -2,9 +2,11 @@ import { Subject, Prisma, SubjectStatus } from '@prisma/client';
 import { CreateSubjectDto, UpdateSubjectDto } from '../dtos/subject.dto';
 import * as subjectRepo from '../repositories/subject.repo';
 import * as courseRepo from '../repositories/course.repo';
+import * as userRepo from '../repositories/user.repo';
 import { SubjectMapper } from '../mappers/subject.mapper';
-import { NotFoundError, BadRequestError } from '../errors/api.errors';
+import { NotFoundError, BadRequestError, ForbiddenError } from '../errors/api.errors';
 import logger from '../utils/logger';
+import { IUser } from '../dtos/auth.dto';
 
 export class SubjectService {
     async createSubject(data: CreateSubjectDto): Promise<Subject> {
@@ -51,6 +53,28 @@ export class SubjectService {
         }
 
         const subjects = await subjectRepo.findSubjectsByCourseId(courseId, findOptions);
+        return subjects.map(SubjectMapper.toDomain);
+    }
+
+    async getSubjectsByUserId(requestingUser: IUser): Promise<Subject[]> {
+        logger.info('SubjectService: Fetching subjects by user', {
+            requestingUserId: requestingUser.id
+        });
+
+        const userExists = await userRepo.exists(requestingUser.id);
+        if (!userExists) {
+            throw new NotFoundError('User not found');
+        }
+
+        const subjects = await subjectRepo.findSubjectsByUserId(requestingUser, {
+            where: { status: SubjectStatus.ACTIVE }
+        });
+
+        logger.info('SubjectService: Subjects fetched', {
+            targetUserId: requestingUser.id,
+            subjectCount: subjects.length
+        });
+
         return subjects.map(SubjectMapper.toDomain);
     }
 

@@ -4,8 +4,9 @@ import { subjectService } from '../services/subject.service';
 import { CreateSubjectDto, UpdateSubjectDto } from '../dtos/subject.dto';
 import { plainToInstance } from 'class-transformer';
 import { ValidationUtils } from '../utils/validation';
-import { BadRequestError, NotFoundError } from '../errors/api.errors';
+import { BadRequestError, NotFoundError, ForbiddenError } from '../errors/api.errors';
 import logger from '../utils/logger';
+import { AuthRequest } from '../dtos/auth.dto';
 
 export const createSubject = async (req: Request, res: Response) => {
     try {
@@ -53,6 +54,22 @@ export const getSubjectsByCourse = async (req: Request, res: Response) => {
         ApiResponseHandler.success(res, subjects, 'Subjects fetched successfully');
     } catch (error: any) {
         logger.error(`Error fetching subjects: ${error.message}`);
+        ApiResponseHandler.error(res, 'Failed to fetch subjects');
+    }
+};
+
+export const getSubjectsByUserId = async (req: AuthRequest, res: Response) => {
+    try {
+        const subjects = await subjectService.getSubjectsByUserId(req.user!);
+        ApiResponseHandler.success(res, subjects, 'Subjects fetched successfully');
+    } catch (error: any) {
+        if (error instanceof NotFoundError) {
+            return ApiResponseHandler.notFound(res, error.message);
+        }
+        if (error instanceof ForbiddenError) {
+            return ApiResponseHandler.forbidden(res, error.message);
+        }
+        logger.error(`Error fetching subjects by user: ${error.message}`);
         ApiResponseHandler.error(res, 'Failed to fetch subjects');
     }
 };

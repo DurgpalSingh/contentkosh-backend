@@ -1,5 +1,14 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.1] - Add Subject to Content 
+**P.R raised by**  : Shubh404-SE on **Date** : 2026-03-25
+
+### Added
+  - `/business/subject/all` api to get all subject according to the user role and their batches.
+### Changed
+  - Updated content schema to add subjectId as well.
+
+---
 ## Version [1.2.0] - LMS Test Module (Practice & Exam Tests)
 **P.R raised by**  : Shubh404-SE on **Date** : 2026-03-22
 

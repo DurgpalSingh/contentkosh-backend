@@ -1,11 +1,23 @@
-import { IsString, IsNotEmpty, IsEnum, IsOptional, IsInt, Min, IsBoolean } from 'class-validator';
+import { IsString, IsNotEmpty, IsEnum, IsOptional, IsInt, Min } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { ContentType, ContentStatus } from '@prisma/client';
+
+const toOptionalNumber = (value: unknown): number | undefined => {
+  if (value === undefined || value === null || value === '') return undefined;
+  const asNumber = Number(value);
+  if (!Number.isFinite(asNumber)) return undefined;
+  return asNumber;
+};
 
 export class CreateContentDto {
   @IsString()
   @IsNotEmpty()
   title!: string;
+
+  @IsInt()
+  @Min(1)
+  @Transform(({ value }) => toOptionalNumber(value))
+  subjectId!: number;
 
   @IsEnum(ContentType)
   type!: ContentType;
@@ -32,6 +44,11 @@ export class UpdateContentDto {
   @IsOptional()
   @IsEnum(ContentStatus)
   status?: ContentStatus;
+
+  @IsInt()
+  @Min(1)
+  @Transform(({ value }) => toOptionalNumber(value))
+  subjectId!: number;
 }
 
 export class ContentQueryDto {

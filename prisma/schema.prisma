@@ -201,6 +201,7 @@ model Subject {
   createdAt   DateTime      @default(now()) @map("created_at")
   updatedAt   DateTime      @updatedAt @map("updated_at")
   course      Course        @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  contents    Content[]
 
   @@unique([courseId, name])
   @@index([courseId])
@@ -272,6 +273,7 @@ enum ContentStatus {
 model Content {
   id         Int           @id @default(autoincrement())
   batchId    Int           @map("batch_id")
+  subjectId  Int?          @map("subject_id")
   title      String
   type       ContentType
   filePath   String        @map("file_path")
@@ -284,10 +286,12 @@ model Content {
 
   // Relations
   batch    Batch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  subject  Subject? @relation(fields: [subjectId], references: [id], onDelete: Cascade)
   uploader User  @relation("ContentUploader", fields: [uploadedBy], references: [id], onDelete: Cascade)
   updater  User? @relation("ContentUpdater", fields: [updatedBy], references: [id], onDelete: Cascade)
 
   @@index([batchId])
+  @@index([subjectId])
   @@index([batchId, status])
   @@index([uploadedBy])
   @@map("contents")
