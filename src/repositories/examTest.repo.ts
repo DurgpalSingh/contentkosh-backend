@@ -5,11 +5,12 @@ import { TestStatus } from '../constants/test-enums';
 const examTestSelect = {
   id: true,
   businessId: true,
-  batchId: true,
-  batch: {
+  batchIds: true,
+  subjectId: true,
+  subject: {
     select: {
       id: true,
-      displayName: true,
+      name: true,
     },
   },
   name: true,
@@ -67,18 +68,17 @@ export function findExamTestById(
 export function findExamTestByIdForUser(
   businessId: number,
   id: string,
-  userId: number,
+  userActiveBatchIds: number[],
   options: ExamTestFindOptions = {},
 ) {
+  if (!userActiveBatchIds.length) {
+    return Promise.resolve(null);
+  }
   const query: Prisma.ExamTestFindFirstArgs = {
     where: {
       id,
       businessId,
-      batch: {
-        batchUsers: {
-          some: { userId, isActive: true },
-        },
-      },
+      batchIds: { hasSome: userActiveBatchIds },
     },
   };
 
@@ -113,17 +113,16 @@ export function findExamTestsByBusinessId(
 
 export function findExamTestsByBusinessIdForUser(
   businessId: number,
-  userId: number,
+  userActiveBatchIds: number[],
   options: ExamTestFindOptions = {},
 ) {
+  if (!userActiveBatchIds.length) {
+    return Promise.resolve([]);
+  }
   const query: Prisma.ExamTestFindManyArgs = {
     where: {
       businessId,
-      batch: {
-        batchUsers: {
-          some: { userId, isActive: true },
-        },
-      },
+      batchIds: { hasSome: userActiveBatchIds },
       ...(options.where ?? {}),
     },
     orderBy: options.orderBy ?? { createdAt: 'desc' },
@@ -153,17 +152,23 @@ export function deleteExamTest(businessId: number, id: string) {
   });
 }
 
-export function findPublishedExamTestsForStudent(businessId: number, userId: number) {
+export function findPublishedExamTestsForStudent(businessId: number, userActiveBatchIds: number[]) {
+  if (!userActiveBatchIds.length) {
+    return Promise.resolve([]);
+  }
   return prisma.examTest.findMany({
     where: {
       businessId,
       status: TestStatus.PUBLISHED,
-      batch: {
-        batchUsers: { some: { userId, isActive: true } },
-      },
+      batchIds: { hasSome: userActiveBatchIds },
     },
     select: examTestSelect,
     orderBy: { createdAt: 'desc' },
   });
 }
 
+export async function countExamTestAttempts(examTestId: string): Promise<number> {
+  return prisma.testAttempt.count({
+    where: { examTestId },
+  });
+}

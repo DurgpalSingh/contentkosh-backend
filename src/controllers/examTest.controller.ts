@@ -205,12 +205,23 @@ export const examTestController = {
       const attemptId = req.params.attemptId!;
 
       const attemptDetails = await testAttemptService.getExamAttemptDetails(businessId, { id: user.id, role: user.role }, attemptId);
+      const rankPayload =
+        'rankInBatch' in attemptDetails &&
+        attemptDetails.rankInBatch != null &&
+        'totalStudentsInBatch' in attemptDetails &&
+        attemptDetails.totalStudentsInBatch != null
+          ? {
+              rankInBatch: attemptDetails.rankInBatch,
+              totalStudentsInBatch: attemptDetails.totalStudentsInBatch,
+            }
+          : {};
       return ApiResponseHandler.success(
         res,
         {
           attempt: attemptDetails.attempt,
           test: TestMapper.examAvailableTest({ ...attemptDetails.test, totalQuestions: attemptDetails.questions.length }),
           questions: attemptDetails.questions,
+          ...rankPayload,
         },
         'Exam attempt fetched successfully',
       );

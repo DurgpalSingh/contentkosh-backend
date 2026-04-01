@@ -7,10 +7,12 @@ import * as practiceRepo from '../repositories/practiceTest.repo';
 import * as examRepo from '../repositories/examTest.repo';
 import * as questionRepo from '../repositories/testQuestion.repo';
 import * as batchUserRepo from '../repositories/batch.repo';
+import { assertTestBatchOverlapForTeacherOrAdmin } from '../utils/test.utils';
 import { computeAttemptSummaryStats } from '../utils/test.utils';
 import { buildAnswersByQuestionIdMap, buildEvaluatedByQuestionIdMap, mapSubmittedResultQuestion } from '../utils/test.utils';
 import { evaluateQuestion, type ScoringQuestionRecord as QuestionRecord, type SubmitAnswerPayload } from '../utils/test.utils';
-import { TestMapper } from '../mappers/test.mapper';
+import { TestMapper, primaryBatchDisplayName } from '../mappers/test.mapper';
+import { attachPrimaryBatchDisplayName, collectBatchIdsFromTests } from '../utils/testBatchDisplay';
 
 type AttemptRecord = Pick<
   TestAttempt,
@@ -106,6 +108,20 @@ export class TestAttemptService {
     }
   }
 
+  /** Lowest batch id in test.batchIds ∩ student's active batches; rejects if empty. */
+  private async assertStudentEligibleForTestBatches(userId: number, testBatchIds: number[]): Promise<number> {
+    const userBatchIds = await batchUserRepo.findActiveBatchIdsForUser(userId);
+    const eligibleBatchId = attemptRepo.computeLowestEligibleBatchId(testBatchIds, userBatchIds);
+    if (eligibleBatchId === null) {
+      logger.warn(
+        `[test-attempt] no eligible batch for student userId=${userId} testBatchIds=${testBatchIds.join(',')}`,
+      );
+      throw new ForbiddenError('Student is not an active member of an assigned batch for this test');
+    }
+    await this.assertStudentInBatch(userId, eligibleBatchId);
+    return eligibleBatchId;
+  }
+
   async startPracticeAttempt(businessId: number, user: { id: number; role: UserRole }, practiceTestId: string) {
     if (user.role !== UserRole.STUDENT) throw new BadRequestError('Only students can start attempts');
     logger.info(`[test-attempt] startPracticeAttempt businessId=${businessId} userId=${user.id} practiceTestId=${practiceTestId}`);
@@ -120,7 +136,7 @@ export class TestAttemptService {
       throw new BadRequestError('Practice test is not published');
     }
 
-    await this.assertStudentInBatch(user.id, practiceTest.batchId);
+    await this.assertStudentEligibleForTestBatches(user.id, practiceTest.batchIds);
 
     const inProgressAttempts = await attemptRepo.findPracticeAttemptsByUser(practiceTestId, user.id, {
       where: { status: AttemptStatus.IN_PROGRESS },
@@ -148,7 +164,7 @@ export class TestAttemptService {
       return {
         attemptId: inProgressAttempt.id,
         startedAt: inProgressAttempt.startedAt,
-        test: practiceTest,
+        test: await attachPrimaryBatchDisplayName(practiceTest),
         questions: orderedQuestions,
       };
     }
@@ -176,7 +192,7 @@ export class TestAttemptService {
     return {
       attemptId: newAttempt.id,
       startedAt: newAttempt.startedAt,
-      test: practiceTest,
+      test: await attachPrimaryBatchDisplayName(practiceTest),
       questions: orderedQuestions,
     };
   }
@@ -195,7 +211,7 @@ export class TestAttemptService {
       throw new BadRequestError('Exam test is not published');
     }
 
-    await this.assertStudentInBatch(user.id, examTest.batchId);
+    await this.assertStudentEligibleForTestBatches(user.id, examTest.batchIds);
 
     const now = new Date();
     const nowMs = now.getTime();
@@ -246,7 +262,7 @@ export class TestAttemptService {
       return {
         attemptId: inProgressAttempt.id,
         startedAt: inProgressAttempt.startedAt,
-        test: examTest,
+        test: await attachPrimaryBatchDisplayName(examTest),
         questions: orderedQuestions,
       };
     }
@@ -276,7 +292,7 @@ export class TestAttemptService {
     return {
       attemptId: newAttempt.id,
       startedAt: newAttempt.startedAt,
-      test: examTest,
+      test: await attachPrimaryBatchDisplayName(examTest),
       questions: orderedQuestions,
     };
   }
@@ -301,7 +317,7 @@ export class TestAttemptService {
     const attemptRecord = await attemptRepo.findTestAttemptWithInclude(attemptId, {
       practiceTest: {
         include: {
-          batch: { select: { id: true, displayName: true } },
+          subject: { select: { id: true, name: true } },
         },
       },
       answers: true,
@@ -311,7 +327,7 @@ export class TestAttemptService {
     if (attemptRecord.practiceTest.businessId !== businessId) throw new BadRequestError('Invalid business scope');
     if (attemptRecord.userId !== user.id) throw new BadRequestError('Forbidden');
 
-    await this.assertStudentInBatch(user.id, attemptRecord.practiceTest.batchId);
+    await this.assertStudentEligibleForTestBatches(user.id, attemptRecord.practiceTest.batchIds);
 
     const questionRecords = (await questionRepo.listPracticeTestQuestions(businessId, attemptRecord.practiceTestId)) as QuestionRecord[];
     const randomizer = createSeededRng(`practice:${attemptRecord.id}`);
@@ -337,7 +353,7 @@ export class TestAttemptService {
 
     return {
       attempt: buildAttemptSummary(attemptRecord),
-      test: attemptRecord.practiceTest,
+      test: await attachPrimaryBatchDisplayName(attemptRecord.practiceTest),
       questions: questionsWithAnswers,
     };
   }
@@ -349,7 +365,7 @@ export class TestAttemptService {
     const attemptRecord = await attemptRepo.findTestAttemptWithInclude(attemptId, {
       examTest: {
         include: {
-          batch: { select: { id: true, displayName: true } },
+          subject: { select: { id: true, name: true } },
         },
       },
       answers: true,
@@ -358,7 +374,7 @@ export class TestAttemptService {
     if (attemptRecord.examTest.businessId !== businessId) throw new BadRequestError('Invalid business scope');
     if (attemptRecord.userId !== user.id) throw new BadRequestError('Forbidden');
 
-    await this.assertStudentInBatch(user.id, attemptRecord.examTest.batchId);
+    await this.assertStudentEligibleForTestBatches(user.id, attemptRecord.examTest.batchIds);
 
     const questionRecords = (await questionRepo.listExamTestQuestions(businessId, attemptRecord.examTestId)) as QuestionRecord[];
     const randomizer = createSeededRng(`exam:${attemptRecord.id}`);
@@ -397,10 +413,22 @@ export class TestAttemptService {
       timeRemainingSeconds = Math.max(0, Math.floor((effectiveEnd.getTime() - now.getTime()) / 1000));
     }
 
+    let rankInBatch: number | null = null;
+    let totalStudentsInBatch: number | null = null;
+    if (shouldRevealResults && isSubmittedAttempt) {
+      const rankInfo = await attemptRepo.getExamRankForUserDerivedBatch(attemptRecord.examTestId, user.id);
+      rankInBatch = rankInfo?.rankInBatch ?? null;
+      totalStudentsInBatch = rankInfo?.totalStudentsInBatch ?? null;
+      logger.info(
+        `[test-attempt] getExamAttemptDetails rank examTestId=${attemptRecord.examTestId} userId=${user.id} rank=${rankInBatch} total=${totalStudentsInBatch}`,
+      );
+    }
+
     return {
       attempt: { ...buildAttemptSummary(maskedAttempt), ...(timeRemainingSeconds !== null ? { timeRemainingSeconds } : {}) },
-      test: attemptRecord.examTest,
+      test: await attachPrimaryBatchDisplayName(attemptRecord.examTest),
       questions: questionsWithAnswers,
+      ...(rankInBatch != null && totalStudentsInBatch != null ? { rankInBatch, totalStudentsInBatch } : {}),
     };
   }
 
@@ -435,7 +463,7 @@ export class TestAttemptService {
       };
     }
 
-    await this.assertStudentInBatch(user.id, attemptRecord.practiceTest.batchId);
+    await this.assertStudentEligibleForTestBatches(user.id, attemptRecord.practiceTest.batchIds);
 
     const questionRecords = (await questionRepo.listPracticeTestQuestions(businessId, attemptRecord.practiceTestId)) as QuestionRecord[];
     const questionIdSet = new Set(questionRecords.map((q) => q.id));
@@ -536,7 +564,7 @@ export class TestAttemptService {
       };
     }
 
-    await this.assertStudentInBatch(user.id, attemptRecord.examTest.batchId);
+    await this.assertStudentEligibleForTestBatches(user.id, attemptRecord.examTest.batchIds);
 
     const now = new Date();
     if (now > attemptRecord.examTest.deadlineAt) {
@@ -627,10 +655,12 @@ export class TestAttemptService {
   async listAvailablePracticeTests(businessId: number, user: { id: number; role: UserRole }) {
     if (user.role !== UserRole.STUDENT) throw new BadRequestError('Only students can access available tests');
     logger.info(`[test-attempt] listAvailablePracticeTests businessId=${businessId} userId=${user.id}`);
-    const availableTests = (await practiceRepo.findPublishedPracticeTestsForStudent(businessId, user.id)) as Array<
+    const userBatchIds = await batchUserRepo.findActiveBatchIdsForUser(user.id);
+    const availableTests = (await practiceRepo.findPublishedPracticeTestsForStudent(businessId, userBatchIds)) as Array<
       PracticeTest & { _count?: { questions?: number } }
     >;
     logger.info(`[test-attempt] available practice tests count=${availableTests.length} businessId=${businessId} userId=${user.id}`);
+    const batchDisplayMap = await batchUserRepo.findBatchesDisplayByIds(collectBatchIdsFromTests(availableTests));
     const attemptStatsByTestId = await attemptRepo.getPracticeAttemptStatsByUserForTests(
       availableTests.map((testRecord) => testRecord.id),
       user.id,
@@ -650,16 +680,22 @@ export class TestAttemptService {
       const isInProgress = attemptStats.lastAttemptStatus === AttemptStatus.IN_PROGRESS;
       const canResume = isInProgress;
       const canStart = !isInProgress;
-      const base = TestMapper.practiceAvailableTest(testRecord, {
-        canAttempt: true,
-        ...(hasPreviousAttempt
-          ? {
-              attemptCount: attemptStats.attemptCount,
-              bestScore: attemptStats.bestScore,
-              lastAttemptAt: attemptStats.lastAttemptAt,
-            }
-          : {}),
-      });
+      const base = TestMapper.practiceAvailableTest(
+        {
+          ...testRecord,
+          batchName: primaryBatchDisplayName(testRecord.batchIds, batchDisplayMap),
+        },
+        {
+          canAttempt: true,
+          ...(hasPreviousAttempt
+            ? {
+                attemptCount: attemptStats.attemptCount,
+                bestScore: attemptStats.bestScore,
+                lastAttemptAt: attemptStats.lastAttemptAt,
+              }
+            : {}),
+        },
+      );
 
       const questionCount = testRecord._count?.questions ?? base.totalQuestions;
       return {
@@ -677,10 +713,12 @@ export class TestAttemptService {
   async listAvailableExamTests(businessId: number, user: { id: number; role: UserRole }) {
     if (user.role !== UserRole.STUDENT) throw new BadRequestError('Only students can access available tests');
     logger.info(`[test-attempt] listAvailableExamTests businessId=${businessId} userId=${user.id}`);
-    const availableTests = (await examRepo.findPublishedExamTestsForStudent(businessId, user.id)) as Array<
+    const userBatchIds = await batchUserRepo.findActiveBatchIdsForUser(user.id);
+    const availableTests = (await examRepo.findPublishedExamTestsForStudent(businessId, userBatchIds)) as Array<
       ExamTest & { _count?: { questions?: number } }
     >;
     logger.info(`[test-attempt] available exam tests count=${availableTests.length} businessId=${businessId} userId=${user.id}`);
+    const batchDisplayMap = await batchUserRepo.findBatchesDisplayByIds(collectBatchIdsFromTests(availableTests));
 
     const now = new Date();
     const nowMs = now.getTime();
@@ -730,14 +768,20 @@ export class TestAttemptService {
         timeRemainingSeconds = Math.max(0, Math.floor((effectiveEndMs - nowMs) / 1000));
       }
 
-      const base = TestMapper.examAvailableTest(testRecord, {
-        canAttempt,
-        lockedReason,
-        attemptsAllowed,
-        attemptsUsed,
-        hasAttempt,
-        lastAttemptAt: attemptStats.lastAttemptAt,
-      });
+      const base = TestMapper.examAvailableTest(
+        {
+          ...testRecord,
+          batchName: primaryBatchDisplayName(testRecord.batchIds, batchDisplayMap),
+        },
+        {
+          canAttempt,
+          lockedReason,
+          attemptsAllowed,
+          attemptsUsed,
+          hasAttempt,
+          lastAttemptAt: attemptStats.lastAttemptAt,
+        },
+      );
 
       const questionCount = testRecord._count?.questions ?? base.totalQuestions;
       return {
@@ -765,8 +809,13 @@ export class TestAttemptService {
     const practiceTest = await practiceRepo.findPracticeTestById(businessId, practiceTestId);
     if (!practiceTest) throw new NotFoundError('Practice test not found');
     if (user.role === UserRole.TEACHER) {
-      const ok = await batchUserRepo.isActiveUserInBatch(user.id, practiceTest.batchId);
-      if (!ok) throw new NotFoundError('Practice test not found');
+      await assertTestBatchOverlapForTeacherOrAdmin({
+        user,
+        testBatchIds: practiceTest.batchIds,
+        businessId,
+        entityLabel: 'Practice test',
+        entityId: practiceTestId,
+      });
     }
 
     const finalAttemptStatuses = [AttemptStatus.SUBMITTED, AttemptStatus.AUTO_SUBMITTED];
@@ -839,8 +888,13 @@ export class TestAttemptService {
     const practiceTest = await practiceRepo.findPracticeTestById(businessId, practiceTestId);
     if (!practiceTest) throw new NotFoundError('Practice test not found');
     if (user.role === UserRole.TEACHER) {
-      const ok = await batchUserRepo.isActiveUserInBatch(user.id, practiceTest.batchId);
-      if (!ok) throw new NotFoundError('Practice test not found');
+      await assertTestBatchOverlapForTeacherOrAdmin({
+        user,
+        testBatchIds: practiceTest.batchIds,
+        businessId,
+        entityLabel: 'Practice test',
+        entityId: practiceTestId,
+      });
     }
 
     const finalAttemptStatuses = [AttemptStatus.SUBMITTED, AttemptStatus.AUTO_SUBMITTED];
@@ -877,8 +931,13 @@ export class TestAttemptService {
     const examTest = await examRepo.findExamTestById(businessId, examTestId);
     if (!examTest) throw new NotFoundError('Exam test not found');
     if (user.role === UserRole.TEACHER) {
-      const ok = await batchUserRepo.isActiveUserInBatch(user.id, examTest.batchId);
-      if (!ok) throw new NotFoundError('Exam test not found');
+      await assertTestBatchOverlapForTeacherOrAdmin({
+        user,
+        testBatchIds: examTest.batchIds,
+        businessId,
+        entityLabel: 'Exam test',
+        entityId: examTestId,
+      });
     }
 
     const finalAttemptStatuses = [AttemptStatus.SUBMITTED, AttemptStatus.AUTO_SUBMITTED];
@@ -951,8 +1010,13 @@ export class TestAttemptService {
     const examTest = await examRepo.findExamTestById(businessId, examTestId);
     if (!examTest) throw new NotFoundError('Exam test not found');
     if (user.role === UserRole.TEACHER) {
-      const ok = await batchUserRepo.isActiveUserInBatch(user.id, examTest.batchId);
-      if (!ok) throw new NotFoundError('Exam test not found');
+      await assertTestBatchOverlapForTeacherOrAdmin({
+        user,
+        testBatchIds: examTest.batchIds,
+        businessId,
+        entityLabel: 'Exam test',
+        entityId: examTestId,
+      });
     }
 
     const finalAttemptStatuses = [AttemptStatus.SUBMITTED, AttemptStatus.AUTO_SUBMITTED];

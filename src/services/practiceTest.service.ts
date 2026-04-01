@@ -1,13 +1,49 @@
 import { BadRequestError, NotFoundError } from '../errors/api.errors';
 import * as practiceRepo from '../repositories/practiceTest.repo';
 import * as questionRepo from '../repositories/testQuestion.repo';
+import * as subjectRepo from '../repositories/subject.repo';
+import * as batchRepo from '../repositories/batch.repo';
 import { TestStatus } from '../constants/test-enums';
 import logger from '../utils/logger';
 import { CreatePracticeTestDto, CreateQuestionDto, UpdatePracticeTestDto, UpdateQuestionDto } from '../dtos/test.dto';
 import { UserRole } from '@prisma/client';
-import { validateQuestionPayload, assertBatchBelongsToBusiness } from '../utils/test.utils';
-import { TestMapper } from '../mappers/test.mapper';
-import { assertTestBatchAccess } from '../utils/test.utils';
+import {
+  validateQuestionPayload,
+  assertBatchBelongsToBusiness,
+  assertTestBatchAccessForAllBatches,
+  assertTestBatchOverlapForTeacherOrAdmin,
+} from '../utils/test.utils';
+import { primaryBatchDisplayName } from '../mappers/test.mapper';
+import { sanitizeOptionalQuestionHtml, sanitizeQuestionHtml } from '../utils/sanitizeHtml';
+import { attachPrimaryBatchDisplayName, collectBatchIdsFromTests } from '../utils/testBatchDisplay';
+
+function normalizeBatchIdList(batchIds: number[]): number[] {
+  const unique = [...new Set(batchIds.filter((n) => Number.isInteger(n) && n >= 1))];
+  unique.sort((a, b) => a - b);
+  return unique;
+}
+
+async function validateSubjectMatchesBatches(subjectId: number, batchIds: number[]): Promise<void> {
+  const subjectCourseId = await subjectRepo.findSubjectCourseId(subjectId);
+  if (subjectCourseId === null) {
+    logger.warn(`[practice-test] validateSubjectMatchesBatches subject not found subjectId=${subjectId}`);
+    throw new BadRequestError('Subject not found');
+  }
+  const courseByBatch = await batchRepo.findBatchCourseIdsByBatchIds(batchIds);
+  if (courseByBatch.size !== batchIds.length) {
+    logger.warn(`[practice-test] validateSubjectMatchesBatches unknown batch in list subjectId=${subjectId}`);
+    throw new BadRequestError('One or more batches not found');
+  }
+  for (const bid of batchIds) {
+    const cid = courseByBatch.get(bid);
+    if (cid !== subjectCourseId) {
+      logger.warn(
+        `[practice-test] validateSubjectMatchesBatches course mismatch subjectId=${subjectId} subjectCourseId=${subjectCourseId} batchId=${bid} batchCourseId=${cid}`,
+      );
+      throw new BadRequestError('Subject must belong to the same course as every assigned batch');
+    }
+  }
+}
 
 export class PracticeTestService {
   private isElevated(role: UserRole) {
@@ -23,9 +59,9 @@ export class PracticeTestService {
     if (!practiceTestRecord) {
       throw new NotFoundError('Practice test not found');
     }
-    await assertTestBatchAccess({
+    await assertTestBatchOverlapForTeacherOrAdmin({
       user,
-      batchId: practiceTestRecord.batchId,
+      testBatchIds: practiceTestRecord.batchIds ?? [],
       businessId,
       entityLabel: 'Practice test',
       entityId: practiceTestId,
@@ -34,18 +70,26 @@ export class PracticeTestService {
   }
 
   async create(businessId: number, dto: CreatePracticeTestDto, user: { id: number; role: UserRole }) {
-    logger.info(`[practice-test] create businessId=${businessId} userId=${user.id} batchId=${dto?.batchId}`);
-    await assertBatchBelongsToBusiness(businessId, dto.batchId);
-    await assertTestBatchAccess({
+    const batchIds = normalizeBatchIdList(dto.batchIds);
+    logger.info(`[practice-test] create businessId=${businessId} userId=${user.id} batchIds=${batchIds.join(',')}`);
+    if (!batchIds.length) throw new BadRequestError('At least one batch is required');
+
+    for (const batchId of batchIds) {
+      await assertBatchBelongsToBusiness(businessId, batchId);
+    }
+    await assertTestBatchAccessForAllBatches({
       user,
-      batchId: dto.batchId,
+      batchIds,
       businessId,
       entityLabel: 'Practice test',
       entityId: 'create',
     });
+    await validateSubjectMatchesBatches(dto.subjectId, batchIds);
+
     const createdPracticeTest = await practiceRepo.createPracticeTest({
       businessId,
-      batchId: dto.batchId,
+      batchIds,
+      subjectId: dto.subjectId,
       name: dto.name,
       description: dto.description ?? null,
       status: dto.status ?? TestStatus.DRAFT,
@@ -55,38 +99,41 @@ export class PracticeTestService {
       shuffleOptions: dto.shuffleOptions ?? true,
       createdBy: user.id,
     });
-    return createdPracticeTest;
+    return attachPrimaryBatchDisplayName(createdPracticeTest);
   }
 
   async list(businessId: number, query: { status?: number; batchId?: number }, user: { id: number; role: UserRole }) {
     logger.info(
       `[practice-test] list businessId=${businessId} userId=${user.id} role=${user.role} status=${query?.status ?? 'any'} batchId=${query?.batchId ?? 'any'}`,
     );
-    const where: { status?: number; batchId?: number } = {};
+    const where: { status?: number; batchIds?: { has: number } } = {};
     if (query.status !== undefined) where.status = query.status;
-    if (query.batchId !== undefined) where.batchId = query.batchId;
     if (query.batchId !== undefined) {
-      await assertTestBatchAccess({
+      where.batchIds = { has: query.batchId };
+      await assertTestBatchAccessForAllBatches({
         user,
-        batchId: query.batchId,
+        batchIds: [query.batchId],
         businessId,
         entityLabel: 'Practice test',
         entityId: 'list',
       });
     }
-    if (!this.isElevated(user.role)) {
-      const practiceTests = await practiceRepo.findPracticeTestsByBusinessIdForUser(businessId, user.id, { where });
-      return practiceTests.map((practiceTest) => TestMapper.practiceTest(practiceTest));
-    }
-    const practiceTests = await practiceRepo.findPracticeTestsByBusinessId(businessId, { where });
-    return practiceTests;
+    const userBatchIds = !this.isElevated(user.role) ? await batchRepo.findActiveBatchIdsForUser(user.id) : [];
+    const practiceTests = this.isElevated(user.role)
+      ? await practiceRepo.findPracticeTestsByBusinessId(businessId, { where })
+      : await practiceRepo.findPracticeTestsByBusinessIdForUser(businessId, userBatchIds, { where });
+    const displayMap = await batchRepo.findBatchesDisplayByIds(collectBatchIdsFromTests(practiceTests));
+    return practiceTests.map((t) => ({
+      ...t,
+      batchName: primaryBatchDisplayName(t.batchIds, displayMap),
+    }));
   }
 
   async get(businessId: number, practiceTestId: string, user: { id: number; role: UserRole }) {
     logger.info(
       `[practice-test] get businessId=${businessId} practiceTestId=${practiceTestId} userId=${user.id} role=${user.role}`,
     );
-    const practiceTestRecord = await this.getWithAccess(businessId, practiceTestId, user);
+    const practiceTestRecord = await attachPrimaryBatchDisplayName(await this.getWithAccess(businessId, practiceTestId, user));
     const canSeeQuestions = this.isElevated(user.role) || user.role === UserRole.TEACHER;
     if (canSeeQuestions) {
       const questions = await questionRepo.listPracticeTestQuestions(businessId, practiceTestId);
@@ -103,18 +150,40 @@ export class PracticeTestService {
   ) {
     logger.info(`[practice-test] update businessId=${businessId} practiceTestId=${practiceTestId} userId=${user.id}`);
     const existing = await this.getWithAccess(businessId, practiceTestId, user);
-    if (dto.batchId !== undefined) {
-      await assertBatchBelongsToBusiness(businessId, dto.batchId);
-      await assertTestBatchAccess({
+
+    if (dto.batchIds !== undefined) {
+      const next = normalizeBatchIdList(dto.batchIds);
+      if (!next.length) throw new BadRequestError('At least one batch is required');
+      if (existing.status !== TestStatus.DRAFT) {
+        logger.warn(`[practice-test] update batchIds rejected: not draft practiceTestId=${practiceTestId}`);
+        throw new BadRequestError('Batches can only be changed while the test is in draft');
+      }
+      const attemptCount = await practiceRepo.countPracticeTestAttempts(practiceTestId);
+      if (attemptCount > 0) {
+        logger.warn(`[practice-test] update batchIds rejected: has attempts practiceTestId=${practiceTestId}`);
+        throw new BadRequestError('Cannot change batches after attempts exist');
+      }
+      for (const batchId of next) {
+        await assertBatchBelongsToBusiness(businessId, batchId);
+      }
+      await assertTestBatchAccessForAllBatches({
         user,
-        batchId: dto.batchId,
+        batchIds: next,
         businessId,
         entityLabel: 'Practice test',
         entityId: practiceTestId,
       });
+      const subjectId = dto.subjectId ?? existing.subjectId;
+      await validateSubjectMatchesBatches(subjectId, next);
     }
+
+    if (dto.subjectId !== undefined && dto.batchIds === undefined) {
+      await validateSubjectMatchesBatches(dto.subjectId, existing.batchIds);
+    }
+
     const updatedPracticeTest = await practiceRepo.updatePracticeTest(businessId, practiceTestId, {
-      ...(dto.batchId !== undefined ? { batchId: dto.batchId } : {}),
+      ...(dto.batchIds !== undefined ? { batchIds: normalizeBatchIdList(dto.batchIds) } : {}),
+      ...(dto.subjectId !== undefined ? { subjectId: dto.subjectId } : {}),
       ...(dto.name !== undefined ? { name: dto.name } : {}),
       ...(dto.description !== undefined ? { description: dto.description } : {}),
       ...(dto.status !== undefined ? { status: dto.status } : {}),
@@ -125,7 +194,7 @@ export class PracticeTestService {
       updatedBy: user.id,
     });
     if (!updatedPracticeTest) throw new NotFoundError('Practice test not found');
-    return updatedPracticeTest;
+    return attachPrimaryBatchDisplayName(updatedPracticeTest);
   }
 
   async remove(businessId: number, practiceTestId: string, user: { id: number; role: UserRole }) {
@@ -139,7 +208,9 @@ export class PracticeTestService {
   async publish(businessId: number, practiceTestId: string, user: { id: number; role: UserRole }) {
     logger.info(`[practice-test] publish businessId=${businessId} practiceTestId=${practiceTestId} userId=${user.id}`);
     const existing = await this.getWithAccess(businessId, practiceTestId, user);
-    await assertBatchBelongsToBusiness(businessId, existing.batchId);
+    for (const batchId of existing.batchIds) {
+      await assertBatchBelongsToBusiness(businessId, batchId);
+    }
     if (existing.status !== TestStatus.DRAFT) {
       throw new BadRequestError('Only draft tests can be published');
     }
@@ -152,7 +223,7 @@ export class PracticeTestService {
       updatedBy: user.id,
     });
     if (!publishedPracticeTest) throw new NotFoundError('Practice test not found');
-    return publishedPracticeTest;
+    return attachPrimaryBatchDisplayName(publishedPracticeTest);
   }
 
   async listQuestions(businessId: number, practiceTestId: string, user: { id: number; role: UserRole }) {
@@ -181,11 +252,14 @@ export class PracticeTestService {
       options: dto.options?.map((o) => ({ text: o.text, mediaUrl: o.mediaUrl ?? null })) ?? [],
     });
 
+    const safeText = sanitizeQuestionHtml(dto.questionText);
+    const safeExplanation = sanitizeOptionalQuestionHtml(dto.explanation);
+
     const createdQuestion = await questionRepo.createPracticeTestQuestionResolvingCorrect(businessId, practiceTestId, {
       type: dto.type,
-      text: dto.questionText,
+      text: safeText,
       mediaUrl: dto.mediaUrl ?? null,
-      explanation: dto.explanation ?? null,
+      explanation: safeExplanation,
       correctTextAnswer: dto.correctTextAnswer ?? null,
       correctOptionRefs: dto.correctOptionIdsAnswers ?? [],
       options: dto.options?.map((o) => ({ text: o.text, mediaUrl: o.mediaUrl ?? null })) ?? [],
@@ -227,11 +301,15 @@ export class PracticeTestService {
         [],
     });
 
+    const safeText = dto.questionText !== undefined ? sanitizeQuestionHtml(dto.questionText) : undefined;
+    const safeExplanation: string | null | undefined =
+      dto.explanation !== undefined ? sanitizeOptionalQuestionHtml(dto.explanation) : undefined;
+
     const updatedQuestion = await questionRepo.updateQuestionAndOptions(businessId, questionId, {
       ...(dto.type !== undefined ? { type: dto.type } : {}),
-      ...(dto.questionText !== undefined ? { text: dto.questionText } : {}),
+      ...(safeText !== undefined ? { text: safeText } : {}),
       ...(dto.mediaUrl !== undefined ? { mediaUrl: dto.mediaUrl } : {}),
-      ...(dto.explanation !== undefined ? { explanation: dto.explanation } : {}),
+      ...(dto.explanation !== undefined ? { explanation: safeExplanation ?? null } : {}),
       ...(dto.correctTextAnswer !== undefined ? { correctTextAnswer: dto.correctTextAnswer } : {}),
       ...(dto.correctOptionIdsAnswers !== undefined
         ? { correctOptionRefs: dto.correctOptionIdsAnswers }

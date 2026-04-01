@@ -25,6 +25,14 @@ export async function findSubjectById(id: number, options: SubjectFindOptions = 
   });
 }
 
+export async function findSubjectCourseId(subjectId: number): Promise<number | null> {
+  const row = await prisma.subject.findUnique({
+    where: { id: subjectId },
+    select: { courseId: true },
+  });
+  return row?.courseId ?? null;
+}
+
 export async function findSubjectsByCourseId(courseId: number, options: SubjectFindOptions = {}) {
   const { where, ...otherOptions } = options;
   return prisma.subject.findMany({

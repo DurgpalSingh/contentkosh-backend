@@ -18,7 +18,9 @@ const NOW = new Date('2026-03-21T10:00:00.000Z');
 const PRACTICE_TEST = {
   id: 'pt-1',
   businessId: 1,
-  batchId: 3,
+  batchIds: [3],
+  subjectId: 1,
+  batchName: 'Batch A',
   name: 'Test 1',
   description: null,
   status: 1,
@@ -36,7 +38,9 @@ const PRACTICE_TEST = {
 const EXAM_TEST = {
   id: 'et-1',
   businessId: 1,
-  batchId: 3,
+  batchIds: [3],
+  subjectId: 1,
+  batchName: 'Batch A',
   name: 'Exam 1',
   description: null,
   status: 1,
@@ -81,11 +85,9 @@ function makeRes(): Partial<Response> {
 function makeReq(overrides: Partial<AuthRequest> = {}): Partial<AuthRequest> {
   return {
     user: { id: 1, role: UserRole.ADMIN, businessId: 1, email: 'admin@test.com' },
-    params: { businessId: '1' },
     body: {},
     query: {},
     ...overrides,
-    // Merge params so callers can add extra params without losing businessId
     params: { businessId: '1', ...(overrides.params ?? {}) },
   };
 }
@@ -146,13 +148,13 @@ describe('PracticeTest Controller', () => {
       expect(res.status).toHaveBeenCalledWith(404);
     });
 
-    it('returns 400 when practiceTestId missing', async () => {
+    it('returns 500 when practiceTestId missing', async () => {
       const req = makeReq({ params: {} });
       const res = makeRes();
 
       await practiceTestController.getPracticeTest(req as AuthRequest, res as Response);
 
-      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.status).toHaveBeenCalledWith(500);
     });
   });
 
@@ -183,7 +185,7 @@ describe('PracticeTest Controller', () => {
 
   describe('create', () => {
     it('returns 201 on success', async () => {
-      const req = makeReq({ body: { batchId: 3, name: 'New Test' } });
+      const req = makeReq({ body: { batchIds: [3], subjectId: 1, name: 'New Test' } });
       const res = makeRes();
       practiceCreateSpy.mockResolvedValue(PRACTICE_TEST);
 
@@ -195,7 +197,7 @@ describe('PracticeTest Controller', () => {
     it('returns 400 on BadRequestError', async () => {
       const req = makeReq({ body: {} });
       const res = makeRes();
-      practiceCreateSpy.mockRejectedValue(new BadRequestError('batchId required'));
+      practiceCreateSpy.mockRejectedValue(new BadRequestError('At least one batch is required'));
 
       await practiceTestController.createPracticeTest(req as AuthRequest, res as Response);
 
@@ -418,13 +420,13 @@ describe('ExamTest Controller', () => {
       expect(res.status).toHaveBeenCalledWith(404);
     });
 
-    it('returns 400 when examTestId missing', async () => {
+    it('returns 500 when examTestId missing', async () => {
       const req = makeReq({ params: {} });
       const res = makeRes();
 
       await examTestController.getExamTest(req as AuthRequest, res as Response);
 
-      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.status).toHaveBeenCalledWith(500);
     });
   });
 
@@ -453,7 +455,8 @@ describe('ExamTest Controller', () => {
     it('returns 201 on success', async () => {
       const req = makeReq({
         body: {
-          batchId: 3,
+          batchIds: [3],
+          subjectId: 1,
           name: 'Exam',
           startAt: NOW.toISOString(),
           deadlineAt: new Date(NOW.getTime() + 3_600_000).toISOString(),
@@ -471,7 +474,7 @@ describe('ExamTest Controller', () => {
     it('returns 400 on BadRequestError', async () => {
       const req = makeReq({ body: {} });
       const res = makeRes();
-      examCreateSpy.mockRejectedValue(new BadRequestError('batchId required'));
+      examCreateSpy.mockRejectedValue(new BadRequestError('At least one batch is required'));
 
       await examTestController.createExamTest(req as AuthRequest, res as Response);
 

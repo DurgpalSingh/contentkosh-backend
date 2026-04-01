@@ -1,11 +1,21 @@
 import type { TestAttemptAnswer } from '@prisma/client';
 import { TestStatus } from '../constants/test-enums';
 
+/** Display name for the lowest batch id in `batchIds` (matches former primary-batch semantics). */
+export function primaryBatchDisplayName(batchIds: number[], displayById: Map<number, string>): string | undefined {
+  if (!batchIds.length) return undefined;
+  const sorted = [...batchIds].sort((a, b) => a - b);
+  const id = sorted[0]!;
+  return displayById.get(id);
+}
+
 export type PracticeTestResponse = {
   id: string;
   businessId: number;
-  batchId: number;
-  /** Batch display name when loaded via batch join (list/get). */
+  batchIds: number[];
+  subjectId: number;
+  subjectName?: string;
+  /** Derived from lowest id in batchIds via batch lookup. */
   batchName?: string;
   name: string;
   description?: string | null;
@@ -27,8 +37,10 @@ export type PracticeTestResponse = {
 export type ExamTestResponse = {
   id: string;
   businessId: number;
-  batchId: number;
-  /** Batch display name when loaded via batch join (list/get). */
+  batchIds: number[];
+  subjectId: number;
+  subjectName?: string;
+  /** Derived from lowest id in batchIds via batch lookup. */
   batchName?: string;
   name: string;
   description?: string | null;
@@ -90,8 +102,10 @@ export type StudentAttemptQuestionResponse = {
 export type PracticeAvailableTestResponse = {
   id: string;
   businessId: number;
-  batchId: number;
-  /** Human-readable batch name for UI (student available list). */
+  batchIds: number[];
+  subjectId: number;
+  subjectName?: string;
+  /** Human-readable batch name for UI (lowest batch id in batchIds). */
   batchName?: string;
   name: string;
   description?: string | null;
@@ -108,7 +122,9 @@ export type PracticeAvailableTestResponse = {
 export type ExamAvailableTestResponse = {
   id: string;
   businessId: number;
-  batchId: number;
+  batchIds: number[];
+  subjectId: number;
+  subjectName?: string;
   batchName?: string;
   name: string;
   description?: string | null;
@@ -137,8 +153,13 @@ type TestCountCarrier = {
 };
 
 type BatchNameCarrier = {
-  batch?: {
-    displayName: string;
+  /** Set when batch rows are resolved by service (min batch id label). */
+  batchName?: string | undefined;
+};
+
+type SubjectNameCarrier = {
+  subject?: {
+    name: string;
   } | null;
 };
 
@@ -173,7 +194,8 @@ export const TestMapper = {
   practiceTest(t: {
     id: string;
     businessId: number;
-    batchId: number;
+    batchIds: number[];
+    subjectId: number;
     name: string;
     description?: string | null;
     status: number;
@@ -185,14 +207,16 @@ export const TestMapper = {
     updatedBy?: number | null;
     createdAt: Date;
     updatedAt: Date;
-  } & TestCountCarrier & BatchNameCarrier): PracticeTestResponse {
+  } & TestCountCarrier & BatchNameCarrier & SubjectNameCarrier): PracticeTestResponse {
     const totalQuestions = resolveTotalQuestions(t);
     const totalMarks = totalQuestions * Number(t.defaultMarksPerQuestion ?? 0);
     return {
       id: t.id,
       businessId: t.businessId,
-      batchId: t.batchId,
-      ...(t.batch?.displayName !== undefined ? { batchName: t.batch.displayName } : {}),
+      batchIds: t.batchIds ?? [],
+      subjectId: t.subjectId,
+      ...(t.subject?.name !== undefined ? { subjectName: t.subject.name } : {}),
+      ...(t.batchName !== undefined ? { batchName: t.batchName } : {}),
       name: t.name,
       description: t.description ?? null,
       status: t.status,
@@ -214,7 +238,8 @@ export const TestMapper = {
   examTest(t: {
     id: string;
     businessId: number;
-    batchId: number;
+    batchIds: number[];
+    subjectId: number;
     name: string;
     description?: string | null;
     status: number;
@@ -230,14 +255,16 @@ export const TestMapper = {
     updatedBy?: number | null;
     createdAt: Date;
     updatedAt: Date;
-  } & TestCountCarrier & BatchNameCarrier): ExamTestResponse {
+  } & TestCountCarrier & BatchNameCarrier & SubjectNameCarrier): ExamTestResponse {
     const totalQuestions = resolveTotalQuestions(t);
     const totalMarks = totalQuestions * Number(t.defaultMarksPerQuestion ?? 0);
     return {
       id: t.id,
       businessId: t.businessId,
-      batchId: t.batchId,
-      ...(t.batch?.displayName !== undefined ? { batchName: t.batch.displayName } : {}),
+      batchIds: t.batchIds ?? [],
+      subjectId: t.subjectId,
+      ...(t.subject?.name !== undefined ? { subjectName: t.subject.name } : {}),
+      ...(t.batchName !== undefined ? { batchName: t.batchName } : {}),
       name: t.name,
       description: t.description ?? null,
       status: t.status,
@@ -311,12 +338,13 @@ export const TestMapper = {
     t: {
       id: string;
       businessId: number;
-      batchId: number;
+      batchIds: number[];
+      subjectId: number;
       name: string;
       description?: string | null;
       status?: number;
       defaultMarksPerQuestion?: number;
-    } & TestCountCarrier & BatchNameCarrier,
+    } & TestCountCarrier & BatchNameCarrier & SubjectNameCarrier,
     stats?: { attemptCount?: number; bestScore?: number | null; lastAttemptAt?: Date | null; canAttempt?: boolean },
   ): PracticeAvailableTestResponse {
     const totalQuestions = resolveTotalQuestions(t);
@@ -324,8 +352,10 @@ export const TestMapper = {
     const base: PracticeAvailableTestResponse = {
       id: t.id,
       businessId: t.businessId,
-      batchId: t.batchId,
-      ...(t.batch?.displayName !== undefined ? { batchName: t.batch.displayName } : {}),
+      batchIds: t.batchIds ?? [],
+      subjectId: t.subjectId,
+      ...(t.subject?.name !== undefined ? { subjectName: t.subject.name } : {}),
+      ...(t.batchName !== undefined ? { batchName: t.batchName } : {}),
       name: t.name,
       description: t.description ?? null,
       totalQuestions,
@@ -347,7 +377,8 @@ export const TestMapper = {
     t: {
       id: string;
       businessId: number;
-      batchId: number;
+      batchIds: number[];
+      subjectId: number;
       name: string;
       description?: string | null;
       status?: number;
@@ -357,7 +388,7 @@ export const TestMapper = {
       defaultMarksPerQuestion?: number;
       negativeMarksPerQuestion?: number;
       resultVisibility?: number;
-    } & TestCountCarrier & BatchNameCarrier,
+    } & TestCountCarrier & BatchNameCarrier & SubjectNameCarrier,
     stats?: {
       canAttempt?: boolean;
       lockedReason?: number | null;
@@ -372,8 +403,10 @@ export const TestMapper = {
     const base: ExamAvailableTestResponse = {
       id: t.id,
       businessId: t.businessId,
-      batchId: t.batchId,
-      ...(t.batch?.displayName !== undefined ? { batchName: t.batch.displayName } : {}),
+      batchIds: t.batchIds ?? [],
+      subjectId: t.subjectId,
+      ...(t.subject?.name !== undefined ? { subjectName: t.subject.name } : {}),
+      ...(t.batchName !== undefined ? { batchName: t.batchName } : {}),
       name: t.name,
       description: t.description ?? null,
       startAt: t.startAt,

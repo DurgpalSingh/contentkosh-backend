@@ -107,8 +107,6 @@ model Batch {
   course     Course      @relation(fields: [courseId], references: [id], onDelete: Cascade)
   batchUsers BatchUser[]
   contents   Content[]
-  practiceTests PracticeTest[]
-  examTests     ExamTest[]
 
   @@index([courseId])
   @@map("batches")
@@ -202,6 +200,8 @@ model Subject {
   updatedAt   DateTime      @updatedAt @map("updated_at")
   course      Course        @relation(fields: [courseId], references: [id], onDelete: Cascade)
   contents    Content[]
+  practiceTests PracticeTest[]
+  examTests     ExamTest[]
 
   @@unique([courseId, name])
   @@index([courseId])
@@ -366,7 +366,8 @@ model ApiAuditLog {
 model PracticeTest {
   id          String  @id @default(cuid()) @map("id")
   businessId  Int     @map("business_id")
-  batchId     Int     @map("batch_id")
+  batchIds    Int[]   @default([]) @map("batch_ids")
+  subjectId   Int     @map("subject_id")
   name        String  @map("name")
   description String? @map("description")
   status      Int     @default(0) @map("status") // 0=DRAFT, 1=PUBLISHED
@@ -383,19 +384,21 @@ model PracticeTest {
 
   // Relations
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  batch    Batch    @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  subject  Subject  @relation(fields: [subjectId], references: [id], onDelete: Restrict)
   questions TestQuestion[]
   attempts  TestAttempt[]
 
   @@index([businessId, status])
-  @@index([batchId, status])
+  @@index([subjectId])
+  @@index([batchIds], type: Gin)
   @@map("practice_tests")
 }
 
 model ExamTest {
   id          String  @id @default(cuid()) @map("id")
   businessId  Int     @map("business_id")
-  batchId     Int     @map("batch_id")
+  batchIds    Int[]   @default([]) @map("batch_ids")
+  subjectId   Int     @map("subject_id")
   name        String  @map("name")
   description String? @map("description")
   status      Int     @default(0) @map("status") // 0=DRAFT, 1=PUBLISHED
@@ -417,12 +420,13 @@ model ExamTest {
 
   // Relations
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  batch    Batch    @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  subject  Subject  @relation(fields: [subjectId], references: [id], onDelete: Restrict)
   questions TestQuestion[]
   attempts  TestAttempt[]
 
   @@index([businessId, status])
-  @@index([batchId, status])
+  @@index([subjectId])
+  @@index([batchIds], type: Gin)
   @@map("exam_tests")
 }
 

@@ -87,6 +87,68 @@ export async function assertTestBatchAccess(params: AssertTestBatchAccessParams)
   throw new ForbiddenError('Access denied');
 }
 
+/** Teacher/student must be an active member of every listed batch (for create/update batch assignments). */
+export async function assertTestBatchAccessForAllBatches(params: {
+  user: AccessUser;
+  batchIds: number[];
+  businessId: number;
+  entityLabel: string;
+  entityId: string;
+}): Promise<void> {
+  const { user, batchIds, businessId, entityLabel, entityId } = params;
+  if (user.role === UserRole.ADMIN || user.role === UserRole.SUPERADMIN) {
+    return;
+  }
+  if (!batchIds.length) {
+    logger.warn(`[test-access] assertTestBatchAccessForAllBatches empty batchIds entityLabel=${entityLabel} entityId=${entityId}`);
+    throw new BadRequestError('At least one batch is required');
+  }
+  if (user.role === UserRole.TEACHER || user.role === UserRole.STUDENT) {
+    for (const batchId of batchIds) {
+      await assertTestBatchAccess({ user, batchId, businessId, entityLabel, entityId });
+    }
+    return;
+  }
+  logger.warn(
+    `[test-access] assertTestBatchAccessForAllBatches forbidden role businessId=${businessId} userId=${user.id} role=${user.role}`,
+  );
+  throw new ForbiddenError('Access denied');
+}
+
+/** Teacher or student must be in at least one of the test’s batches; admin/superadmin unrestricted. */
+export async function assertTestBatchOverlapForTeacherOrAdmin(params: {
+  user: AccessUser;
+  testBatchIds: number[];
+  businessId: number;
+  entityLabel: string;
+  entityId: string;
+}): Promise<void> {
+  const { user, testBatchIds, businessId, entityLabel, entityId } = params;
+  if (user.role === UserRole.ADMIN || user.role === UserRole.SUPERADMIN) {
+    return;
+  }
+  if (user.role === UserRole.TEACHER || user.role === UserRole.STUDENT) {
+    if (!testBatchIds.length) {
+      logger.warn(`[test-access] assertTestBatchOverlapForTeacherOrAdmin empty testBatchIds entityId=${entityId}`);
+      throw new NotFoundError(`${entityLabel} not found`);
+    }
+    const activeBatchIds = await batchRepo.findActiveBatchIdsForUser(user.id);
+    const activeSet = new Set(activeBatchIds);
+    const overlap = testBatchIds.some((id) => activeSet.has(id));
+    if (!overlap) {
+      logger.warn(
+        `[test-access] assertTestBatchOverlapForTeacherOrAdmin no overlap userId=${user.id} entityLabel=${entityLabel} entityId=${entityId}`,
+      );
+      throw new NotFoundError(`${entityLabel} not found`);
+    }
+    return;
+  }
+  logger.warn(
+    `[test-access] assertTestBatchOverlapForTeacherOrAdmin forbidden role userId=${user.id} role=${user.role} entityLabel=${entityLabel}`,
+  );
+  throw new ForbiddenError('Access denied');
+}
+
 
 export async function assertTeacherInBatch(userId: number, batchId: number): Promise<void> {
   const isTeacherActiveMember = await batchRepo.isActiveUserInBatch(userId, batchId);

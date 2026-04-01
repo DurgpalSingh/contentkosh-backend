@@ -1913,7 +1913,8 @@ export const swaggerSchemas = {
     required: [
       'id',
       'businessId',
-      'batchId',
+      'batchIds',
+      'subjectId',
       'name',
       'status',
       'defaultMarksPerQuestion',
@@ -1926,8 +1927,10 @@ export const swaggerSchemas = {
     properties: {
       id: { type: 'string', minLength: 1, maxLength: 50 },
       businessId: { type: 'string', minLength: 1, maxLength: 50 },
-      batchId: { type: 'string', minLength: 1, maxLength: 50 },
-      batchName: { type: 'string', description: 'Batch display name (when loaded with batch join)' },
+      batchIds: { type: 'array', items: { type: 'integer', minimum: 1 } },
+      subjectId: { type: 'integer', minimum: 1 },
+      subjectName: { type: 'string' },
+      batchName: { type: 'string', description: 'Display name for lowest batch id in batchIds (when resolved)' },
       name: { type: 'string', minLength: 1, maxLength: 120 },
       description: { type: 'string', maxLength: 2000 },
       status: { $ref: '#/components/schemas/TestStatus' },
@@ -1948,7 +1951,8 @@ export const swaggerSchemas = {
     required: [
       'id',
       'businessId',
-      'batchId',
+      'batchIds',
+      'subjectId',
       'name',
       'startAt',
       'deadlineAt',
@@ -1961,8 +1965,10 @@ export const swaggerSchemas = {
     properties: {
       id: { type: 'string', minLength: 1, maxLength: 50 },
       businessId: { type: 'string', minLength: 1, maxLength: 50 },
-      batchId: { type: 'string', minLength: 1, maxLength: 50 },
-      batchName: { type: 'string', description: 'Batch display name (when loaded with batch join)' },
+      batchIds: { type: 'array', items: { type: 'integer', minimum: 1 } },
+      subjectId: { type: 'integer', minimum: 1 },
+      subjectName: { type: 'string' },
+      batchName: { type: 'string', description: 'Display name for lowest batch id in batchIds (when resolved)' },
       name: { type: 'string', minLength: 1, maxLength: 120 },
       description: { type: 'string', maxLength: 2000 },
       startAt: { type: 'string', format: 'date-time' },
@@ -1984,12 +1990,14 @@ export const swaggerSchemas = {
   },
   PracticeAvailableTest: {
     type: 'object',
-    required: ['id', 'businessId', 'batchId', 'name', 'totalQuestions', 'totalMarks'],
+    required: ['id', 'businessId', 'batchIds', 'subjectId', 'name', 'totalQuestions', 'totalMarks'],
     properties: {
       id: { type: 'string', minLength: 1, maxLength: 50 },
       businessId: { type: 'string', minLength: 1, maxLength: 50 },
-      batchId: { type: 'string', minLength: 1, maxLength: 50 },
-      batchName: { type: 'string', description: 'Batch display name for UI' },
+      batchIds: { type: 'array', items: { type: 'integer', minimum: 1 } },
+      subjectId: { type: 'integer', minimum: 1 },
+      subjectName: { type: 'string' },
+      batchName: { type: 'string', description: 'Batch display name for UI (lowest batch id in batchIds)' },
       name: { type: 'string', minLength: 1, maxLength: 120 },
       description: { type: 'string', maxLength: 2000 },
       status: { $ref: '#/components/schemas/TestStatus' },
@@ -2005,12 +2013,14 @@ export const swaggerSchemas = {
   },
   ExamAvailableTest: {
     type: 'object',
-    required: ['id', 'businessId', 'batchId', 'name', 'startAt', 'deadlineAt', 'durationMinutes'],
+    required: ['id', 'businessId', 'batchIds', 'subjectId', 'name', 'startAt', 'deadlineAt', 'durationMinutes'],
     properties: {
       id: { type: 'string', minLength: 1, maxLength: 50 },
       businessId: { type: 'string', minLength: 1, maxLength: 50 },
-      batchId: { type: 'string', minLength: 1, maxLength: 50 },
-      batchName: { type: 'string', description: 'Batch display name for UI' },
+      batchIds: { type: 'array', items: { type: 'integer', minimum: 1 } },
+      subjectId: { type: 'integer', minimum: 1 },
+      subjectName: { type: 'string' },
+      batchName: { type: 'string', description: 'Batch display name for UI (lowest batch id in batchIds)' },
       name: { type: 'string', minLength: 1, maxLength: 120 },
       description: { type: 'string', maxLength: 2000 },
       status: { $ref: '#/components/schemas/TestStatus' },
@@ -2033,9 +2043,10 @@ export const swaggerSchemas = {
   },
   CreatePracticeTestDTO: {
     type: 'object',
-    required: ['batchId', 'name'],
+    required: ['batchIds', 'subjectId', 'name'],
     properties: {
-      batchId: { type: 'string', minLength: 1, maxLength: 50 },
+      batchIds: { type: 'array', items: { type: 'integer', minimum: 1 }, minItems: 1 },
+      subjectId: { type: 'integer', minimum: 1 },
       name: { type: 'string', minLength: 1, maxLength: 120 },
       description: { type: 'string', maxLength: 2000 },
       defaultMarksPerQuestion: { type: 'number', minimum: 0 },
@@ -2048,6 +2059,8 @@ export const swaggerSchemas = {
   UpdatePracticeTestDTO: {
     type: 'object',
     properties: {
+      batchIds: { type: 'array', items: { type: 'integer', minimum: 1 }, minItems: 1 },
+      subjectId: { type: 'integer', minimum: 1 },
       name: { type: 'string', minLength: 1, maxLength: 120 },
       description: { type: 'string', maxLength: 2000 },
       defaultMarksPerQuestion: { type: 'number', minimum: 0 },
@@ -2059,9 +2072,10 @@ export const swaggerSchemas = {
   },
   CreateExamTestDTO: {
     type: 'object',
-    required: ['batchId', 'name', 'startAt', 'deadlineAt', 'durationMinutes'],
+    required: ['batchIds', 'subjectId', 'name', 'startAt', 'deadlineAt', 'durationMinutes'],
     properties: {
-      batchId: { type: 'string', minLength: 1, maxLength: 50 },
+      batchIds: { type: 'array', items: { type: 'integer', minimum: 1 }, minItems: 1 },
+      subjectId: { type: 'integer', minimum: 1 },
       name: { type: 'string', minLength: 1, maxLength: 120 },
       description: { type: 'string', maxLength: 2000 },
       startAt: { type: 'string', format: 'date-time' },
@@ -2078,6 +2092,8 @@ export const swaggerSchemas = {
   UpdateExamTestDTO: {
     type: 'object',
     properties: {
+      batchIds: { type: 'array', items: { type: 'integer', minimum: 1 }, minItems: 1 },
+      subjectId: { type: 'integer', minimum: 1 },
       name: { type: 'string', minLength: 1, maxLength: 120 },
       description: { type: 'string', maxLength: 2000 },
       startAt: { type: 'string', format: 'date-time' },

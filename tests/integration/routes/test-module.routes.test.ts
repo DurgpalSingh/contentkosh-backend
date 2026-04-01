@@ -21,6 +21,7 @@ import * as examRepo from '../../../src/repositories/examTest.repo';
 import * as questionRepo from '../../../src/repositories/testQuestion.repo';
 import * as attemptRepo from '../../../src/repositories/testAttempt.repo';
 import * as batchRepo from '../../../src/repositories/batch.repo';
+import * as subjectRepo from '../../../src/repositories/subject.repo';
 
 // ─── mock all repos ──────────────────────────────────────────────────────────
 jest.mock('../../../src/repositories/practiceTest.repo');
@@ -28,6 +29,7 @@ jest.mock('../../../src/repositories/examTest.repo');
 jest.mock('../../../src/repositories/testQuestion.repo');
 jest.mock('../../../src/repositories/testAttempt.repo');
 jest.mock('../../../src/repositories/batch.repo');
+jest.mock('../../../src/repositories/subject.repo');
 jest.mock('../../../src/utils/logger');
 
 // ─── bypass auth + business-access middleware ────────────────────────────────
@@ -78,8 +80,9 @@ const EXAM_DEADLINE = new Date(Date.now() + 3_600_000); // 1 hour from now
 const PRACTICE_TEST_ROW = {
   id: 'pt-1',
   businessId: 1,
-  batchId: 3,
-  batch: { id: 3, displayName: 'Batch A' },
+  batchIds: [3],
+  subjectId: 1,
+  subject: { id: 1, name: 'Math' },
   name: 'Practice Test 1',
   description: null,
   status: 1,
@@ -97,8 +100,9 @@ const PRACTICE_TEST_ROW = {
 const EXAM_TEST_ROW = {
   id: 'et-1',
   businessId: 1,
-  batchId: 3,
-  batch: { id: 3, displayName: 'Batch A' },
+  batchIds: [3],
+  subjectId: 1,
+  subject: { id: 1, name: 'Math' },
   name: 'Exam Test 1',
   description: null,
   status: 1,
@@ -155,6 +159,24 @@ const TF_QUESTION_ROW = {
 beforeEach(() => {
   jest.clearAllMocks();
   mockUserRole = UserRole.ADMIN;
+  (subjectRepo.findSubjectCourseId as jest.Mock).mockResolvedValue(100);
+  (batchRepo.findBatchCourseIdsByBatchIds as jest.Mock).mockImplementation(async (ids: number[]) => {
+    const m = new Map<number, number>();
+    for (const id of ids) m.set(id, 100);
+    return m;
+  });
+  (batchRepo.findActiveBatchIdsForUser as jest.Mock).mockResolvedValue([3]);
+  (batchRepo.findBatchesDisplayByIds as jest.Mock).mockImplementation(async (ids: number[]) => {
+    const m = new Map<number, string>();
+    for (const id of ids) m.set(id, `Batch ${id}`);
+    return m;
+  });
+
+  const attemptRepoActual = jest.requireActual<typeof import('../../../src/repositories/testAttempt.repo')>(
+    '../../../src/repositories/testAttempt.repo',
+  );
+  (attemptRepo.computeLowestEligibleBatchId as jest.Mock).mockImplementation(attemptRepoActual.computeLowestEligibleBatchId);
+  (attemptRepo.getExamRankForUserDerivedBatch as jest.Mock).mockResolvedValue(null);
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -172,7 +194,7 @@ describe('Practice Test Routes', () => {
 
       const res = await request(app)
         .post('/api/business/1/practice-tests')
-        .send({ batchId: 3, name: 'Practice Test 1' });
+        .send({ batchIds: [3], subjectId: 1, name: 'Practice Test 1' });
 
       expect(res.status).toBe(201);
       expect(res.body.success).toBe(true);
@@ -184,12 +206,12 @@ describe('Practice Test Routes', () => {
 
       const res = await request(app)
         .post('/api/business/1/practice-tests')
-        .send({ batchId: 3, name: 'Test' });
+        .send({ batchIds: [3], subjectId: 1, name: 'Test' });
 
       expect(res.status).toBe(403);
     });
 
-    it('returns 400 when batchId is missing', async () => {
+    it('returns 400 when batchIds is missing', async () => {
       const res = await request(app)
         .post('/api/business/1/practice-tests')
         .send({ name: 'Test' });
@@ -249,7 +271,7 @@ describe('Practice Test Routes', () => {
 
     it('returns test with questions for teacher', async () => {
       mockUserRole = UserRole.TEACHER;
-      (practiceRepo.findPracticeTestByIdForUser as jest.Mock).mockResolvedValue(PRACTICE_TEST_ROW);
+      (practiceRepo.findPracticeTestById as jest.Mock).mockResolvedValue(PRACTICE_TEST_ROW);
       (questionRepo.listPracticeTestQuestions as jest.Mock).mockResolvedValue([MCQ_QUESTION_ROW]);
 
       const res = await request(app).get('/api/business/1/practice-tests/pt-1');
@@ -314,6 +336,7 @@ describe('Practice Test Routes', () => {
     it('publishes a draft test', async () => {
       (practiceRepo.findPracticeTestById as jest.Mock).mockResolvedValue({ ...PRACTICE_TEST_ROW, status: 0 });
       (batchRepo.findBatchBusinessId as jest.Mock).mockResolvedValue(1);
+      (batchRepo.findBatchCourseIdsByBatchIds as jest.Mock).mockResolvedValue(new Map([[3, 100]]));
       (questionRepo.countQuestionsForPracticeTest as jest.Mock).mockResolvedValue(2);
       (practiceRepo.updatePracticeTest as jest.Mock).mockResolvedValue({ ...PRACTICE_TEST_ROW, status: 1 });
 
@@ -327,6 +350,7 @@ describe('Practice Test Routes', () => {
 
     it('returns 400 when test has no questions', async () => {
       (practiceRepo.findPracticeTestById as jest.Mock).mockResolvedValue({ ...PRACTICE_TEST_ROW, status: 0 });
+      (batchRepo.findBatchCourseIdsByBatchIds as jest.Mock).mockResolvedValue(new Map([[3, 100]]));
       (questionRepo.countQuestionsForPracticeTest as jest.Mock).mockResolvedValue(0);
 
       const res = await request(app)
@@ -732,7 +756,8 @@ describe('Exam Test Routes', () => {
       const res = await request(app)
         .post('/api/business/1/exam-tests')
         .send({
-          batchId: 3,
+          batchIds: [3],
+          subjectId: 1,
           name: 'Exam Test 1',
           startAt: NOW.toISOString(),
           deadlineAt: new Date(NOW.getTime() + 3_600_000).toISOString(),
@@ -749,12 +774,12 @@ describe('Exam Test Routes', () => {
 
       const res = await request(app)
         .post('/api/business/1/exam-tests')
-        .send({ batchId: 3, name: 'Exam' });
+        .send({ batchIds: [3], subjectId: 1, name: 'Exam' });
 
       expect(res.status).toBe(403);
     });
 
-    it('returns 400 when batchId is missing', async () => {
+    it('returns 400 when batchIds is missing', async () => {
       const res = await request(app)
         .post('/api/business/1/exam-tests')
         .send({ name: 'Exam' });
@@ -813,7 +838,7 @@ describe('Exam Test Routes', () => {
 
     it('returns exam test with questions for teacher', async () => {
       mockUserRole = UserRole.TEACHER;
-      (examRepo.findExamTestByIdForUser as jest.Mock).mockResolvedValue(EXAM_TEST_ROW);
+      (examRepo.findExamTestById as jest.Mock).mockResolvedValue(EXAM_TEST_ROW);
       (questionRepo.listExamTestQuestions as jest.Mock).mockResolvedValue([MCQ_QUESTION_ROW]);
 
       const res = await request(app).get('/api/business/1/exam-tests/et-1');
@@ -878,6 +903,7 @@ describe('Exam Test Routes', () => {
     it('publishes a draft exam test', async () => {
       (examRepo.findExamTestById as jest.Mock).mockResolvedValue({ ...EXAM_TEST_ROW, status: 0 });
       (batchRepo.findBatchBusinessId as jest.Mock).mockResolvedValue(1);
+      (batchRepo.findBatchCourseIdsByBatchIds as jest.Mock).mockResolvedValue(new Map([[3, 100]]));
       (questionRepo.countQuestionsForExamTest as jest.Mock).mockResolvedValue(2);
       (examRepo.updateExamTest as jest.Mock).mockResolvedValue({ ...EXAM_TEST_ROW, status: 1 });
 
@@ -891,6 +917,7 @@ describe('Exam Test Routes', () => {
 
     it('returns 400 when exam test has no questions', async () => {
       (examRepo.findExamTestById as jest.Mock).mockResolvedValue({ ...EXAM_TEST_ROW, status: 0 });
+      (batchRepo.findBatchCourseIdsByBatchIds as jest.Mock).mockResolvedValue(new Map([[3, 100]]));
       (questionRepo.countQuestionsForExamTest as jest.Mock).mockResolvedValue(0);
 
       const res = await request(app)
@@ -1201,7 +1228,7 @@ describe('Exam Test Attempt Routes', () => {
         totalScore: 8,
         percentage: 50,
         submittedAt: NOW,
-        examTest: { ...EXAM_TEST_ROW, businessId: 1, batchId: 3, shuffleQuestions: false, shuffleOptions: false, resultVisibility: 0 },
+        examTest: { ...EXAM_TEST_ROW, businessId: 1, shuffleQuestions: false, shuffleOptions: false, resultVisibility: 0 },
         answers: [],
       };
 
@@ -1231,7 +1258,7 @@ describe('Exam Test Attempt Routes', () => {
       (attemptRepo.findTestAttemptWithInclude as jest.Mock).mockResolvedValue({
         ...EXAM_ATTEMPT_ROW,
         userId: 1,
-        examTest: { ...EXAM_TEST_ROW, businessId: 1, batchId: 3, shuffleQuestions: false, shuffleOptions: false },
+        examTest: { ...EXAM_TEST_ROW, businessId: 1, shuffleQuestions: false, shuffleOptions: false },
       });
       (batchRepo.isActiveUserInBatch as jest.Mock).mockResolvedValue(true);
       (questionRepo.listExamTestQuestions as jest.Mock).mockResolvedValue([MCQ_QUESTION_ROW, TF_QUESTION_ROW]);
@@ -1266,7 +1293,7 @@ describe('Exam Test Attempt Routes', () => {
       (attemptRepo.findTestAttemptWithInclude as jest.Mock).mockResolvedValue({
         ...EXAM_ATTEMPT_ROW,
         userId: 1,
-        examTest: { ...EXAM_TEST_ROW, businessId: 1, batchId: 3, shuffleQuestions: false, shuffleOptions: false },
+        examTest: { ...EXAM_TEST_ROW, businessId: 1, shuffleQuestions: false, shuffleOptions: false },
       });
       (batchRepo.isActiveUserInBatch as jest.Mock).mockResolvedValue(true);
       (questionRepo.listExamTestQuestions as jest.Mock).mockResolvedValue([MCQ_QUESTION_ROW]);

@@ -16,9 +16,15 @@ import {
 import { Type } from 'class-transformer';
 
 export class CreatePracticeTestDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  batchIds!: number[];
+
   @IsInt()
   @Min(1)
-  batchId!: number;
+  subjectId!: number;
 
   @IsString()
   @IsNotEmpty()
@@ -54,9 +60,16 @@ export class CreatePracticeTestDto {
 
 export class UpdatePracticeTestDto {
   @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  batchIds?: number[];
+
+  @IsOptional()
   @IsInt()
   @Min(1)
-  batchId?: number;
+  subjectId?: number;
 
   @IsOptional()
   @IsString()
@@ -92,9 +105,15 @@ export class UpdatePracticeTestDto {
 }
 
 export class CreateExamTestDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  batchIds!: number[];
+
   @IsInt()
   @Min(1)
-  batchId!: number;
+  subjectId!: number;
 
   @IsString()
   @IsNotEmpty()
@@ -147,9 +166,16 @@ export class CreateExamTestDto {
 
 export class UpdateExamTestDto {
   @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  batchIds?: number[];
+
+  @IsOptional()
   @IsInt()
   @Min(1)
-  batchId?: number;
+  subjectId?: number;
 
   @IsOptional()
   @IsString()

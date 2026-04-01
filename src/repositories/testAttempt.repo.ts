@@ -466,3 +466,108 @@ export async function getExamTestAnalyticsAttemptsForExport(
   });
 }
 
+/** Minimal batch id in (test.batchIds ∩ user's active batch memberships), per product rules. */
+export function computeLowestEligibleBatchId(testBatchIds: number[], userActiveBatchIds: number[]): number | null {
+  const userSet = new Set(userActiveBatchIds);
+  let min: number | null = null;
+  for (const bid of testBatchIds) {
+    if (userSet.has(bid)) {
+      if (min === null || bid < min) min = bid;
+    }
+  }
+  return min;
+}
+
+export type ExamRankDerivedBatchRow = {
+  rank_in_batch: number;
+  total_in_batch: number;
+  eligible_batch_id: number;
+};
+
+/**
+ * Rank among submitted exam attempts for users sharing the same derived eligible batch
+ * (lowest batch id in test.batch ∩ user's active batches). Ties: higher score first, then lower userId.
+ */
+export async function getExamRankForUserDerivedBatch(examTestId: string, userId: number): Promise<{
+  rankInBatch: number;
+  totalStudentsInBatch: number;
+  eligibleBatchId: number;
+} | null> {
+  const rows = await prisma.$queryRaw<ExamRankDerivedBatchRow[]>`
+    WITH et AS (
+      SELECT batch_ids
+      FROM exam_tests
+      WHERE id = ${examTestId}
+    ),
+    user_eligible AS (
+      SELECT (
+        SELECT MIN(bid)
+        FROM unnest((SELECT batch_ids FROM et)) AS bid
+        WHERE EXISTS (
+          SELECT 1 FROM batch_users bu
+          WHERE bu.user_id = ${userId}
+            AND bu.batch_id = bid
+            AND bu.is_active = true
+        )
+      ) AS eligible_batch_id
+    ),
+    per_user_best AS (
+      SELECT ta.user_id, MAX(ta.score) AS best_score
+      FROM test_attempts ta
+      WHERE ta.exam_test_id = ${examTestId}
+        AND ta.status IN (1, 2)
+      GROUP BY ta.user_id
+    ),
+    eligible_scores AS (
+      SELECT
+        p.user_id,
+        p.best_score AS score,
+        (
+          SELECT MIN(bid)
+          FROM unnest((SELECT batch_ids FROM et)) AS bid
+          WHERE EXISTS (
+            SELECT 1 FROM batch_users bu
+            WHERE bu.user_id = p.user_id
+              AND bu.batch_id = bid
+              AND bu.is_active = true
+          )
+        ) AS eligible_batch_id
+      FROM per_user_best p
+    ),
+    filtered AS (
+      SELECT es.user_id, es.score
+      FROM eligible_scores es
+      CROSS JOIN user_eligible ue
+      WHERE es.eligible_batch_id IS NOT NULL
+        AND ue.eligible_batch_id IS NOT NULL
+        AND es.eligible_batch_id = ue.eligible_batch_id
+    ),
+    ranked AS (
+      SELECT
+        user_id,
+        RANK() OVER (ORDER BY score DESC NULLS LAST, user_id ASC) AS rnk,
+        COUNT(*) OVER () AS cnt
+      FROM filtered
+    )
+    SELECT
+      r.rnk::int AS rank_in_batch,
+      r.cnt::int AS total_in_batch,
+      ue.eligible_batch_id::int AS eligible_batch_id
+    FROM ranked r
+    CROSS JOIN user_eligible ue
+    WHERE r.user_id = ${userId}
+    LIMIT 1
+  `;
+
+  const row = rows[0];
+  if (!row) return null;
+  logger.debug(
+    `[test-attempt.repo] getExamRankForUserDerivedBatch examTestId=${examTestId} userId=${userId} rank=${row.rank_in_batch} total=${row.total_in_batch} eligibleBatchId=${row.eligible_batch_id}`,
+  );
+  return {
+    rankInBatch: row.rank_in_batch,
+    totalStudentsInBatch: row.total_in_batch,
+    eligibleBatchId: row.eligible_batch_id,
+  };
+}
+

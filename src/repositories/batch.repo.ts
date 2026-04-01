@@ -1,5 +1,6 @@
 import { Prisma, UserRole } from '@prisma/client';
 import { prisma } from '../config/database';
+import logger from '../utils/logger';
 
 const batchSelect = {
   id: true,
@@ -400,4 +401,35 @@ export async function isActiveUserInBatch(userId: number, batchId: number): Prom
     select: { id: true },
   });
   return Boolean(membership);
+}
+
+export async function findActiveBatchIdsForUser(userId: number): Promise<number[]> {
+  const rows = await prisma.batchUser.findMany({
+    where: { userId, isActive: true },
+    select: { batchId: true },
+  });
+  return rows.map((r) => r.batchId);
+}
+
+export async function findBatchCourseIdsByBatchIds(batchIds: number[]): Promise<Map<number, number>> {
+  if (!batchIds.length) return new Map();
+  const rows = await prisma.batch.findMany({
+    where: { id: { in: batchIds } },
+    select: { id: true, courseId: true },
+  });
+  return new Map(rows.map((r) => [r.id, r.courseId]));
+}
+
+/** Display names for batch ids (e.g. enriching practice/exam test API responses from batch_ids). */
+export async function findBatchesDisplayByIds(batchIds: number[]): Promise<Map<number, string>> {
+  const unique = [...new Set(batchIds.filter((n) => Number.isInteger(n) && n >= 1))];
+  if (!unique.length) {
+    return new Map();
+  }
+  const rows = await prisma.batch.findMany({
+    where: { id: { in: unique } },
+    select: { id: true, displayName: true },
+  });
+  logger.info(`[batch.repo] findBatchesDisplayByIds requested=${unique.length} resolved=${rows.length}`);
+  return new Map(rows.map((r) => [r.id, r.displayName]));
 }
