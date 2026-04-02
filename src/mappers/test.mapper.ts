@@ -7,6 +7,8 @@ export type PracticeTestResponse = {
   batchId: number;
   /** Batch display name when loaded via batch join (list/get). */
   batchName?: string;
+  subjectId?: number | null;
+  subjectName?: string;
   name: string;
   description?: string | null;
   status: number;
@@ -30,6 +32,8 @@ export type ExamTestResponse = {
   batchId: number;
   /** Batch display name when loaded via batch join (list/get). */
   batchName?: string;
+  subjectId?: number | null;
+  subjectName?: string;
   name: string;
   description?: string | null;
   status: number;
@@ -93,6 +97,8 @@ export type PracticeAvailableTestResponse = {
   batchId: number;
   /** Human-readable batch name for UI (student available list). */
   batchName?: string;
+  subjectId?: number | null;
+  subjectName?: string;
   name: string;
   description?: string | null;
   status?: number;
@@ -110,6 +116,8 @@ export type ExamAvailableTestResponse = {
   businessId: number;
   batchId: number;
   batchName?: string;
+  subjectId?: number | null;
+  subjectName?: string;
   name: string;
   description?: string | null;
   status?: number;
@@ -177,6 +185,7 @@ export const TestMapper = {
     name: string;
     description?: string | null;
     status: number;
+    subjectId?: number | null;
     defaultMarksPerQuestion: number;
     showExplanations: boolean;
     shuffleQuestions: boolean;
@@ -185,6 +194,7 @@ export const TestMapper = {
     updatedBy?: number | null;
     createdAt: Date;
     updatedAt: Date;
+    subject?: { name: string } | null;
   } & TestCountCarrier & BatchNameCarrier): PracticeTestResponse {
     const totalQuestions = resolveTotalQuestions(t);
     const totalMarks = totalQuestions * Number(t.defaultMarksPerQuestion ?? 0);
@@ -193,6 +203,8 @@ export const TestMapper = {
       businessId: t.businessId,
       batchId: t.batchId,
       ...(t.batch?.displayName !== undefined ? { batchName: t.batch.displayName } : {}),
+      subjectId: t.subjectId ?? null,
+      ...(t.subject?.name !== undefined ? { subjectName: t.subject.name } : {}),
       name: t.name,
       description: t.description ?? null,
       status: t.status,
@@ -218,6 +230,7 @@ export const TestMapper = {
     name: string;
     description?: string | null;
     status: number;
+    subjectId?: number | null;
     startAt: Date;
     deadlineAt: Date;
     durationMinutes: number;
@@ -230,6 +243,7 @@ export const TestMapper = {
     updatedBy?: number | null;
     createdAt: Date;
     updatedAt: Date;
+    subject?: { name: string } | null;
   } & TestCountCarrier & BatchNameCarrier): ExamTestResponse {
     const totalQuestions = resolveTotalQuestions(t);
     const totalMarks = totalQuestions * Number(t.defaultMarksPerQuestion ?? 0);
@@ -238,6 +252,8 @@ export const TestMapper = {
       businessId: t.businessId,
       batchId: t.batchId,
       ...(t.batch?.displayName !== undefined ? { batchName: t.batch.displayName } : {}),
+      subjectId: t.subjectId ?? null,
+      ...(t.subject?.name !== undefined ? { subjectName: t.subject.name } : {}),
       name: t.name,
       description: t.description ?? null,
       status: t.status,
@@ -315,7 +331,9 @@ export const TestMapper = {
       name: string;
       description?: string | null;
       status?: number;
+      subjectId?: number | null;
       defaultMarksPerQuestion?: number;
+      subject?: { name: string } | null;
     } & TestCountCarrier & BatchNameCarrier,
     stats?: { attemptCount?: number; bestScore?: number | null; lastAttemptAt?: Date | null; canAttempt?: boolean },
   ): PracticeAvailableTestResponse {
@@ -326,6 +344,8 @@ export const TestMapper = {
       businessId: t.businessId,
       batchId: t.batchId,
       ...(t.batch?.displayName !== undefined ? { batchName: t.batch.displayName } : {}),
+      subjectId: t.subjectId ?? null,
+      ...(t.subject?.name !== undefined ? { subjectName: t.subject.name } : {}),
       name: t.name,
       description: t.description ?? null,
       totalQuestions,
@@ -351,12 +371,14 @@ export const TestMapper = {
       name: string;
       description?: string | null;
       status?: number;
+      subjectId?: number | null;
       startAt: Date;
       deadlineAt: Date;
       durationMinutes: number;
       defaultMarksPerQuestion?: number;
       negativeMarksPerQuestion?: number;
       resultVisibility?: number;
+      subject?: { name: string } | null;
     } & TestCountCarrier & BatchNameCarrier,
     stats?: {
       canAttempt?: boolean;
@@ -374,6 +396,8 @@ export const TestMapper = {
       businessId: t.businessId,
       batchId: t.batchId,
       ...(t.batch?.displayName !== undefined ? { batchName: t.batch.displayName } : {}),
+      subjectId: t.subjectId ?? null,
+      ...(t.subject?.name !== undefined ? { subjectName: t.subject.name } : {}),
       name: t.name,
       description: t.description ?? null,
       startAt: t.startAt,

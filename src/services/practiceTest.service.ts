@@ -8,6 +8,8 @@ import { UserRole } from '@prisma/client';
 import { validateQuestionPayload, assertBatchBelongsToBusiness } from '../utils/test.utils';
 import { TestMapper } from '../mappers/test.mapper';
 import { assertTestBatchAccess } from '../utils/test.utils';
+import { assertSubjectForBatch } from '../utils/testSubjectValidation';
+import { sanitizeOptionalQuillHtml, sanitizeRequiredQuillHtml } from '../utils/sanitizeHtml';
 
 export class PracticeTestService {
   private isElevated(role: UserRole) {
@@ -34,7 +36,9 @@ export class PracticeTestService {
   }
 
   async create(businessId: number, dto: CreatePracticeTestDto, user: { id: number; role: UserRole }) {
-    logger.info(`[practice-test] create businessId=${businessId} userId=${user.id} batchId=${dto?.batchId}`);
+    logger.info(
+      `[practice-test] create businessId=${businessId} userId=${user.id} batchId=${dto?.batchId} subjectId=${dto?.subjectId}`,
+    );
     await assertBatchBelongsToBusiness(businessId, dto.batchId);
     await assertTestBatchAccess({
       user,
@@ -43,9 +47,18 @@ export class PracticeTestService {
       entityLabel: 'Practice test',
       entityId: 'create',
     });
+
+    await assertSubjectForBatch({
+      batchId: dto.batchId,
+      subjectId: dto.subjectId,
+      businessId,
+      userId: user.id,
+    });
+
     const createdPracticeTest = await practiceRepo.createPracticeTest({
       businessId,
       batchId: dto.batchId,
+      subjectId: dto.subjectId,
       name: dto.name,
       description: dto.description ?? null,
       status: dto.status ?? TestStatus.DRAFT,
@@ -103,6 +116,8 @@ export class PracticeTestService {
   ) {
     logger.info(`[practice-test] update businessId=${businessId} practiceTestId=${practiceTestId} userId=${user.id}`);
     const existing = await this.getWithAccess(businessId, practiceTestId, user);
+
+    const targetBatchId = dto.batchId !== undefined ? dto.batchId : existing.batchId;
     if (dto.batchId !== undefined) {
       await assertBatchBelongsToBusiness(businessId, dto.batchId);
       await assertTestBatchAccess({
@@ -113,8 +128,19 @@ export class PracticeTestService {
         entityId: practiceTestId,
       });
     }
+
+    const targetSubjectId = dto.subjectId ?? existing.subjectId;
+    if (targetSubjectId !== null && targetSubjectId !== undefined) {
+      await assertSubjectForBatch({
+        batchId: targetBatchId,
+        subjectId: targetSubjectId,
+        businessId,
+        userId: user.id,
+      });
+    }
     const updatedPracticeTest = await practiceRepo.updatePracticeTest(businessId, practiceTestId, {
       ...(dto.batchId !== undefined ? { batchId: dto.batchId } : {}),
+      ...(dto.subjectId !== undefined ? { subjectId: dto.subjectId } : {}),
       ...(dto.name !== undefined ? { name: dto.name } : {}),
       ...(dto.description !== undefined ? { description: dto.description } : {}),
       ...(dto.status !== undefined ? { status: dto.status } : {}),
@@ -181,11 +207,22 @@ export class PracticeTestService {
       options: dto.options?.map((o) => ({ text: o.text, mediaUrl: o.mediaUrl ?? null })) ?? [],
     });
 
+    const sanitizedQuestionText = sanitizeRequiredQuillHtml(dto.questionText, 'questionText', {
+      businessId,
+      practiceTestId,
+      userId: user.id,
+    });
+    const sanitizedExplanation = sanitizeOptionalQuillHtml(dto.explanation ?? null, 'explanation', {
+      businessId,
+      practiceTestId,
+      userId: user.id,
+    });
+
     const createdQuestion = await questionRepo.createPracticeTestQuestionResolvingCorrect(businessId, practiceTestId, {
       type: dto.type,
-      text: dto.questionText,
+      text: sanitizedQuestionText,
       mediaUrl: dto.mediaUrl ?? null,
-      explanation: dto.explanation ?? null,
+      explanation: sanitizedExplanation,
       correctTextAnswer: dto.correctTextAnswer ?? null,
       correctOptionRefs: dto.correctOptionIdsAnswers ?? [],
       options: dto.options?.map((o) => ({ text: o.text, mediaUrl: o.mediaUrl ?? null })) ?? [],
@@ -227,11 +264,30 @@ export class PracticeTestService {
         [],
     });
 
+    const sanitizedQuestionText =
+      dto.questionText !== undefined
+        ? sanitizeRequiredQuillHtml(dto.questionText, 'questionText', {
+            businessId,
+            practiceTestId,
+            questionId,
+            userId: user.id,
+          })
+        : undefined;
+    const sanitizedExplanation =
+      dto.explanation !== undefined
+        ? sanitizeOptionalQuillHtml(dto.explanation ?? null, 'explanation', {
+            businessId,
+            practiceTestId,
+            questionId,
+            userId: user.id,
+          })
+        : undefined;
+
     const updatedQuestion = await questionRepo.updateQuestionAndOptions(businessId, questionId, {
       ...(dto.type !== undefined ? { type: dto.type } : {}),
-      ...(dto.questionText !== undefined ? { text: dto.questionText } : {}),
+      ...(dto.questionText !== undefined ? { text: sanitizedQuestionText! } : {}),
       ...(dto.mediaUrl !== undefined ? { mediaUrl: dto.mediaUrl } : {}),
-      ...(dto.explanation !== undefined ? { explanation: dto.explanation } : {}),
+      ...(dto.explanation !== undefined ? { explanation: sanitizedExplanation! } : {}),
       ...(dto.correctTextAnswer !== undefined ? { correctTextAnswer: dto.correctTextAnswer } : {}),
       ...(dto.correctOptionIdsAnswers !== undefined
         ? { correctOptionRefs: dto.correctOptionIdsAnswers }

@@ -14,13 +14,14 @@ import { errorHandler } from '../../../src/middlewares/error.middleware';
 import { practiceTestRouter } from '../../../src/routes/practiceTest.routes';
 import { examTestRouter } from '../../../src/routes/examTest.routes';
 import { QuestionType, AttemptStatus } from '../../../src/constants/test-enums';
-import { UserRole } from '@prisma/client';
+import { SubjectStatus, UserRole } from '@prisma/client';
 
 import * as practiceRepo from '../../../src/repositories/practiceTest.repo';
 import * as examRepo from '../../../src/repositories/examTest.repo';
 import * as questionRepo from '../../../src/repositories/testQuestion.repo';
 import * as attemptRepo from '../../../src/repositories/testAttempt.repo';
 import * as batchRepo from '../../../src/repositories/batch.repo';
+import * as subjectRepo from '../../../src/repositories/subject.repo';
 
 // ─── mock all repos ──────────────────────────────────────────────────────────
 jest.mock('../../../src/repositories/practiceTest.repo');
@@ -28,6 +29,7 @@ jest.mock('../../../src/repositories/examTest.repo');
 jest.mock('../../../src/repositories/testQuestion.repo');
 jest.mock('../../../src/repositories/testAttempt.repo');
 jest.mock('../../../src/repositories/batch.repo');
+jest.mock('../../../src/repositories/subject.repo');
 jest.mock('../../../src/utils/logger');
 
 // ─── bypass auth + business-access middleware ────────────────────────────────
@@ -74,6 +76,9 @@ const NOW = new Date('2026-03-21T10:00:00.000Z');
 // Use dynamic dates for exam tests so timing checks pass regardless of when tests run
 const EXAM_START = new Date(Date.now() - 3_600_000);   // 1 hour ago
 const EXAM_DEADLINE = new Date(Date.now() + 3_600_000); // 1 hour from now
+
+const SUBJECT_ID = 1;
+const SUBJECT_COURSE_ID = 99;
 
 const PRACTICE_TEST_ROW = {
   id: 'pt-1',
@@ -168,11 +173,17 @@ describe('Practice Test Routes', () => {
   describe('POST /api/business/1/practice-tests', () => {
     it('creates a practice test (admin)', async () => {
       (batchRepo.findBatchBusinessId as jest.Mock).mockResolvedValue(1);
+      (batchRepo.findBatchById as jest.Mock).mockResolvedValue({ id: 3, courseId: SUBJECT_COURSE_ID });
+      (subjectRepo.findSubjectById as jest.Mock).mockResolvedValue({
+        id: SUBJECT_ID,
+        courseId: SUBJECT_COURSE_ID,
+        status: SubjectStatus.ACTIVE,
+      });
       (practiceRepo.createPracticeTest as jest.Mock).mockResolvedValue(PRACTICE_TEST_ROW);
 
       const res = await request(app)
         .post('/api/business/1/practice-tests')
-        .send({ batchId: 3, name: 'Practice Test 1' });
+        .send({ batchId: 3, subjectId: SUBJECT_ID, name: 'Practice Test 1' });
 
       expect(res.status).toBe(201);
       expect(res.body.success).toBe(true);
@@ -249,7 +260,8 @@ describe('Practice Test Routes', () => {
 
     it('returns test with questions for teacher', async () => {
       mockUserRole = UserRole.TEACHER;
-      (practiceRepo.findPracticeTestByIdForUser as jest.Mock).mockResolvedValue(PRACTICE_TEST_ROW);
+      (practiceRepo.findPracticeTestById as jest.Mock).mockResolvedValue(PRACTICE_TEST_ROW);
+      (batchRepo.isActiveUserInBatch as jest.Mock).mockResolvedValue(true);
       (questionRepo.listPracticeTestQuestions as jest.Mock).mockResolvedValue([MCQ_QUESTION_ROW]);
 
       const res = await request(app).get('/api/business/1/practice-tests/pt-1');
@@ -727,12 +739,19 @@ describe('Exam Test Routes', () => {
   describe('POST /api/business/1/exam-tests', () => {
     it('creates an exam test (admin)', async () => {
       (batchRepo.findBatchBusinessId as jest.Mock).mockResolvedValue(1);
+      (batchRepo.findBatchById as jest.Mock).mockResolvedValue({ id: 3, courseId: SUBJECT_COURSE_ID });
+      (subjectRepo.findSubjectById as jest.Mock).mockResolvedValue({
+        id: SUBJECT_ID,
+        courseId: SUBJECT_COURSE_ID,
+        status: SubjectStatus.ACTIVE,
+      });
       (examRepo.createExamTest as jest.Mock).mockResolvedValue(EXAM_TEST_ROW);
 
       const res = await request(app)
         .post('/api/business/1/exam-tests')
         .send({
           batchId: 3,
+          subjectId: SUBJECT_ID,
           name: 'Exam Test 1',
           startAt: NOW.toISOString(),
           deadlineAt: new Date(NOW.getTime() + 3_600_000).toISOString(),
@@ -813,7 +832,8 @@ describe('Exam Test Routes', () => {
 
     it('returns exam test with questions for teacher', async () => {
       mockUserRole = UserRole.TEACHER;
-      (examRepo.findExamTestByIdForUser as jest.Mock).mockResolvedValue(EXAM_TEST_ROW);
+      (examRepo.findExamTestById as jest.Mock).mockResolvedValue(EXAM_TEST_ROW);
+      (batchRepo.isActiveUserInBatch as jest.Mock).mockResolvedValue(true);
       (questionRepo.listExamTestQuestions as jest.Mock).mockResolvedValue([MCQ_QUESTION_ROW]);
 
       const res = await request(app).get('/api/business/1/exam-tests/et-1');

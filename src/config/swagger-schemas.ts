@@ -1928,6 +1928,8 @@ export const swaggerSchemas = {
       businessId: { type: 'string', minLength: 1, maxLength: 50 },
       batchId: { type: 'string', minLength: 1, maxLength: 50 },
       batchName: { type: 'string', description: 'Batch display name (when loaded with batch join)' },
+      subjectId: { type: 'integer', minimum: 1, description: 'Subject ID (nullable during migration)' },
+      subjectName: { type: 'string', description: 'Subject name (when loaded with subject join)' },
       name: { type: 'string', minLength: 1, maxLength: 120 },
       description: { type: 'string', maxLength: 2000 },
       status: { $ref: '#/components/schemas/TestStatus' },
@@ -1963,6 +1965,8 @@ export const swaggerSchemas = {
       businessId: { type: 'string', minLength: 1, maxLength: 50 },
       batchId: { type: 'string', minLength: 1, maxLength: 50 },
       batchName: { type: 'string', description: 'Batch display name (when loaded with batch join)' },
+      subjectId: { type: 'integer', minimum: 1, description: 'Subject ID (nullable during migration)' },
+      subjectName: { type: 'string', description: 'Subject name (when loaded with subject join)' },
       name: { type: 'string', minLength: 1, maxLength: 120 },
       description: { type: 'string', maxLength: 2000 },
       startAt: { type: 'string', format: 'date-time' },
@@ -1990,6 +1994,8 @@ export const swaggerSchemas = {
       businessId: { type: 'string', minLength: 1, maxLength: 50 },
       batchId: { type: 'string', minLength: 1, maxLength: 50 },
       batchName: { type: 'string', description: 'Batch display name for UI' },
+      subjectId: { type: 'integer', minimum: 1, description: 'Subject ID (nullable during migration)' },
+      subjectName: { type: 'string', description: 'Subject name (when loaded with subject join)' },
       name: { type: 'string', minLength: 1, maxLength: 120 },
       description: { type: 'string', maxLength: 2000 },
       status: { $ref: '#/components/schemas/TestStatus' },
@@ -2011,6 +2017,8 @@ export const swaggerSchemas = {
       businessId: { type: 'string', minLength: 1, maxLength: 50 },
       batchId: { type: 'string', minLength: 1, maxLength: 50 },
       batchName: { type: 'string', description: 'Batch display name for UI' },
+      subjectId: { type: 'integer', minimum: 1, description: 'Subject ID (nullable during migration)' },
+      subjectName: { type: 'string', description: 'Subject name (when loaded with subject join)' },
       name: { type: 'string', minLength: 1, maxLength: 120 },
       description: { type: 'string', maxLength: 2000 },
       status: { $ref: '#/components/schemas/TestStatus' },
@@ -2033,9 +2041,10 @@ export const swaggerSchemas = {
   },
   CreatePracticeTestDTO: {
     type: 'object',
-    required: ['batchId', 'name'],
+    required: ['batchId', 'subjectId', 'name'],
     properties: {
       batchId: { type: 'string', minLength: 1, maxLength: 50 },
+      subjectId: { type: 'integer', minimum: 1 },
       name: { type: 'string', minLength: 1, maxLength: 120 },
       description: { type: 'string', maxLength: 2000 },
       defaultMarksPerQuestion: { type: 'number', minimum: 0 },
@@ -2059,9 +2068,10 @@ export const swaggerSchemas = {
   },
   CreateExamTestDTO: {
     type: 'object',
-    required: ['batchId', 'name', 'startAt', 'deadlineAt', 'durationMinutes'],
+    required: ['batchId', 'subjectId', 'name', 'startAt', 'deadlineAt', 'durationMinutes'],
     properties: {
       batchId: { type: 'string', minLength: 1, maxLength: 50 },
+      subjectId: { type: 'integer', minimum: 1 },
       name: { type: 'string', minLength: 1, maxLength: 120 },
       description: { type: 'string', maxLength: 2000 },
       startAt: { type: 'string', format: 'date-time' },
@@ -2088,6 +2098,7 @@ export const swaggerSchemas = {
       resultVisibility: { $ref: '#/components/schemas/ResultVisibilityExam' },
       shuffleQuestions: { type: 'boolean' },
       shuffleOptions: { type: 'boolean' },
+      subjectId: { type: 'integer', minimum: 1 },
       status: { $ref: '#/components/schemas/TestStatus' }
     }
   },
