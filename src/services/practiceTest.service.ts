@@ -7,8 +7,7 @@ import { CreatePracticeTestDto, CreateQuestionDto, UpdatePracticeTestDto, Update
 import { UserRole } from '@prisma/client';
 import { validateQuestionPayload, assertBatchBelongsToBusiness } from '../utils/test.utils';
 import { TestMapper } from '../mappers/test.mapper';
-import { assertTestBatchAccess } from '../utils/test.utils';
-import { assertSubjectForBatch } from '../utils/testSubjectValidation';
+import { assertTestBatchAccess, assertSubjectForBatch } from '../utils/test.utils';
 import { sanitizeOptionalQuillHtml, sanitizeRequiredQuillHtml } from '../utils/sanitizeHtml';
 
 export class PracticeTestService {

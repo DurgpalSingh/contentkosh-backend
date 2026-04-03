@@ -9,7 +9,7 @@ import { BadRequestError, NotFoundError } from '../../../src/errors/api.errors';
 import { AuthRequest } from '../../../src/dtos/auth.dto';
 import { QuestionType, AttemptStatus } from '../../../src/constants/test-enums';
 import { sanitizeOptionalQuillHtml, sanitizeRequiredQuillHtml } from '../../../src/utils/sanitizeHtml';
-import { assertSubjectForBatch } from '../../../src/utils/testSubjectValidation';
+import { assertSubjectForBatch } from '../../../src/utils/test.utils'; 
 import logger from '../../../src/utils/logger';
 
 import * as batchRepo from '../../../src/repositories/batch.repo';
