@@ -8,7 +8,7 @@ import { UserRole } from '@prisma/client';
 import { validateQuestionPayload, assertBatchBelongsToBusiness } from '../utils/test.utils';
 import { TestMapper } from '../mappers/test.mapper';
 import { assertTestBatchAccess, assertSubjectForBatch } from '../utils/test.utils';
-import { sanitizeOptionalQuillHtml, sanitizeRequiredQuillHtml } from '../utils/sanitizeHtml';
+import { sanitizeQuestionFieldsForCreate, sanitizeQuestionFieldsForUpdate } from '../utils/test.utils';
 
 export class PracticeTestService {
   private isElevated(role: UserRole) {
@@ -206,16 +206,8 @@ export class PracticeTestService {
       options: dto.options?.map((o) => ({ text: o.text, mediaUrl: o.mediaUrl ?? null })) ?? [],
     });
 
-    const sanitizedQuestionText = sanitizeRequiredQuillHtml(dto.questionText, 'questionText', {
-      businessId,
-      practiceTestId,
-      userId: user.id,
-    });
-    const sanitizedExplanation = sanitizeOptionalQuillHtml(dto.explanation ?? null, 'explanation', {
-      businessId,
-      practiceTestId,
-      userId: user.id,
-    });
+    const { questionText: sanitizedQuestionText, explanation: sanitizedExplanation } =
+      sanitizeQuestionFieldsForCreate(dto, { businessId, practiceTestId, userId: user.id });
 
     const createdQuestion = await questionRepo.createPracticeTestQuestionResolvingCorrect(businessId, practiceTestId, {
       type: dto.type,
@@ -263,30 +255,18 @@ export class PracticeTestService {
         [],
     });
 
-    const sanitizedQuestionText =
-      dto.questionText !== undefined
-        ? sanitizeRequiredQuillHtml(dto.questionText, 'questionText', {
-            businessId,
-            practiceTestId,
-            questionId,
-            userId: user.id,
-          })
-        : undefined;
-    const sanitizedExplanation =
-      dto.explanation !== undefined
-        ? sanitizeOptionalQuillHtml(dto.explanation ?? null, 'explanation', {
-            businessId,
-            practiceTestId,
-            questionId,
-            userId: user.id,
-          })
-        : undefined;
+    const { questionText: sanitizedQuestionText, explanation: sanitizedExplanation } = sanitizeQuestionFieldsForUpdate(dto, {
+      businessId,
+      practiceTestId,
+      questionId,
+      userId: user.id,
+    });
 
     const updatedQuestion = await questionRepo.updateQuestionAndOptions(businessId, questionId, {
       ...(dto.type !== undefined ? { type: dto.type } : {}),
-      ...(dto.questionText !== undefined ? { text: sanitizedQuestionText! } : {}),
+      ...(sanitizedQuestionText !== undefined ? { text: sanitizedQuestionText } : {}),
       ...(dto.mediaUrl !== undefined ? { mediaUrl: dto.mediaUrl } : {}),
-      ...(dto.explanation !== undefined ? { explanation: sanitizedExplanation! } : {}),
+      ...(sanitizedExplanation !== undefined ? { explanation: sanitizedExplanation } : {}),
       ...(dto.correctTextAnswer !== undefined ? { correctTextAnswer: dto.correctTextAnswer } : {}),
       ...(dto.correctOptionIdsAnswers !== undefined
         ? { correctOptionRefs: dto.correctOptionIdsAnswers }

@@ -89,7 +89,6 @@ function makeRes(): Partial<Response> {
 function makeReq(overrides: Partial<AuthRequest> = {}): Partial<AuthRequest> {
   return {
     user: { id: 1, role: UserRole.ADMIN, businessId: 1, email: 'admin@test.com' },
-    params: { businessId: '1' },
     body: {},
     query: {},
     ...overrides,

@@ -5,11 +5,43 @@
 import sanitizeHtml from 'sanitize-html';
 import logger from './logger';
 import { BadRequestError } from '../errors/api.errors';
-
-const MAX_QUIll_HTML_INPUT_CHARS = 50000;
-const MAX_QUIll_HTML_STORED_CHARS = 20000;
+import {
+  QUIll_HTML_MAX_INPUT_CHARS,
+  QUIll_HTML_MAX_STORED_CHARS,
+  QUIll_SANITIZE_ALLOWED_ATTRIBUTES,
+  QUIll_SANITIZE_ALLOWED_CLASSES,
+  QUIll_SANITIZE_ALLOWED_SCHEMES,
+  QUIll_SANITIZE_ALLOWED_TAGS,
+  QUIll_SANITIZE_DISALLOWED_TAGS_MODE,
+  QUIll_SANITIZE_LINK_REL,
+  QUIll_SANITIZE_LINK_TARGET,
+} from '../config/quillSanitizeConfig';
 
 type QuillField = 'questionText' | 'explanation';
+
+/** Options passed to `sanitize-html` for Quill content; built from `quillSanitizeConfig`. */
+function buildQuillSanitizeHtmlOptions(): Record<string, unknown> {
+  const allowedAttributes: Record<string, string[]> = {};
+  for (const tag of Object.keys(QUIll_SANITIZE_ALLOWED_ATTRIBUTES)) {
+    allowedAttributes[tag] = [...QUIll_SANITIZE_ALLOWED_ATTRIBUTES[tag]!];
+  }
+
+  return {
+    allowedTags: [...QUIll_SANITIZE_ALLOWED_TAGS],
+    allowedAttributes,
+    allowedSchemes: [...QUIll_SANITIZE_ALLOWED_SCHEMES],
+    transformTags: {
+      a: sanitizeHtml.simpleTransform('a', {
+        target: QUIll_SANITIZE_LINK_TARGET,
+        rel: QUIll_SANITIZE_LINK_REL,
+      }),
+    },
+    disallowedTagsMode: QUIll_SANITIZE_DISALLOWED_TAGS_MODE,
+    allowedClasses: QUIll_SANITIZE_ALLOWED_CLASSES,
+  };
+}
+
+const quillSanitizeHtmlOptions = buildQuillSanitizeHtmlOptions();
 
 function getMeaningfulTextLength(html: string): number {
   // Strip tags and normalize whitespace to approximate "empty" content.
@@ -26,7 +58,7 @@ function sanitizeQuillHtmlInternal(
   isRequired: boolean,
   context?: Record<string, unknown>,
 ): string {
-  if (input.length > MAX_QUIll_HTML_INPUT_CHARS) {
+  if (input.length > QUIll_HTML_MAX_INPUT_CHARS) {
     logger.warn('[test-module] Quill HTML rejected: input too large', {
       fieldLabel,
       inputChars: input.length,
@@ -35,42 +67,9 @@ function sanitizeQuillHtmlInternal(
     throw new BadRequestError(`${fieldLabel} is too large`);
   }
 
-  const sanitized = sanitizeHtml(input, {
-    allowedTags: [
-      'p',
-      'br',
-      'strong',
-      'b',
-      'em',
-      'i',
-      'u',
-      's',
-      'h1',
-      'h2',
-      'h3',
-      'blockquote',
-      'ol',
-      'ul',
-      'li',
-      'a',
-      'span',
-    ],
-    allowedAttributes: {
-      a: ['href', 'target', 'rel'],
-      span: ['class'],
-      p: ['class'],
-    },
-    allowedSchemes: ['http', 'https'],
-    // Disallow Quill-style CSS classes unless they start with `ql-` to avoid arbitrary styling.
-    transformTags: {
-      a: sanitizeHtml.simpleTransform('a', { target: '_blank', rel: 'noopener noreferrer' }),
-    } as any,
-    // Strip everything else.
-    disallowedTagsMode: 'discard',
-    allowedClasses: false,
-  });
+  const sanitized = sanitizeHtml(input, quillSanitizeHtmlOptions as Parameters<typeof sanitizeHtml>[1]);
 
-  if (sanitized.length > MAX_QUIll_HTML_STORED_CHARS) {
+  if (sanitized.length > QUIll_HTML_MAX_STORED_CHARS) {
     logger.warn('[test-module] Quill HTML rejected: sanitized too large', {
       fieldLabel,
       sanitizedChars: sanitized.length,

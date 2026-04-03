@@ -8,7 +8,7 @@ import { UserRole } from '@prisma/client';
 import { validateQuestionPayload, assertBatchBelongsToBusiness } from '../utils/test.utils';
 import { TestMapper } from '../mappers/test.mapper';
 import { assertTestBatchAccess, assertSubjectForBatch } from '../utils/test.utils';
-import { sanitizeOptionalQuillHtml, sanitizeRequiredQuillHtml } from '../utils/sanitizeHtml';
+import { sanitizeQuestionFieldsForCreate, sanitizeQuestionFieldsForUpdate } from '../utils/test.utils';
 
 export class ExamTestService {
   private isElevated(role: UserRole) {
@@ -231,22 +231,13 @@ export class ExamTestService {
       options: dto.options?.map((o) => ({ text: o.text, mediaUrl: o.mediaUrl ?? null })) ?? [],
     });
 
-    const sanitizedQuestionText = sanitizeRequiredQuillHtml(dto.questionText, 'questionText', {
-      businessId,
-      examTestId,
-      userId: user.id,
-    });
-    const sanitizedExplanation = sanitizeOptionalQuillHtml(dto.explanation ?? null, 'explanation', {
-      businessId,
-      examTestId,
-      userId: user.id,
-    });
+    const { questionText: sanitizedQuestionText } =
+      sanitizeQuestionFieldsForCreate(dto, { businessId, examTestId, userId: user.id });
 
     const createdQuestion = await questionRepo.createExamTestQuestionResolvingCorrect(businessId, examTestId, {
       type: dto.type,
       text: sanitizedQuestionText,
       mediaUrl: dto.mediaUrl ?? null,
-      explanation: sanitizedExplanation,
       correctTextAnswer: dto.correctTextAnswer ?? null,
       correctOptionRefs: dto.correctOptionIdsAnswers ?? [],
       options: dto.options?.map((o) => ({ text: o.text, mediaUrl: o.mediaUrl ?? null })) ?? [],
@@ -287,30 +278,17 @@ export class ExamTestService {
         [],
     });
 
-    const sanitizedQuestionText =
-      dto.questionText !== undefined
-        ? sanitizeRequiredQuillHtml(dto.questionText, 'questionText', {
-            businessId,
-            examTestId,
-            questionId,
-            userId: user.id,
-          })
-        : undefined;
-    const sanitizedExplanation =
-      dto.explanation !== undefined
-        ? sanitizeOptionalQuillHtml(dto.explanation ?? null, 'explanation', {
-            businessId,
-            examTestId,
-            questionId,
-            userId: user.id,
-          })
-        : undefined;
+    const { questionText: sanitizedQuestionText } = sanitizeQuestionFieldsForUpdate(dto, {
+      businessId,
+      examTestId,
+      questionId,
+      userId: user.id,
+    });
 
     const updatedQuestion = await questionRepo.updateQuestionAndOptions(businessId, questionId, {
       ...(dto.type !== undefined ? { type: dto.type } : {}),
-      ...(dto.questionText !== undefined ? { text: sanitizedQuestionText! } : {}),
+      ...(sanitizedQuestionText !== undefined ? { text: sanitizedQuestionText } : {}),
       ...(dto.mediaUrl !== undefined ? { mediaUrl: dto.mediaUrl } : {}),
-      ...(dto.explanation !== undefined ? { explanation: sanitizedExplanation! } : {}),
       ...(dto.correctTextAnswer !== undefined ? { correctTextAnswer: dto.correctTextAnswer } : {}),
       ...(dto.correctOptionIdsAnswers !== undefined
         ? { correctOptionRefs: dto.correctOptionIdsAnswers }

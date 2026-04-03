@@ -10,6 +10,7 @@ import { QuestionType } from '../constants/test-enums';
 import * as batchRepo from '../repositories/batch.repo';
 import * as subjectRepo from '../repositories/subject.repo';
 import logger from './logger';
+import { sanitizeOptionalQuillHtml, sanitizeRequiredQuillHtml } from './sanitizeHtml';
 
 // ---------------------------------------------------------------------------
 // Question Validation
@@ -41,6 +42,49 @@ export function validateQuestionPayload(payload: {
     }
   }
 }
+
+
+/**
+ * Sanitizes Quill HTML for question text and explanation on create.
+ * Use from practice and exam question flows to keep behavior aligned.
+ */
+export type SanitizedQuestionFieldsCreate = {
+  questionText: string;
+  explanation: string | null;
+};
+
+export function sanitizeQuestionFieldsForCreate(
+  dto: { questionText: string; explanation?: string | null },
+  context: Record<string, unknown>,
+): SanitizedQuestionFieldsCreate {
+  return {
+    questionText: sanitizeRequiredQuillHtml(dto.questionText, 'questionText', context),
+    explanation: sanitizeOptionalQuillHtml(dto.explanation ?? null, 'explanation', context),
+  };
+}
+
+/**
+ * Sanitizes Quill HTML for fields present on `UpdateQuestionDto`.
+ */
+export type SanitizedQuestionFieldsUpdate = {
+  questionText?: string;
+  explanation?: string | null;
+};
+
+export function sanitizeQuestionFieldsForUpdate(
+  dto: { questionText?: string; explanation?: string | null },
+  context: Record<string, unknown>,
+): SanitizedQuestionFieldsUpdate {
+  const result: SanitizedQuestionFieldsUpdate = {};
+  if (dto.questionText !== undefined) {
+    result.questionText = sanitizeRequiredQuillHtml(dto.questionText, 'questionText', context);
+  }
+  if (dto.explanation !== undefined) {
+    result.explanation = sanitizeOptionalQuillHtml(dto.explanation ?? null, 'explanation', context);
+  }
+  return result;
+}
+
 
 // ---------------------------------------------------------------------------
 // Access Guards
