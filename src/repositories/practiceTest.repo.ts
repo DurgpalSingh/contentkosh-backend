@@ -12,6 +12,13 @@ const practiceTestSelect = {
       displayName: true,
     },
   },
+  subjectId: true,
+  subject: {
+    select: {
+      id: true,
+      name: true,
+    },
+  },
   name: true,
   description: true,
   status: true,

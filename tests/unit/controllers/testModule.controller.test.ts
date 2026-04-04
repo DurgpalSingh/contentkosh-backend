@@ -1,5 +1,5 @@
 import { Response } from 'express';
-import { UserRole } from '@prisma/client';
+import { UserRole, SubjectStatus } from '@prisma/client';
 import { practiceTestController } from '../../../src/controllers/practiceTest.controller';
 import { examTestController } from '../../../src/controllers/examTest.controller';
 import { PracticeTestService } from '../../../src/services/practiceTest.service';
@@ -8,8 +8,16 @@ import { TestAttemptService } from '../../../src/services/testAttempt.service';
 import { BadRequestError, NotFoundError } from '../../../src/errors/api.errors';
 import { AuthRequest } from '../../../src/dtos/auth.dto';
 import { QuestionType, AttemptStatus } from '../../../src/constants/test-enums';
+import { sanitizeOptionalQuillHtml, sanitizeRequiredQuillHtml } from '../../../src/utils/sanitizeHtml';
+import { assertSubjectForBatch } from '../../../src/utils/test.utils'; 
+import logger from '../../../src/utils/logger';
+
+import * as batchRepo from '../../../src/repositories/batch.repo';
+import * as subjectRepo from '../../../src/repositories/subject.repo';
 
 jest.mock('../../../src/utils/logger');
+jest.mock('../../../src/repositories/batch.repo');
+jest.mock('../../../src/repositories/subject.repo');
 
 // ─── shared test fixtures ────────────────────────────────────────────────────
 
@@ -81,7 +89,6 @@ function makeRes(): Partial<Response> {
 function makeReq(overrides: Partial<AuthRequest> = {}): Partial<AuthRequest> {
   return {
     user: { id: 1, role: UserRole.ADMIN, businessId: 1, email: 'admin@test.com' },
-    params: { businessId: '1' },
     body: {},
     query: {},
     ...overrides,
@@ -91,6 +98,114 @@ function makeReq(overrides: Partial<AuthRequest> = {}): Partial<AuthRequest> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+
+// --------------------------------------------------------------------------------------------------------
+// RICH TEXT SANITIZATION + SUBJECT VALIDATION (test-module)
+// --------------------------------------------------------------------------------------------------------
+
+describe('test-module rich text sanitization', () => {
+  it('removes disallowed tags/attributes (script/onerror)', () => {
+    const html = `
+      <p>Hello</p>
+      <script>alert(1)</script>
+      <img src="x" onerror="alert(2)" />
+      <a href="javascript:alert(3)">bad link</a>
+    `;
+
+    const sanitized = sanitizeRequiredQuillHtml(html, 'questionText');
+
+    expect(sanitized).not.toContain('<script');
+    expect(sanitized).not.toContain('onerror=');
+    expect(sanitized).not.toContain('javascript:');
+  });
+
+  it('rejects Quill placeholder content when required', () => {
+    expect(() => sanitizeRequiredQuillHtml('<p><br></p>', 'questionText')).toThrow(BadRequestError);
+  });
+
+  it('returns null for Quill placeholder content when optional', () => {
+    expect(sanitizeOptionalQuillHtml('<p><br></p>', 'explanation')).toBeNull();
+  });
+});
+
+describe('test-module subject validation', () => {
+  const businessId = 1;
+  const userId = 10;
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('throws NotFoundError when batch is missing', async () => {
+    (batchRepo.findBatchById as jest.Mock).mockResolvedValue(null);
+
+    await expect(
+      assertSubjectForBatch({
+        batchId: 3,
+        subjectId: 1,
+        businessId,
+        userId,
+      }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it('throws BadRequestError when subject course mismatches batch course', async () => {
+    (batchRepo.findBatchById as jest.Mock).mockResolvedValue({ id: 3, courseId: 100 });
+    (subjectRepo.findSubjectById as jest.Mock).mockResolvedValue({
+      id: 1,
+      courseId: 200,
+      status: SubjectStatus.ACTIVE,
+    });
+
+    await expect(
+      assertSubjectForBatch({
+        batchId: 3,
+        subjectId: 1,
+        businessId,
+        userId,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestError);
+  });
+
+  it('throws BadRequestError when subject is inactive', async () => {
+    (batchRepo.findBatchById as jest.Mock).mockResolvedValue({ id: 3, courseId: 100 });
+    (subjectRepo.findSubjectById as jest.Mock).mockResolvedValue({
+      id: 1,
+      courseId: 100,
+      status: SubjectStatus.INACTIVE,
+    });
+
+    await expect(
+      assertSubjectForBatch({
+        batchId: 3,
+        subjectId: 1,
+        businessId,
+        userId,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestError);
+  });
+
+  it('resolves when subject is active and belongs to batch course', async () => {
+    (batchRepo.findBatchById as jest.Mock).mockResolvedValue({ id: 3, courseId: 100 });
+    (subjectRepo.findSubjectById as jest.Mock).mockResolvedValue({
+      id: 1,
+      courseId: 100,
+      status: SubjectStatus.ACTIVE,
+    });
+
+    await expect(
+      assertSubjectForBatch({
+        batchId: 3,
+        subjectId: 1,
+        businessId,
+        userId,
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
+});
+
 // PRACTICE TEST CONTROLLER
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -859,3 +974,7 @@ describe('TestAttempt Controller (via practiceTest + examTest controllers)', () 
     });
   });
 });
+
+
+
+

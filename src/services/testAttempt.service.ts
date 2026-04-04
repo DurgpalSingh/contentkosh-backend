@@ -302,6 +302,7 @@ export class TestAttemptService {
       practiceTest: {
         include: {
           batch: { select: { id: true, displayName: true } },
+          subject: { select: { id: true, name: true } },
         },
       },
       answers: true,
@@ -350,6 +351,7 @@ export class TestAttemptService {
       examTest: {
         include: {
           batch: { select: { id: true, displayName: true } },
+          subject: { select: { id: true, name: true } },
         },
       },
       answers: true,

@@ -7,7 +7,8 @@ import { CreateExamTestDto, CreateQuestionDto, UpdateExamTestDto, UpdateQuestion
 import { UserRole } from '@prisma/client';
 import { validateQuestionPayload, assertBatchBelongsToBusiness } from '../utils/test.utils';
 import { TestMapper } from '../mappers/test.mapper';
-import { assertTestBatchAccess } from '../utils/test.utils';
+import { assertTestBatchAccess, assertSubjectForBatch } from '../utils/test.utils';
+import { sanitizeQuestionFieldsForCreate, sanitizeQuestionFieldsForUpdate } from '../utils/test.utils';
 
 export class ExamTestService {
   private isElevated(role: UserRole) {
@@ -34,7 +35,9 @@ export class ExamTestService {
   }
 
   async create(businessId: number, dto: CreateExamTestDto, user: { id: number; role: UserRole }) {
-    logger.info(`[exam-test] create businessId=${businessId} userId=${user.id} batchId=${dto?.batchId}`);
+    logger.info(
+      `[exam-test] create businessId=${businessId} userId=${user.id} batchId=${dto?.batchId} subjectId=${dto?.subjectId}`,
+    );
     await assertBatchBelongsToBusiness(businessId, dto.batchId);
     await assertTestBatchAccess({
       user,
@@ -43,6 +46,14 @@ export class ExamTestService {
       entityLabel: 'Exam test',
       entityId: 'create',
     });
+
+    await assertSubjectForBatch({
+      batchId: dto.batchId,
+      subjectId: dto.subjectId,
+      businessId,
+      userId: user.id,
+    });
+
     const startAt = new Date(dto.startAt);
     const deadlineAt = new Date(dto.deadlineAt);
     if (!(deadlineAt > startAt)) {
@@ -52,6 +63,7 @@ export class ExamTestService {
     const createdExamTest = await examRepo.createExamTest({
       businessId,
       batchId: dto.batchId,
+      subjectId: dto.subjectId,
       name: dto.name,
       description: dto.description ?? null,
       status: dto.status ?? TestStatus.DRAFT,
@@ -112,6 +124,7 @@ export class ExamTestService {
     logger.info(`[exam-test] update businessId=${businessId} examTestId=${examTestId} userId=${user.id}`);
     const existing = await this.getWithAccess(businessId, examTestId, user);
 
+    const targetBatchId = dto.batchId !== undefined ? dto.batchId : existing.batchId;
     if (dto.batchId !== undefined) {
       await assertBatchBelongsToBusiness(businessId, dto.batchId);
       await assertTestBatchAccess({
@@ -123,6 +136,16 @@ export class ExamTestService {
       });
     }
 
+    const targetSubjectId = dto.subjectId ?? existing.subjectId;
+    if (targetSubjectId !== null && targetSubjectId !== undefined) {
+      await assertSubjectForBatch({
+        batchId: targetBatchId,
+        subjectId: targetSubjectId,
+        businessId,
+        userId: user.id,
+      });
+    }
+
     const startAt = dto.startAt !== undefined ? new Date(dto.startAt) : existing.startAt;
     const deadlineAt = dto.deadlineAt !== undefined ? new Date(dto.deadlineAt) : existing.deadlineAt;
     if (!(deadlineAt > startAt)) {
@@ -131,6 +154,7 @@ export class ExamTestService {
 
     const updatedExamTest = await examRepo.updateExamTest(businessId, examTestId, {
       ...(dto.batchId !== undefined ? { batchId: dto.batchId } : {}),
+      ...(dto.subjectId !== undefined ? { subjectId: dto.subjectId } : {}),
       ...(dto.name !== undefined ? { name: dto.name } : {}),
       ...(dto.description !== undefined ? { description: dto.description } : {}),
       ...(dto.status !== undefined ? { status: dto.status } : {}),
@@ -207,11 +231,13 @@ export class ExamTestService {
       options: dto.options?.map((o) => ({ text: o.text, mediaUrl: o.mediaUrl ?? null })) ?? [],
     });
 
+    const { questionText: sanitizedQuestionText } =
+      sanitizeQuestionFieldsForCreate(dto, { businessId, examTestId, userId: user.id });
+
     const createdQuestion = await questionRepo.createExamTestQuestionResolvingCorrect(businessId, examTestId, {
       type: dto.type,
-      text: dto.questionText,
+      text: sanitizedQuestionText,
       mediaUrl: dto.mediaUrl ?? null,
-      explanation: dto.explanation ?? null,
       correctTextAnswer: dto.correctTextAnswer ?? null,
       correctOptionRefs: dto.correctOptionIdsAnswers ?? [],
       options: dto.options?.map((o) => ({ text: o.text, mediaUrl: o.mediaUrl ?? null })) ?? [],
@@ -252,11 +278,17 @@ export class ExamTestService {
         [],
     });
 
+    const { questionText: sanitizedQuestionText } = sanitizeQuestionFieldsForUpdate(dto, {
+      businessId,
+      examTestId,
+      questionId,
+      userId: user.id,
+    });
+
     const updatedQuestion = await questionRepo.updateQuestionAndOptions(businessId, questionId, {
       ...(dto.type !== undefined ? { type: dto.type } : {}),
-      ...(dto.questionText !== undefined ? { text: dto.questionText } : {}),
+      ...(sanitizedQuestionText !== undefined ? { text: sanitizedQuestionText } : {}),
       ...(dto.mediaUrl !== undefined ? { mediaUrl: dto.mediaUrl } : {}),
-      ...(dto.explanation !== undefined ? { explanation: dto.explanation } : {}),
       ...(dto.correctTextAnswer !== undefined ? { correctTextAnswer: dto.correctTextAnswer } : {}),
       ...(dto.correctOptionIdsAnswers !== undefined
         ? { correctOptionRefs: dto.correctOptionIdsAnswers }

@@ -4,11 +4,13 @@
  * Covers: question validation, access guards, scoring, attempt result mapping, analytics summary.
  */
 
-import { TestOption, TestQuestion, TestAttemptAnswer, UserRole } from '@prisma/client';
+import { TestOption, TestQuestion, TestAttemptAnswer, UserRole, SubjectStatus } from '@prisma/client';
 import { BadRequestError, ForbiddenError, NotFoundError } from '../errors/api.errors';
 import { QuestionType } from '../constants/test-enums';
 import * as batchRepo from '../repositories/batch.repo';
+import * as subjectRepo from '../repositories/subject.repo';
 import logger from './logger';
+import { sanitizeOptionalQuillHtml, sanitizeRequiredQuillHtml } from './sanitizeHtml';
 
 // ---------------------------------------------------------------------------
 // Question Validation
@@ -40,6 +42,49 @@ export function validateQuestionPayload(payload: {
     }
   }
 }
+
+
+/**
+ * Sanitizes Quill HTML for question text and explanation on create.
+ * Use from practice and exam question flows to keep behavior aligned.
+ */
+export type SanitizedQuestionFieldsCreate = {
+  questionText: string;
+  explanation: string | null;
+};
+
+export function sanitizeQuestionFieldsForCreate(
+  dto: { questionText: string; explanation?: string | null },
+  context: Record<string, unknown>,
+): SanitizedQuestionFieldsCreate {
+  return {
+    questionText: sanitizeRequiredQuillHtml(dto.questionText, 'questionText', context),
+    explanation: sanitizeOptionalQuillHtml(dto.explanation ?? null, 'explanation', context),
+  };
+}
+
+/**
+ * Sanitizes Quill HTML for fields present on `UpdateQuestionDto`.
+ */
+export type SanitizedQuestionFieldsUpdate = {
+  questionText?: string;
+  explanation?: string | null;
+};
+
+export function sanitizeQuestionFieldsForUpdate(
+  dto: { questionText?: string; explanation?: string | null },
+  context: Record<string, unknown>,
+): SanitizedQuestionFieldsUpdate {
+  const result: SanitizedQuestionFieldsUpdate = {};
+  if (dto.questionText !== undefined) {
+    result.questionText = sanitizeRequiredQuillHtml(dto.questionText, 'questionText', context);
+  }
+  if (dto.explanation !== undefined) {
+    result.explanation = sanitizeOptionalQuillHtml(dto.explanation ?? null, 'explanation', context);
+  }
+  return result;
+}
+
 
 // ---------------------------------------------------------------------------
 // Access Guards
@@ -86,6 +131,65 @@ export async function assertTestBatchAccess(params: AssertTestBatchAccessParams)
   );
   throw new ForbiddenError('Access denied');
 }
+
+
+type AssertSubjectForBatchParams = {
+  batchId: number;
+  subjectId: number;
+  businessId: number;
+  userId: number;
+};
+
+export async function assertSubjectForBatch(params: AssertSubjectForBatchParams): Promise<void> {
+  const { batchId, subjectId, businessId, userId } = params;
+
+  const batch = await batchRepo.findBatchById(batchId);
+  if (!batch) {
+    logger.warn('[test-module] Subject validation failed: batch not found', {
+      businessId,
+      userId,
+      batchId,
+      subjectId,
+    });
+    throw new NotFoundError('Batch not found');
+  }
+
+  const subject = await subjectRepo.findSubjectById(subjectId);
+  if (!subject) {
+    logger.warn('[test-module] Subject validation failed: subject not found', {
+      businessId,
+      userId,
+      batchId,
+      subjectId,
+    });
+    throw new NotFoundError('Subject not found');
+  }
+
+  if (subject.status !== SubjectStatus.ACTIVE) {
+    logger.warn('[test-module] Subject validation failed: subject inactive', {
+      businessId,
+      userId,
+      batchId,
+      subjectId,
+      subjectStatus: subject.status,
+    });
+    throw new BadRequestError('Subject must be active');
+  }
+
+  if (subject.courseId !== batch.courseId) {
+    logger.warn('[test-module] Subject validation failed: subject course mismatch', {
+      businessId,
+      userId,
+      batchId,
+      subjectId,
+      batchCourseId: batch.courseId,
+      subjectCourseId: subject.courseId,
+    });
+    throw new BadRequestError('Subject does not belong to this batch');
+  }
+}
+
+
 
 
 export async function assertTeacherInBatch(userId: number, batchId: number): Promise<void> {

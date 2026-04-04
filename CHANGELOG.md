@@ -1,5 +1,13 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.2] - Add Subject to Test + sanitized content 
+**P.R raised by**  : Shubh404-SE on **Date** : 2026-04-03
+
+### Changed
+  - tests schema updated with subjectId.
+  - tests dto updated for subjectId and subjectName.
+  - sanitized content for test question and explanations to prevent XSS.
+---
 ## Version [1.2.1] - Add Subject to Content 
 **P.R raised by**  : Shubh404-SE on **Date** : 2026-03-25
 
