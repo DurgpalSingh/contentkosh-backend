@@ -24,6 +24,16 @@ export const QUIll_SANITIZE_ALLOWED_TAGS = [
   'a',
   'span',
   'div',
+  'table',
+  'thead',
+  'tbody',
+  'tfoot',
+  'tr',
+  'th',
+  'td',
+  'caption',
+  'colgroup',
+  'col',
 ] as const;
 
 /** Per-tag allowed attributes (keys must match tags present in content). */
@@ -32,6 +42,16 @@ export const QUIll_SANITIZE_ALLOWED_ATTRIBUTES: Readonly<Record<string, readonly
   span: ['class', 'data-type', 'data-latex'],
   p: ['class'],
   div: ['class', 'data-type', 'data-latex'],
+  table: ['class', 'style', 'width'],
+  thead: ['class'],
+  tbody: ['class'],
+  tfoot: ['class'],
+  tr: ['class'],
+  th: ['class', 'style', 'colspan', 'rowspan', 'align', 'colwidth', 'width'],
+  td: ['class', 'style', 'colspan', 'rowspan', 'align', 'colwidth', 'width'],
+  caption: ['class'],
+  colgroup: ['class', 'span', 'width'],
+  col: ['class', 'span', 'width'],
 } as const;
 
 export const QUIll_SANITIZE_ALLOWED_SCHEMES = ['http', 'https'] as const;
