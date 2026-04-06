@@ -1,5 +1,12 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.3] - updated sanitizeconfig 
+**P.R raised by**  : Shubh404-SE on **Date** : 2026-04-06
+
+### Changed
+  - Allowed extra tags and attributes in sanitize config to support rich text content.
+
+---
 ## Version [1.2.2] - Add Subject to Test + sanitized content 
 **P.R raised by**  : Shubh404-SE on **Date** : 2026-04-03
 
