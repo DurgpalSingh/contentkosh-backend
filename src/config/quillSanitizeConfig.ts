@@ -1,5 +1,5 @@
 /**
- * Single place to tune Quill/rich-text HTML allowlists for `sanitize-html`.
+ * Single place to tune rich-text HTML allowlists (Quill/TipTap + math) for `sanitize-html`.
  * Adjust tags, attributes, schemes, and size limits here.
  */
 export const QUIll_HTML_MAX_INPUT_CHARS = 50000 as const;
@@ -23,20 +23,25 @@ export const QUIll_SANITIZE_ALLOWED_TAGS = [
   'li',
   'a',
   'span',
+  'div',
 ] as const;
 
 /** Per-tag allowed attributes (keys must match tags present in content). */
 export const QUIll_SANITIZE_ALLOWED_ATTRIBUTES: Readonly<Record<string, readonly string[]>> = {
   a: ['href', 'target', 'rel'],
-  span: ['class'],
+  span: ['class', 'data-type', 'data-latex'],
   p: ['class'],
+  div: ['class', 'data-type', 'data-latex'],
 } as const;
 
 export const QUIll_SANITIZE_ALLOWED_SCHEMES = ['http', 'https'] as const;
 
 export const QUIll_SANITIZE_DISALLOWED_TAGS_MODE = 'discard' as const;
 
-/** When false, arbitrary classes are stripped (Quill `ql-*` classes are not preserved unless configured otherwise). */
+/**
+ * When false at the top level, `sanitize-html` strips disallowed classes (see library docs).
+ * TipTap math is stored as `data-latex` on span/div; classes are not required for rendering.
+ */
 export const QUIll_SANITIZE_ALLOWED_CLASSES = false as const;
 
 export const QUIll_SANITIZE_LINK_TARGET = '_blank' as const;

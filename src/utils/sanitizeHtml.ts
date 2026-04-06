@@ -17,9 +17,9 @@ import {
   QUIll_SANITIZE_LINK_TARGET,
 } from '../config/quillSanitizeConfig';
 
-type QuillField = 'questionText' | 'explanation';
+type RichTextField = 'questionText' | 'explanation';
 
-/** Options passed to `sanitize-html` for Quill content; built from `quillSanitizeConfig`. */
+/** Options passed to `sanitize-html` for rich-text content; built from `quillSanitizeConfig`. */
 function buildQuillSanitizeHtmlOptions(): Record<string, unknown> {
   const allowedAttributes: Record<string, string[]> = {};
   for (const tag of Object.keys(QUIll_SANITIZE_ALLOWED_ATTRIBUTES)) {
@@ -44,22 +44,29 @@ function buildQuillSanitizeHtmlOptions(): Record<string, unknown> {
 const quillSanitizeHtmlOptions = buildQuillSanitizeHtmlOptions();
 
 function getMeaningfulTextLength(html: string): number {
-  // Strip tags and normalize whitespace to approximate "empty" content.
-  return html
+  const textFromTags = html
     .replace(/<[^>]*>/g, '')
     .replace(/&nbsp;/g, ' ')
     .replace(/\s+/g, ' ')
-    .trim().length;
+    .trim();
+  const latexParts = [...html.matchAll(/data-latex="([^"]*)"/g)]
+    .map((m) => m[1])
+    .join(' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const combined = `${textFromTags} ${latexParts}`.replace(/\s+/g, ' ').trim();
+  return combined.length;
 }
 
 function sanitizeQuillHtmlInternal(
   input: string,
-  fieldLabel: QuillField,
+  fieldLabel: RichTextField,
   isRequired: boolean,
   context?: Record<string, unknown>,
 ): string {
   if (input.length > QUIll_HTML_MAX_INPUT_CHARS) {
-    logger.warn('[test-module] Quill HTML rejected: input too large', {
+    logger.warn('[test-module] Rich text HTML rejected: input too large', {
       fieldLabel,
       inputChars: input.length,
       ...(context ?? {}),
@@ -70,7 +77,7 @@ function sanitizeQuillHtmlInternal(
   const sanitized = sanitizeHtml(input, quillSanitizeHtmlOptions as Parameters<typeof sanitizeHtml>[1]);
 
   if (sanitized.length > QUIll_HTML_MAX_STORED_CHARS) {
-    logger.warn('[test-module] Quill HTML rejected: sanitized too large', {
+    logger.warn('[test-module] Rich text HTML rejected: sanitized too large', {
       fieldLabel,
       sanitizedChars: sanitized.length,
       ...(context ?? {}),
@@ -80,11 +87,11 @@ function sanitizeQuillHtmlInternal(
 
   if (getMeaningfulTextLength(sanitized) === 0) {
     if (isRequired) {
-      logger.warn('[test-module] Quill HTML rejected: empty after sanitization', { fieldLabel });
+      logger.warn('[test-module] Rich text HTML rejected: empty after sanitization', { fieldLabel });
       throw new BadRequestError(`${fieldLabel} cannot be empty`);
     }
 
-    // Treat Quill placeholder content as "no content".
+    // Treat empty placeholder content as "no content".
     return '';
   }
 
@@ -93,7 +100,7 @@ function sanitizeQuillHtmlInternal(
 
 export function sanitizeRequiredQuillHtml(
   input: string,
-  fieldLabel: QuillField,
+  fieldLabel: RichTextField,
   context?: Record<string, unknown>,
 ): string {
   return sanitizeQuillHtmlInternal(input, fieldLabel, true, context);
@@ -101,7 +108,7 @@ export function sanitizeRequiredQuillHtml(
 
 export function sanitizeOptionalQuillHtml(
   input: string | null | undefined,
-  fieldLabel: QuillField,
+  fieldLabel: RichTextField,
   context?: Record<string, unknown>,
 ): string | null {
   if (input === undefined) return null;
