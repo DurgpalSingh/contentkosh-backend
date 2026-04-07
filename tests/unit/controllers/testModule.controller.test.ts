@@ -1,5 +1,5 @@
 import { Response } from 'express';
-import { UserRole, SubjectStatus } from '@prisma/client';
+import { UserRole, SubjectStatus, TestLanguage } from '@prisma/client';
 import { practiceTestController } from '../../../src/controllers/practiceTest.controller';
 import { examTestController } from '../../../src/controllers/examTest.controller';
 import { PracticeTestService } from '../../../src/services/practiceTest.service';
@@ -34,6 +34,7 @@ const PRACTICE_TEST = {
   showExplanations: true,
   shuffleQuestions: false,
   shuffleOptions: false,
+  language: TestLanguage.en,
   createdBy: 1,
   updatedBy: null,
   createdAt: NOW,
@@ -56,6 +57,7 @@ const EXAM_TEST = {
   resultVisibility: 0,
   shuffleQuestions: false,
   shuffleOptions: false,
+  language: TestLanguage.en,
   createdBy: 1,
   updatedBy: null,
   createdAt: NOW,
@@ -784,7 +786,7 @@ describe('TestAttempt Controller (via practiceTest + examTest controllers)', () 
 
   describe('startAttempt (practice)', () => {
     it('returns 201 and questions WITHOUT correctTextAnswer/explanation', async () => {
-      const req = makeReq({ user: STUDENT_USER, body: { practiceTestId: 'pt-1' } });
+      const req = makeReq({ user: STUDENT_USER, body: { practiceTestId: 'pt-1', language: TestLanguage.en } });
       const res = makeRes();
       startPracticeSpy.mockResolvedValue(ATTEMPT_STARTED);
 
@@ -799,7 +801,7 @@ describe('TestAttempt Controller (via practiceTest + examTest controllers)', () 
     });
 
     it('returns 400 when only admin tries to start', async () => {
-      const req = makeReq({ body: { practiceTestId: 'pt-1' } }); // ADMIN role
+      const req = makeReq({ body: { practiceTestId: 'pt-1', language: TestLanguage.en } }); // ADMIN role
       const res = makeRes();
       startPracticeSpy.mockRejectedValue(new BadRequestError('Only students can start attempts'));
 
@@ -809,7 +811,7 @@ describe('TestAttempt Controller (via practiceTest + examTest controllers)', () 
     });
 
     it('returns 404 when practice test not found', async () => {
-      const req = makeReq({ user: STUDENT_USER, body: { practiceTestId: 'missing' } });
+      const req = makeReq({ user: STUDENT_USER, body: { practiceTestId: 'missing', language: TestLanguage.en } });
       const res = makeRes();
       startPracticeSpy.mockRejectedValue(new NotFoundError('Practice test not found'));
 
@@ -824,7 +826,7 @@ describe('TestAttempt Controller (via practiceTest + examTest controllers)', () 
       const req = makeReq({ user: STUDENT_USER, params: { attemptId: 'attempt-1' } });
       const res = makeRes();
       getPracticeAttemptSpy.mockResolvedValue({
-        attempt: { id: 'attempt-1', status: AttemptStatus.IN_PROGRESS },
+        attempt: { id: 'attempt-1', status: AttemptStatus.IN_PROGRESS, language: TestLanguage.en },
         test: PRACTICE_TEST,
         questions: [],
       });
@@ -879,7 +881,7 @@ describe('TestAttempt Controller (via practiceTest + examTest controllers)', () 
 
   describe('startAttempt (exam)', () => {
     it('returns 201 and questions WITHOUT correctTextAnswer/explanation', async () => {
-      const req = makeReq({ user: STUDENT_USER, body: { examTestId: 'et-1' } });
+      const req = makeReq({ user: STUDENT_USER, body: { examTestId: 'et-1', language: TestLanguage.en } });
       const res = makeRes();
       startExamSpy.mockResolvedValue({
         attemptId: 'attempt-2',
@@ -898,7 +900,7 @@ describe('TestAttempt Controller (via practiceTest + examTest controllers)', () 
     });
 
     it('returns 400 when exam has not started yet', async () => {
-      const req = makeReq({ user: STUDENT_USER, body: { examTestId: 'et-1' } });
+      const req = makeReq({ user: STUDENT_USER, body: { examTestId: 'et-1', language: TestLanguage.en } });
       const res = makeRes();
       startExamSpy.mockRejectedValue(new BadRequestError('Exam has not started yet'));
 
@@ -908,7 +910,7 @@ describe('TestAttempt Controller (via practiceTest + examTest controllers)', () 
     });
 
     it('returns 400 when exam deadline has passed', async () => {
-      const req = makeReq({ user: STUDENT_USER, body: { examTestId: 'et-1' } });
+      const req = makeReq({ user: STUDENT_USER, body: { examTestId: 'et-1', language: TestLanguage.en } });
       const res = makeRes();
       startExamSpy.mockRejectedValue(new BadRequestError('Exam deadline has passed'));
 
@@ -918,7 +920,7 @@ describe('TestAttempt Controller (via practiceTest + examTest controllers)', () 
     });
 
     it('returns 400 when student already attempted exam', async () => {
-      const req = makeReq({ user: STUDENT_USER, body: { examTestId: 'et-1' } });
+      const req = makeReq({ user: STUDENT_USER, body: { examTestId: 'et-1', language: TestLanguage.en } });
       const res = makeRes();
       startExamSpy.mockRejectedValue(new BadRequestError('You have already attempted this exam'));
 
@@ -933,7 +935,7 @@ describe('TestAttempt Controller (via practiceTest + examTest controllers)', () 
       const req = makeReq({ user: STUDENT_USER, params: { attemptId: 'attempt-2' } });
       const res = makeRes();
       getExamAttemptSpy.mockResolvedValue({
-        attempt: { id: 'attempt-2', status: AttemptStatus.IN_PROGRESS },
+        attempt: { id: 'attempt-2', status: AttemptStatus.IN_PROGRESS, language: TestLanguage.en },
         test: EXAM_TEST,
         questions: [],
       });

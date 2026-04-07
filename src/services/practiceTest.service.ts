@@ -36,7 +36,7 @@ export class PracticeTestService {
 
   async create(businessId: number, dto: CreatePracticeTestDto, user: { id: number; role: UserRole }) {
     logger.info(
-      `[practice-test] create businessId=${businessId} userId=${user.id} batchId=${dto?.batchId} subjectId=${dto?.subjectId}`,
+      `[practice-test] create businessId=${businessId} userId=${user.id} batchId=${dto?.batchId} subjectId=${dto?.subjectId} language=${dto.language}`,
     );
     await assertBatchBelongsToBusiness(businessId, dto.batchId);
     await assertTestBatchAccess({
@@ -65,6 +65,7 @@ export class PracticeTestService {
       showExplanations: dto.showExplanations ?? true,
       shuffleQuestions: dto.shuffleQuestions ?? true,
       shuffleOptions: dto.shuffleOptions ?? true,
+      language: dto.language,
       createdBy: user.id,
     });
     return createdPracticeTest;
@@ -147,6 +148,7 @@ export class PracticeTestService {
       ...(dto.showExplanations !== undefined ? { showExplanations: dto.showExplanations } : {}),
       ...(dto.shuffleQuestions !== undefined ? { shuffleQuestions: dto.shuffleQuestions } : {}),
       ...(dto.shuffleOptions !== undefined ? { shuffleOptions: dto.shuffleOptions } : {}),
+      ...(dto.language !== undefined ? { language: dto.language } : {}),
       updatedBy: user.id,
     });
     if (!updatedPracticeTest) throw new NotFoundError('Practice test not found');

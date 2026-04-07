@@ -30,6 +30,7 @@ const examTestSelect = {
   resultVisibility: true,
   shuffleQuestions: true,
   shuffleOptions: true,
+  language: true,
   createdBy: true,
   updatedBy: true,
   createdAt: true,

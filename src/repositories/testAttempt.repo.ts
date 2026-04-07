@@ -7,6 +7,7 @@ const attemptSelect = {
   practiceTestId: true,
   examTestId: true,
   userId: true,
+  language: true,
   status: true,
   startedAt: true,
   submittedAt: true,
