@@ -1,4 +1,4 @@
-import { BadRequestError, NotFoundError } from '../errors/api.errors';
+import { BadRequestError, ForbiddenError, NotFoundError } from '../errors/api.errors';
 import * as practiceRepo from '../repositories/practiceTest.repo';
 import * as questionRepo from '../repositories/testQuestion.repo';
 import { TestStatus } from '../constants/test-enums';
@@ -6,7 +6,6 @@ import logger from '../utils/logger';
 import { CreatePracticeTestDto, CreateQuestionDto, UpdatePracticeTestDto, UpdateQuestionDto } from '../dtos/test.dto';
 import { UserRole } from '@prisma/client';
 import { validateQuestionPayload, assertBatchBelongsToBusiness } from '../utils/test.utils';
-import { TestMapper } from '../mappers/test.mapper';
 import { assertTestBatchAccess, assertSubjectForBatch } from '../utils/test.utils';
 import { sanitizeQuestionFieldsForCreate, sanitizeQuestionFieldsForUpdate } from '../utils/test.utils';
 
@@ -23,6 +22,9 @@ export class PracticeTestService {
     const practiceTestRecord = await practiceRepo.findPracticeTestById(businessId, practiceTestId);
     if (!practiceTestRecord) {
       throw new NotFoundError('Practice test not found');
+    }
+    if (!this.isElevated(user.role) && practiceTestRecord.createdBy !== user.id) {
+      throw new ForbiddenError('Access denied to this practice test');
     }
     await assertTestBatchAccess({
       user,
@@ -75,21 +77,11 @@ export class PracticeTestService {
     logger.info(
       `[practice-test] list businessId=${businessId} userId=${user.id} role=${user.role} status=${query?.status ?? 'any'} batchId=${query?.batchId ?? 'any'}`,
     );
-    const where: { status?: number; batchId?: number } = {};
+    const where: { status?: number; batchId?: number; createdBy?: number } = {};
     if (query.status !== undefined) where.status = query.status;
     if (query.batchId !== undefined) where.batchId = query.batchId;
-    if (query.batchId !== undefined) {
-      await assertTestBatchAccess({
-        user,
-        batchId: query.batchId,
-        businessId,
-        entityLabel: 'Practice test',
-        entityId: 'list',
-      });
-    }
     if (!this.isElevated(user.role)) {
-      const practiceTests = await practiceRepo.findPracticeTestsByBusinessIdForUser(businessId, user.id, { where });
-      return practiceTests.map((practiceTest) => TestMapper.practiceTest(practiceTest));
+      where.createdBy = user.id;
     }
     const practiceTests = await practiceRepo.findPracticeTestsByBusinessId(businessId, { where });
     return practiceTests;

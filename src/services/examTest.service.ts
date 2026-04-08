@@ -1,4 +1,4 @@
-import { BadRequestError, NotFoundError } from '../errors/api.errors';
+import { BadRequestError, ForbiddenError, NotFoundError } from '../errors/api.errors';
 import * as examRepo from '../repositories/examTest.repo';
 import * as questionRepo from '../repositories/testQuestion.repo';
 import { TestStatus, ResultVisibilityExam } from '../constants/test-enums';
@@ -6,7 +6,6 @@ import logger from '../utils/logger';
 import { CreateExamTestDto, CreateQuestionDto, UpdateExamTestDto, UpdateQuestionDto } from '../dtos/test.dto';
 import { UserRole } from '@prisma/client';
 import { validateQuestionPayload, assertBatchBelongsToBusiness } from '../utils/test.utils';
-import { TestMapper } from '../mappers/test.mapper';
 import { assertTestBatchAccess, assertSubjectForBatch } from '../utils/test.utils';
 import { sanitizeQuestionFieldsForCreate, sanitizeQuestionFieldsForUpdate } from '../utils/test.utils';
 
@@ -23,6 +22,9 @@ export class ExamTestService {
     const examTestRecord = await examRepo.findExamTestById(businessId, examTestId);
     if (!examTestRecord) {
       throw new NotFoundError('Exam test not found');
+    }
+    if (!this.isElevated(user.role) && examTestRecord.createdBy !== user.id) {
+      throw new ForbiddenError('Access denied to this exam test');
     }
     await assertTestBatchAccess({
       user,
@@ -85,21 +87,11 @@ export class ExamTestService {
     logger.info(
       `[exam-test] list businessId=${businessId} userId=${user.id} role=${user.role} status=${query?.status ?? 'any'} batchId=${query?.batchId ?? 'any'}`,
     );
-    const where: { status?: number; batchId?: number } = {};
+    const where: { status?: number; batchId?: number; createdBy?: number } = {};
     if (query.status !== undefined) where.status = query.status;
     if (query.batchId !== undefined) where.batchId = query.batchId;
-    if (query.batchId !== undefined) {
-      await assertTestBatchAccess({
-        user,
-        batchId: query.batchId,
-        businessId,
-        entityLabel: 'Exam test',
-        entityId: 'list',
-      });
-    }
     if (!this.isElevated(user.role)) {
-      const examTests = await examRepo.findExamTestsByBusinessIdForUser(businessId, user.id, { where });
-      return examTests.map((examTest) => TestMapper.examTest(examTest));
+      where.createdBy = user.id;
     }
     const examTests = await examRepo.findExamTestsByBusinessId(businessId, { where });
     return examTests;
