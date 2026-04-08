@@ -1,5 +1,11 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.5] - Teacher resticted to his own test only
+**P.R Raised by** : shubh404-SE on **Date** : 2026-04-08
+
+### Changed
+  - Teacher can only access/delete/edit tests created by them.
+---
 ## Version [1.2.4] - Multi language support in test module
 **P.R Raised by** : shubh404-SE on **Date** : 2026-04-07
 
