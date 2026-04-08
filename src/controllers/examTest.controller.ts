@@ -162,8 +162,14 @@ export const examTestController = {
       const user = req.user!;
 
       const examTestId = req.body.examTestId!;
+      const language = req.body.language!;
 
-      const attemptStart = await testAttemptService.startExamAttempt(businessId, { id: user.id, role: user.role }, examTestId);
+      const attemptStart = await testAttemptService.startExamAttempt(
+        businessId,
+        { id: user.id, role: user.role },
+        examTestId,
+        language,
+      );
       return ApiResponseHandler.created(
         res,
         {

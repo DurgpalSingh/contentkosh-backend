@@ -199,8 +199,14 @@ export const practiceTestController = {
       const user = req.user!;
 
       const practiceTestId = req.body.practiceTestId!;
+      const language = req.body.language!;
 
-      const attemptStart = await testAttemptService.startPracticeAttempt(businessId, { id: user.id, role: user.role }, practiceTestId);
+      const attemptStart = await testAttemptService.startPracticeAttempt(
+        businessId,
+        { id: user.id, role: user.role },
+        practiceTestId,
+        language,
+      );
       return ApiResponseHandler.created(
         res,
         {

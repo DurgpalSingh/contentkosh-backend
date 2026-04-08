@@ -26,6 +26,7 @@ const practiceTestSelect = {
   showExplanations: true,
   shuffleQuestions: true,
   shuffleOptions: true,
+  language: true,
   createdBy: true,
   updatedBy: true,
   createdAt: true,

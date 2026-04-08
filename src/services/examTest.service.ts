@@ -36,7 +36,7 @@ export class ExamTestService {
 
   async create(businessId: number, dto: CreateExamTestDto, user: { id: number; role: UserRole }) {
     logger.info(
-      `[exam-test] create businessId=${businessId} userId=${user.id} batchId=${dto?.batchId} subjectId=${dto?.subjectId}`,
+      `[exam-test] create businessId=${businessId} userId=${user.id} batchId=${dto?.batchId} subjectId=${dto?.subjectId} language=${dto.language}`,
     );
     await assertBatchBelongsToBusiness(businessId, dto.batchId);
     await assertTestBatchAccess({
@@ -75,6 +75,7 @@ export class ExamTestService {
       resultVisibility: dto.resultVisibility ?? ResultVisibilityExam.AFTER_DEADLINE,
       shuffleQuestions: dto.shuffleQuestions ?? true,
       shuffleOptions: dto.shuffleOptions ?? true,
+      language: dto.language,
       createdBy: user.id,
     });
     return createdExamTest;
@@ -166,6 +167,7 @@ export class ExamTestService {
       ...(dto.resultVisibility !== undefined ? { resultVisibility: dto.resultVisibility } : {}),
       ...(dto.shuffleQuestions !== undefined ? { shuffleQuestions: dto.shuffleQuestions } : {}),
       ...(dto.shuffleOptions !== undefined ? { shuffleOptions: dto.shuffleOptions } : {}),
+      ...(dto.language !== undefined ? { language: dto.language } : {}),
       updatedBy: user.id,
     });
     if (!updatedExamTest) throw new NotFoundError('Exam test not found');

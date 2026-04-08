@@ -3,6 +3,7 @@ import {
   IsArray,
   IsBoolean,
   IsDateString,
+  IsEnum,
   IsInt,
   IsNotEmpty,
   IsNumber,
@@ -14,6 +15,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { TestLanguage } from '@prisma/client';
 
 export class CreatePracticeTestDto {
   @IsInt()
@@ -27,6 +29,9 @@ export class CreatePracticeTestDto {
   @IsString()
   @IsNotEmpty()
   name!: string;
+
+  @IsEnum(TestLanguage)
+  language!: TestLanguage;
 
   @IsOptional()
   @IsString()
@@ -66,6 +71,10 @@ export class UpdatePracticeTestDto {
   @IsInt()
   @Min(1)
   subjectId?: number;
+
+  @IsOptional()
+  @IsEnum(TestLanguage)
+  language?: TestLanguage;
 
   @IsOptional()
   @IsString()
@@ -156,6 +165,9 @@ export class CreateExamTestDto {
   @IsOptional()
   @IsBoolean()
   shuffleOptions?: boolean;
+
+  @IsEnum(TestLanguage)
+  language!: TestLanguage;
 }
 
 export class UpdateExamTestDto {
@@ -220,6 +232,10 @@ export class UpdateExamTestDto {
   @IsOptional()
   @IsBoolean()
   shuffleOptions?: boolean;
+
+  @IsOptional()
+  @IsEnum(TestLanguage)
+  language?: TestLanguage;
 }
 
 export class PublishPracticeTestRequestDto {
@@ -323,12 +339,18 @@ export class StartPracticeAttemptRequestDto {
   @IsString()
   @IsNotEmpty()
   practiceTestId!: string;
+
+  @IsEnum(TestLanguage)
+  language!: TestLanguage;
 }
 
 export class StartExamAttemptRequestDto {
   @IsString()
   @IsNotEmpty()
   examTestId!: string;
+
+  @IsEnum(TestLanguage)
+  language!: TestLanguage;
 }
 
 export class SubmitAttemptAnswerDto {

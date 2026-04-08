@@ -1,4 +1,4 @@
-import { UserRole, ExamTest, PracticeTest, TestAttempt, TestAttemptAnswer } from '@prisma/client';
+import { UserRole, ExamTest, PracticeTest, TestAttempt, TestAttemptAnswer, TestLanguage } from '@prisma/client';
 import { BadRequestError, ForbiddenError, NotFoundError } from '../errors/api.errors';
 import { AttemptStatus, LockedReason, ResultVisibilityExam, TestStatus } from '../constants/test-enums';
 import logger from '../utils/logger';
@@ -14,7 +14,17 @@ import { TestMapper } from '../mappers/test.mapper';
 
 type AttemptRecord = Pick<
   TestAttempt,
-  'id' | 'practiceTestId' | 'examTestId' | 'userId' | 'status' | 'startedAt' | 'submittedAt' | 'score' | 'totalScore' | 'percentage'
+  | 'id'
+  | 'practiceTestId'
+  | 'examTestId'
+  | 'userId'
+  | 'language'
+  | 'status'
+  | 'startedAt'
+  | 'submittedAt'
+  | 'score'
+  | 'totalScore'
+  | 'percentage'
 >;
 
 function hashStringToUint32(input: string): number {
@@ -65,6 +75,7 @@ function buildAttemptSummary(attemptRecord: AttemptRecord) {
     practiceTestId: attemptRecord.practiceTestId ?? null,
     examTestId: attemptRecord.examTestId ?? null,
     userId: attemptRecord.userId,
+    language: attemptRecord.language,
     status: attemptRecord.status,
     startedAt: attemptRecord.startedAt,
     submittedAt: attemptRecord.submittedAt ?? null,
@@ -106,9 +117,16 @@ export class TestAttemptService {
     }
   }
 
-  async startPracticeAttempt(businessId: number, user: { id: number; role: UserRole }, practiceTestId: string) {
+  async startPracticeAttempt(
+    businessId: number,
+    user: { id: number; role: UserRole },
+    practiceTestId: string,
+    language: TestLanguage,
+  ) {
     if (user.role !== UserRole.STUDENT) throw new BadRequestError('Only students can start attempts');
-    logger.info(`[test-attempt] startPracticeAttempt businessId=${businessId} userId=${user.id} practiceTestId=${practiceTestId}`);
+    logger.info(
+      `[test-attempt] startPracticeAttempt businessId=${businessId} userId=${user.id} practiceTestId=${practiceTestId} language=${language}`,
+    );
 
     const practiceTest = await practiceRepo.findPracticeTestById(businessId, practiceTestId);
     if (!practiceTest) {
@@ -118,6 +136,13 @@ export class TestAttemptService {
     if (practiceTest.status !== TestStatus.PUBLISHED) {
       logger.warn(`[test-attempt] practice test not published practiceTestId=${practiceTestId} status=${practiceTest.status}`);
       throw new BadRequestError('Practice test is not published');
+    }
+
+    if (language !== practiceTest.language) {
+      logger.warn(
+        `[test-attempt] practice language mismatch practiceTestId=${practiceTestId} requested=${language} test=${practiceTest.language}`,
+      );
+      throw new BadRequestError('Selected language does not match this test');
     }
 
     await this.assertStudentInBatch(user.id, practiceTest.batchId);
@@ -156,6 +181,7 @@ export class TestAttemptService {
     const newAttempt = await attemptRepo.createTestAttempt({
       practiceTestId,
       userId: user.id,
+      language,
       status: AttemptStatus.IN_PROGRESS,
       startedAt: new Date(),
     });
@@ -181,9 +207,16 @@ export class TestAttemptService {
     };
   }
 
-  async startExamAttempt(businessId: number, user: { id: number; role: UserRole }, examTestId: string) {
+  async startExamAttempt(
+    businessId: number,
+    user: { id: number; role: UserRole },
+    examTestId: string,
+    language: TestLanguage,
+  ) {
     if (user.role !== UserRole.STUDENT) throw new BadRequestError('Only students can start attempts');
-    logger.info(`[test-attempt] startExamAttempt businessId=${businessId} userId=${user.id} examTestId=${examTestId}`);
+    logger.info(
+      `[test-attempt] startExamAttempt businessId=${businessId} userId=${user.id} examTestId=${examTestId} language=${language}`,
+    );
 
     const examTest = await examRepo.findExamTestById(businessId, examTestId);
     if (!examTest) {
@@ -193,6 +226,13 @@ export class TestAttemptService {
     if (examTest.status !== TestStatus.PUBLISHED) {
       logger.warn(`[test-attempt] exam test not published examTestId=${examTestId} status=${examTest.status}`);
       throw new BadRequestError('Exam test is not published');
+    }
+
+    if (language !== examTest.language) {
+      logger.warn(
+        `[test-attempt] exam language mismatch examTestId=${examTestId} requested=${language} test=${examTest.language}`,
+      );
+      throw new BadRequestError('Selected language does not match this test');
     }
 
     await this.assertStudentInBatch(user.id, examTest.batchId);
@@ -254,6 +294,7 @@ export class TestAttemptService {
     const newAttempt = await attemptRepo.createTestAttempt({
       examTestId,
       userId: user.id,
+      language,
       status: AttemptStatus.IN_PROGRESS,
       startedAt: now,
     });

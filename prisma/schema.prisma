@@ -310,6 +310,11 @@ enum Gender {
   other
 }
 
+enum TestLanguage {
+  hi
+  en
+}
+
 model Teacher {
   id              Int           @id @default(autoincrement())
   userId          Int           @unique @map("user_id")
@@ -378,6 +383,7 @@ model PracticeTest {
   showExplanations        Boolean @default(true) @map("show_explanations")
   shuffleQuestions        Boolean @default(true) @map("shuffle_questions")
   shuffleOptions          Boolean @default(true) @map("shuffle_options")
+  language                TestLanguage @default(en) @map("language")
 
   createdBy Int   @map("created_by")
   updatedBy Int?  @map("updated_by")
@@ -415,6 +421,7 @@ model ExamTest {
   resultVisibility         Int   @default(0) @map("result_visibility") // 0=AFTER_DEADLINE, 1=HIDDEN
   shuffleQuestions         Boolean @default(true) @map("shuffle_questions")
   shuffleOptions           Boolean @default(true) @map("shuffle_options")
+  language                 TestLanguage @default(en) @map("language")
 
   createdBy Int   @map("created_by")
   updatedBy Int?  @map("updated_by")
@@ -481,6 +488,7 @@ model TestAttempt {
   practiceTestId String? @map("practice_test_id")
   examTestId     String? @map("exam_test_id")
   userId         Int     @map("user_id")
+  language       TestLanguage @default(en) @map("language")
 
   status      Int      @default(0) @map("status") // 0=IN_PROGRESS, 1=SUBMITTED, 2=AUTO_SUBMITTED, 3=EXPIRED
   startedAt   DateTime @map("started_at")

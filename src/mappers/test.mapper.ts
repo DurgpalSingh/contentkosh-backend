@@ -1,4 +1,4 @@
-import type { TestAttemptAnswer } from '@prisma/client';
+import type { TestAttemptAnswer, TestLanguage } from '@prisma/client';
 import { TestStatus } from '../constants/test-enums';
 
 export type PracticeTestResponse = {
@@ -17,6 +17,7 @@ export type PracticeTestResponse = {
   showExplanations: boolean;
   shuffleQuestions: boolean;
   shuffleOptions: boolean;
+  language: TestLanguage;
   questionCount: number;
   totalQuestions: number;
   totalMarks: number;
@@ -46,6 +47,7 @@ export type ExamTestResponse = {
   resultVisibility: number;
   shuffleQuestions: boolean;
   shuffleOptions: boolean;
+  language: TestLanguage;
   questionCount: number;
   totalQuestions: number;
   totalMarks: number;
@@ -105,6 +107,7 @@ export type PracticeAvailableTestResponse = {
   totalQuestions: number;
   totalMarks: number;
   defaultMarksPerQuestion?: number;
+  language?: TestLanguage;
   canAttempt?: boolean;
   attemptCount?: number;
   bestScore?: number | null;
@@ -129,6 +132,7 @@ export type ExamAvailableTestResponse = {
   defaultMarksPerQuestion?: number;
   negativeMarksPerQuestion?: number;
   resultVisibility?: number;
+  language?: TestLanguage;
   canAttempt?: boolean;
   lockedReason?: number | null;
   attemptsAllowed?: number;
@@ -190,6 +194,7 @@ export const TestMapper = {
     showExplanations: boolean;
     shuffleQuestions: boolean;
     shuffleOptions: boolean;
+    language: TestLanguage;
     createdBy: number;
     updatedBy?: number | null;
     createdAt: Date;
@@ -213,6 +218,7 @@ export const TestMapper = {
       showExplanations: t.showExplanations,
       shuffleQuestions: t.shuffleQuestions,
       shuffleOptions: t.shuffleOptions,
+      language: t.language,
       questionCount: totalQuestions,
       totalQuestions,
       totalMarks,
@@ -239,6 +245,7 @@ export const TestMapper = {
     resultVisibility: number;
     shuffleQuestions: boolean;
     shuffleOptions: boolean;
+    language: TestLanguage;
     createdBy: number;
     updatedBy?: number | null;
     createdAt: Date;
@@ -266,6 +273,7 @@ export const TestMapper = {
       resultVisibility: t.resultVisibility,
       shuffleQuestions: t.shuffleQuestions,
       shuffleOptions: t.shuffleOptions,
+      language: t.language,
       questionCount: totalQuestions,
       totalQuestions,
       totalMarks,
@@ -333,6 +341,7 @@ export const TestMapper = {
       status?: number;
       subjectId?: number | null;
       defaultMarksPerQuestion?: number;
+      language?: TestLanguage;
       subject?: { name: string } | null;
     } & TestCountCarrier & BatchNameCarrier,
     stats?: { attemptCount?: number; bestScore?: number | null; lastAttemptAt?: Date | null; canAttempt?: boolean },
@@ -350,6 +359,7 @@ export const TestMapper = {
       description: t.description ?? null,
       totalQuestions,
       totalMarks,
+      ...(t.language !== undefined ? { language: t.language } : {}),
     };
 
     return {
@@ -378,6 +388,7 @@ export const TestMapper = {
       defaultMarksPerQuestion?: number;
       negativeMarksPerQuestion?: number;
       resultVisibility?: number;
+      language?: TestLanguage;
       subject?: { name: string } | null;
     } & TestCountCarrier & BatchNameCarrier,
     stats?: {
@@ -405,6 +416,7 @@ export const TestMapper = {
       durationMinutes: t.durationMinutes,
       totalQuestions,
       totalMarks,
+      ...(t.language !== undefined ? { language: t.language } : {}),
     };
 
     return {

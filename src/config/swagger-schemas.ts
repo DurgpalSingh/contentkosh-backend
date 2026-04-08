@@ -1908,6 +1908,11 @@ export const swaggerSchemas = {
     enum: [0, 1, 2],
     description: '0=NOT_STARTED, 1=DEADLINE_PASSED, 2=ALREADY_ATTEMPTED'
   },
+  TestLanguage: {
+    type: 'string',
+    enum: ['hi', 'en'],
+    description: 'Test content language: hi=Hindi, en=English'
+  },
   PracticeTest: {
     type: 'object',
     required: [
@@ -1920,6 +1925,7 @@ export const swaggerSchemas = {
       'showExplanations',
       'shuffleQuestions',
       'shuffleOptions',
+      'language',
       'createdAt',
       'updatedAt'
     ],
@@ -1937,6 +1943,7 @@ export const swaggerSchemas = {
       showExplanations: { type: 'boolean' },
       shuffleQuestions: { type: 'boolean' },
       shuffleOptions: { type: 'boolean' },
+      language: { $ref: '#/components/schemas/TestLanguage' },
       totalQuestions: { type: 'integer', minimum: 0 },
       totalMarks: { type: 'number', minimum: 0 },
       createdBy: { type: 'string', minLength: 1, maxLength: 50 },
@@ -1956,6 +1963,7 @@ export const swaggerSchemas = {
       'deadlineAt',
       'durationMinutes',
       'status',
+      'language',
       'createdBy',
       'createdAt',
       'updatedAt'
@@ -1978,6 +1986,7 @@ export const swaggerSchemas = {
       resultVisibility: { $ref: '#/components/schemas/ResultVisibilityExam' },
       shuffleQuestions: { type: 'boolean' },
       shuffleOptions: { type: 'boolean' },
+      language: { $ref: '#/components/schemas/TestLanguage' },
       totalQuestions: { type: 'integer', minimum: 0 },
       totalMarks: { type: 'number', minimum: 0 },
       createdBy: { type: 'string', minLength: 1, maxLength: 50 },
@@ -1988,7 +1997,7 @@ export const swaggerSchemas = {
   },
   PracticeAvailableTest: {
     type: 'object',
-    required: ['id', 'businessId', 'batchId', 'name', 'totalQuestions', 'totalMarks'],
+    required: ['id', 'businessId', 'batchId', 'name', 'totalQuestions', 'totalMarks', 'language'],
     properties: {
       id: { type: 'string', minLength: 1, maxLength: 50 },
       businessId: { type: 'string', minLength: 1, maxLength: 50 },
@@ -1999,6 +2008,7 @@ export const swaggerSchemas = {
       name: { type: 'string', minLength: 1, maxLength: 120 },
       description: { type: 'string', maxLength: 2000 },
       status: { $ref: '#/components/schemas/TestStatus' },
+      language: { $ref: '#/components/schemas/TestLanguage' },
       totalQuestions: { type: 'integer', minimum: 0 },
       totalMarks: { type: 'number', minimum: 0 },
       defaultMarksPerQuestion: { type: 'number', minimum: 0 },
@@ -2011,7 +2021,7 @@ export const swaggerSchemas = {
   },
   ExamAvailableTest: {
     type: 'object',
-    required: ['id', 'businessId', 'batchId', 'name', 'startAt', 'deadlineAt', 'durationMinutes'],
+    required: ['id', 'businessId', 'batchId', 'name', 'startAt', 'deadlineAt', 'durationMinutes', 'language'],
     properties: {
       id: { type: 'string', minLength: 1, maxLength: 50 },
       businessId: { type: 'string', minLength: 1, maxLength: 50 },
@@ -2022,6 +2032,7 @@ export const swaggerSchemas = {
       name: { type: 'string', minLength: 1, maxLength: 120 },
       description: { type: 'string', maxLength: 2000 },
       status: { $ref: '#/components/schemas/TestStatus' },
+      language: { $ref: '#/components/schemas/TestLanguage' },
       startAt: { type: 'string', format: 'date-time' },
       deadlineAt: { type: 'string', format: 'date-time' },
       durationMinutes: { type: 'integer', minimum: 1 },
@@ -2041,7 +2052,7 @@ export const swaggerSchemas = {
   },
   CreatePracticeTestDTO: {
     type: 'object',
-    required: ['batchId', 'subjectId', 'name'],
+    required: ['batchId', 'subjectId', 'name', 'language'],
     properties: {
       batchId: { type: 'string', minLength: 1, maxLength: 50 },
       subjectId: { type: 'integer', minimum: 1 },
@@ -2051,7 +2062,8 @@ export const swaggerSchemas = {
       showExplanations: { type: 'boolean' },
       shuffleQuestions: { type: 'boolean' },
       shuffleOptions: { type: 'boolean' },
-      status: { $ref: '#/components/schemas/TestStatus' }
+      status: { $ref: '#/components/schemas/TestStatus' },
+      language: { $ref: '#/components/schemas/TestLanguage' }
     }
   },
   UpdatePracticeTestDTO: {
@@ -2063,12 +2075,13 @@ export const swaggerSchemas = {
       showExplanations: { type: 'boolean' },
       shuffleQuestions: { type: 'boolean' },
       shuffleOptions: { type: 'boolean' },
-      status: { $ref: '#/components/schemas/TestStatus' }
+      status: { $ref: '#/components/schemas/TestStatus' },
+      language: { $ref: '#/components/schemas/TestLanguage' }
     }
   },
   CreateExamTestDTO: {
     type: 'object',
-    required: ['batchId', 'subjectId', 'name', 'startAt', 'deadlineAt', 'durationMinutes'],
+    required: ['batchId', 'subjectId', 'name', 'startAt', 'deadlineAt', 'durationMinutes', 'language'],
     properties: {
       batchId: { type: 'string', minLength: 1, maxLength: 50 },
       subjectId: { type: 'integer', minimum: 1 },
@@ -2082,7 +2095,8 @@ export const swaggerSchemas = {
       resultVisibility: { $ref: '#/components/schemas/ResultVisibilityExam' },
       shuffleQuestions: { type: 'boolean' },
       shuffleOptions: { type: 'boolean' },
-      status: { $ref: '#/components/schemas/TestStatus' }
+      status: { $ref: '#/components/schemas/TestStatus' },
+      language: { $ref: '#/components/schemas/TestLanguage' }
     }
   },
   UpdateExamTestDTO: {
@@ -2099,7 +2113,8 @@ export const swaggerSchemas = {
       shuffleQuestions: { type: 'boolean' },
       shuffleOptions: { type: 'boolean' },
       subjectId: { type: 'integer', minimum: 1 },
-      status: { $ref: '#/components/schemas/TestStatus' }
+      status: { $ref: '#/components/schemas/TestStatus' },
+      language: { $ref: '#/components/schemas/TestLanguage' }
     }
   },
   PublishPracticeTestRequest: {
@@ -2185,16 +2200,18 @@ export const swaggerSchemas = {
   },
   StartPracticeAttemptRequest: {
     type: 'object',
-    required: ['practiceTestId'],
+    required: ['practiceTestId', 'language'],
     properties: {
-      practiceTestId: { type: 'string', minLength: 1, maxLength: 50 }
+      practiceTestId: { type: 'string', minLength: 1, maxLength: 50 },
+      language: { $ref: '#/components/schemas/TestLanguage' }
     }
   },
   StartExamAttemptRequest: {
     type: 'object',
-    required: ['examTestId'],
+    required: ['examTestId', 'language'],
     properties: {
-      examTestId: { type: 'string', minLength: 1, maxLength: 50 }
+      examTestId: { type: 'string', minLength: 1, maxLength: 50 },
+      language: { $ref: '#/components/schemas/TestLanguage' }
     }
   },
   StartPrecticeTestAttemptResponse: {
@@ -2252,7 +2269,8 @@ export const swaggerSchemas = {
         description: 'Practice=IMMEDIATE; Exam=AFTER_DEADLINE or HIDDEN.'
       },
       attemptsAllowed: { type: 'integer', minimum: 1 },
-      attemptsUsed: { type: 'integer', minimum: 0 }
+      attemptsUsed: { type: 'integer', minimum: 0 },
+      language: { $ref: '#/components/schemas/TestLanguage' }
     }
   },
   SubmitAttemptRequest: {
@@ -2404,9 +2422,10 @@ export const swaggerSchemas = {
   },
   TestAttempt: {
     type: 'object',
-    required: ['id', 'status', 'startedAt'],
+    required: ['id', 'status', 'startedAt', 'language'],
     properties: {
       id: { type: 'string', minLength: 1, maxLength: 50 },
+      language: { $ref: '#/components/schemas/TestLanguage' },
       testId: {
         type: 'string',
         minLength: 1,

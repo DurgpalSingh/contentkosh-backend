@@ -14,7 +14,7 @@ import { errorHandler } from '../../../src/middlewares/error.middleware';
 import { practiceTestRouter } from '../../../src/routes/practiceTest.routes';
 import { examTestRouter } from '../../../src/routes/examTest.routes';
 import { QuestionType, AttemptStatus } from '../../../src/constants/test-enums';
-import { SubjectStatus, UserRole } from '@prisma/client';
+import { SubjectStatus, TestLanguage, UserRole } from '@prisma/client';
 
 import * as practiceRepo from '../../../src/repositories/practiceTest.repo';
 import * as examRepo from '../../../src/repositories/examTest.repo';
@@ -92,6 +92,7 @@ const PRACTICE_TEST_ROW = {
   showExplanations: true,
   shuffleQuestions: false,
   shuffleOptions: false,
+  language: TestLanguage.en,
   createdBy: 1,
   updatedBy: null,
   createdAt: NOW,
@@ -115,6 +116,7 @@ const EXAM_TEST_ROW = {
   resultVisibility: 0,
   shuffleQuestions: false,
   shuffleOptions: false,
+  language: TestLanguage.en,
   createdBy: 1,
   updatedBy: null,
   createdAt: NOW,
@@ -183,7 +185,7 @@ describe('Practice Test Routes', () => {
 
       const res = await request(app)
         .post('/api/business/1/practice-tests')
-        .send({ batchId: 3, subjectId: SUBJECT_ID, name: 'Practice Test 1' });
+        .send({ batchId: 3, subjectId: SUBJECT_ID, name: 'Practice Test 1', language: TestLanguage.en });
 
       expect(res.status).toBe(201);
       expect(res.body.success).toBe(true);
@@ -331,7 +333,7 @@ describe('Practice Test Routes', () => {
 
       const res = await request(app)
         .post('/api/business/1/practice-tests/publish')
-        .send({ practiceTestId: 'pt-1' });
+        .send({ practiceTestId: 'pt-1', language: TestLanguage.en });
 
       expect(res.status).toBe(200);
       expect(res.body.data.status).toBe(1);
@@ -343,7 +345,7 @@ describe('Practice Test Routes', () => {
 
       const res = await request(app)
         .post('/api/business/1/practice-tests/publish')
-        .send({ practiceTestId: 'pt-1' });
+        .send({ practiceTestId: 'pt-1', language: TestLanguage.en });
 
       expect(res.status).toBe(400);
     });
@@ -514,6 +516,7 @@ describe('Practice Test Attempt Routes', () => {
     practiceTestId: 'pt-1',
     examTestId: null,
     userId: 5,
+    language: TestLanguage.en,
     status: AttemptStatus.IN_PROGRESS,
     startedAt: NOW,
     submittedAt: null,
@@ -565,7 +568,7 @@ describe('Practice Test Attempt Routes', () => {
 
       const res = await request(app)
         .post('/api/business/1/practice-tests/attempts')
-        .send({ practiceTestId: 'pt-1' });
+        .send({ practiceTestId: 'pt-1', language: TestLanguage.en });
 
       expect(res.status).toBe(201);
       expect(res.body.data.attemptId).toBe('attempt-1');
@@ -587,7 +590,7 @@ describe('Practice Test Attempt Routes', () => {
 
       const res = await request(app)
         .post('/api/business/1/practice-tests/attempts')
-        .send({ practiceTestId: 'pt-1' });
+        .send({ practiceTestId: 'pt-1', language: TestLanguage.en });
 
       expect(res.status).toBe(201);
       expect(res.body.data.attemptId).toBe('attempt-1');
@@ -603,7 +606,7 @@ describe('Practice Test Attempt Routes', () => {
 
       const res = await request(app)
         .post('/api/business/1/practice-tests/attempts')
-        .send({ practiceTestId: 'pt-1' });
+        .send({ practiceTestId: 'pt-1', language: TestLanguage.en });
 
       expect(res.status).toBe(400);
     });
@@ -614,7 +617,7 @@ describe('Practice Test Attempt Routes', () => {
 
       const res = await request(app)
         .post('/api/business/1/practice-tests/attempts')
-        .send({ practiceTestId: 'pt-1' });
+        .send({ practiceTestId: 'pt-1', language: TestLanguage.en });
 
       // ForbiddenError is not caught by the controller — falls through to 500
       expect(res.status).toBe(500);
@@ -624,7 +627,7 @@ describe('Practice Test Attempt Routes', () => {
       mockUserRole = UserRole.ADMIN;
       const res = await request(app)
         .post('/api/business/1/practice-tests/attempts')
-        .send({ practiceTestId: 'pt-1' });
+        .send({ practiceTestId: 'pt-1', language: TestLanguage.en });
       expect(res.status).toBe(403);
     });
   });
@@ -756,6 +759,7 @@ describe('Exam Test Routes', () => {
           startAt: NOW.toISOString(),
           deadlineAt: new Date(NOW.getTime() + 3_600_000).toISOString(),
           durationMinutes: 60,
+          language: TestLanguage.en,
         });
 
       expect(res.status).toBe(201);
@@ -903,7 +907,7 @@ describe('Exam Test Routes', () => {
 
       const res = await request(app)
         .post('/api/business/1/exam-tests/publish')
-        .send({ examTestId: 'et-1' });
+        .send({ examTestId: 'et-1', language: TestLanguage.en });
 
       expect(res.status).toBe(200);
       expect(res.body.data.status).toBe(1);
@@ -915,7 +919,7 @@ describe('Exam Test Routes', () => {
 
       const res = await request(app)
         .post('/api/business/1/exam-tests/publish')
-        .send({ examTestId: 'et-1' });
+        .send({ examTestId: 'et-1', language: TestLanguage.en });
 
       expect(res.status).toBe(400);
     });
@@ -924,7 +928,7 @@ describe('Exam Test Routes', () => {
       mockUserRole = UserRole.STUDENT;
       const res = await request(app)
         .post('/api/business/1/exam-tests/publish')
-        .send({ examTestId: 'et-1' });
+        .send({ examTestId: 'et-1', language: TestLanguage.en });
       expect(res.status).toBe(403);
     });
   });
@@ -1093,6 +1097,7 @@ describe('Exam Test Attempt Routes', () => {
     practiceTestId: null,
     examTestId: 'et-1',
     userId: 5,
+    language: TestLanguage.en,
     status: AttemptStatus.IN_PROGRESS,
     startedAt: NOW,
     submittedAt: null,
@@ -1139,7 +1144,7 @@ describe('Exam Test Attempt Routes', () => {
 
       const res = await request(app)
         .post('/api/business/1/exam-tests/attempts')
-        .send({ examTestId: 'et-1' });
+        .send({ examTestId: 'et-1', language: TestLanguage.en });
 
       expect(res.status).toBe(201);
       expect(res.body.data.attemptId).toBe('attempt-2');
@@ -1166,7 +1171,7 @@ describe('Exam Test Attempt Routes', () => {
 
       const res = await request(app)
         .post('/api/business/1/exam-tests/attempts')
-        .send({ examTestId: 'et-1' });
+        .send({ examTestId: 'et-1', language: TestLanguage.en });
 
       expect(res.status).toBe(400);
     });
@@ -1183,7 +1188,7 @@ describe('Exam Test Attempt Routes', () => {
 
       const res = await request(app)
         .post('/api/business/1/exam-tests/attempts')
-        .send({ examTestId: 'et-1' });
+        .send({ examTestId: 'et-1', language: TestLanguage.en });
 
       expect(res.status).toBe(400);
     });
@@ -1194,7 +1199,7 @@ describe('Exam Test Attempt Routes', () => {
 
       const res = await request(app)
         .post('/api/business/1/exam-tests/attempts')
-        .send({ examTestId: 'et-1' });
+        .send({ examTestId: 'et-1', language: TestLanguage.en });
 
       // ForbiddenError is not caught by the controller — falls through to 500
       expect(res.status).toBe(500);
@@ -1204,7 +1209,7 @@ describe('Exam Test Attempt Routes', () => {
       mockUserRole = UserRole.ADMIN;
       const res = await request(app)
         .post('/api/business/1/exam-tests/attempts')
-        .send({ examTestId: 'et-1' });
+        .send({ examTestId: 'et-1', language: TestLanguage.en });
       expect(res.status).toBe(403);
     });
   });
