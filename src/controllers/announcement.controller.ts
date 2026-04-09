@@ -1,214 +1,94 @@
-import { Request, Response } from 'express';
-import { ApiResponseHandler } from '../utils/apiResponse';
+import { Response } from 'express';
+import type { CreateAnnouncementDto, UpdateAnnouncementDto } from '../dtos/announcement.dto';
+import type { AuthRequest } from '../dtos/auth.dto';
+import { BadRequestError, NotFoundError, UnauthorizedError } from '../errors/api.errors';
 import * as announcementRepo from '../repositories/announcement.repo';
-import * as businessRepo from '../repositories/business.repo';
+import { announcementService } from '../services/announcement.service';
+import { ApiResponseHandler } from '../utils/apiResponse';
 import logger from '../utils/logger';
-import { BadRequestError, NotFoundError } from '../errors/api.errors';
-import { Prisma } from '@prisma/client';
 
-export const createAnnouncement = async (req: Request, res: Response) => {
-    const announcementData: Prisma.AnnouncementUncheckedCreateInput = req.body;
-
-    // Validate input
-    if (!announcementData.heading || !announcementData.heading.trim()) {
-      throw new BadRequestError('Announcement heading is required');
-    }
-
-    if (!announcementData.content || !announcementData.content.trim()) {
-      throw new BadRequestError('Announcement content is required');
-    }
-
-    if (!announcementData.startDate || !announcementData.endDate) {
-      throw new BadRequestError('Start date and end date are required');
-    }
-
-    if (!announcementData.businessId) {
-      throw new BadRequestError('Business ID is required');
-    }
-
-    // Validate date range
-    const startDate = new Date(announcementData.startDate);
-    const endDate = new Date(announcementData.endDate);
-    
-    if (startDate >= endDate) {
-      throw new BadRequestError('End date must be after start date');
-    }
-
-    // Check if business exists
-    const business = await businessRepo.findBusinessById(announcementData.businessId);
-    if (!business) {
-      throw new NotFoundError('Business not found');
-    }
-
-    // Validate at least one role is selected
-    if (!announcementData.visibleToAdmins && !announcementData.visibleToTeachers && !announcementData.visibleToStudents) {
-      throw new BadRequestError('At least one role must be selected for visibility');
-    }
-
-    const announcement = await announcementRepo.createAnnouncement({
-      ...announcementData,
-      business: {
-        connect: {
-          id: announcementData.businessId
-        }
-      }
-    });
-
-    logger.info(`Announcement created successfully: ${announcementData.heading}`);
-
-    ApiResponseHandler.success(res, announcement, 'Announcement created successfully', 201);
-};
-
-function getAnnouncementIdFromRequest(req: Request): number {
-    const id = Number(req.params.id);
-    if (Number.isInteger(id) && id > 0) {
-        return id;
-    }
-    throw new BadRequestError('Announcement ID is required');
+function parsePositiveId(raw: string | undefined, label: string): number {
+  const id = Number(raw);
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new BadRequestError(`Valid ${label} is required`);
+  }
+  return id;
 }
 
-export const getAnnouncement = async (req: Request, res: Response) => {
-    const id = getAnnouncementIdFromRequest(req);
-
-    const announcement = await announcementRepo.findAnnouncementById(id);
-    if (!announcement) {
-        throw new NotFoundError('Announcement not found');
-    }
-
-    logger.info(`Announcement fetched successfully: ${announcement.heading}`);
-
-    ApiResponseHandler.success(res, announcement, 'Announcement fetched successfully');
+export const getMyAnnouncements = async (req: AuthRequest, res: Response) => {
+  const user = req.user;
+  if (!user) {
+    logger.warn('[announcement] getMyAnnouncements missing user');
+    throw new UnauthorizedError('Unauthorized');
+  }
+  logger.info(`[announcement] getMyAnnouncements request userId=${user.id}`);
+  const data = await announcementService.getMyAnnouncements(user);
+  logger.info(`[announcement] getMyAnnouncements response userId=${user.id} count=${data.length}`);
+  ApiResponseHandler.success(res, data, 'Announcements fetched successfully');
 };
 
-export const getAnnouncementsByBusiness = async (req: Request, res: Response) => {
-    const businessId = Number(req.params.businessId);
-    if (!Number.isInteger(businessId) || businessId <= 0) {
-        throw new BadRequestError('Valid Business ID is required');
-    }
-
-    const activeOnly = req.query.active === 'true';
-    
-    let announcements;
-    if (activeOnly) {
-        announcements = await announcementRepo.findActiveAnnouncementsByBusinessId(businessId);
-    } else {
-        announcements = await announcementRepo.findAnnouncementsByBusinessId(businessId);
-    }
-
-    logger.info(`Announcements fetched for business ${businessId}`);
-
-    ApiResponseHandler.success(res, announcements, 'Announcements fetched successfully');
+export const getManagedAnnouncements = async (req: AuthRequest, res: Response) => {
+  const user = req.user;
+  if (!user) {
+    logger.warn('[announcement] getManagedAnnouncements missing user');
+    throw new UnauthorizedError('Unauthorized');
+  }
+  logger.info(`[announcement] getManagedAnnouncements request userId=${user.id}`);
+  const data = await announcementService.getManagedAnnouncements(user);
+  logger.info(`[announcement] getManagedAnnouncements response userId=${user.id} count=${data.length}`);
+  ApiResponseHandler.success(res, data, 'Announcements fetched successfully');
 };
 
-export const getAnnouncementsByRole = async (req: Request, res: Response) => {
-    const businessId = Number(req.params.businessId);
-    if (!Number.isInteger(businessId) || businessId <= 0) {
-        throw new BadRequestError('Valid Business ID is required');
-    }
-
-    const role = req.query.role as string;
-    if (!role) {
-        throw new BadRequestError('Role parameter is required');
-    }
-
-    const validRoles = ['ADMIN', 'SUPERADMIN', 'TEACHER', 'STUDENT'];
-    if (!validRoles.includes(role)) {
-        throw new BadRequestError('Invalid role. Must be ADMIN, SUPERADMIN, TEACHER, or STUDENT');
-    }
-
-    const announcements = await announcementRepo.findAnnouncementsByRole(businessId, role);
-
-    logger.info(`Announcements fetched for business ${businessId} and role ${role}`);
-
-    ApiResponseHandler.success(res, announcements, 'Announcements fetched successfully');
+export const createAnnouncement = async (req: AuthRequest, res: Response) => {
+  const user = req.user;
+  if (!user) {
+    logger.warn('[announcement] create missing user');
+    throw new UnauthorizedError('Unauthorized');
+  }
+  const body = req.body as CreateAnnouncementDto;
+  logger.info(`[announcement] create request userId=${user.id} scope=${body?.scope}`);
+  const data = await announcementService.createAnnouncement(user, body);
+  logger.info(`[announcement] create response id=${data.id} userId=${user.id}`);
+  ApiResponseHandler.success(res, data, 'Announcement created successfully', 201);
 };
 
-export const getAnnouncementsByDateRange = async (req: Request, res: Response) => {
-    const businessId = Number(req.params.businessId);
-    if (!Number.isInteger(businessId) || businessId <= 0) {
-        throw new BadRequestError('Valid Business ID is required');
-    }
-
-    const startDateStr = req.query.startDate as string;
-    const endDateStr = req.query.endDate as string;
-
-    if (!startDateStr || !endDateStr) {
-        throw new BadRequestError('Start date and end date are required');
-    }
-
-    const startDate = new Date(startDateStr);
-    const endDate = new Date(endDateStr);
-
-    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-        throw new BadRequestError('Invalid date format');
-    }
-
-    if (startDate >= endDate) {
-        throw new BadRequestError('End date must be after start date');
-    }
-
-    const announcements = await announcementRepo.findAnnouncementsByDateRange(businessId, startDate, endDate);
-
-    logger.info(`Announcements fetched for business ${businessId} in date range`);
-
-    ApiResponseHandler.success(res, announcements, 'Announcements fetched successfully');
+export const getAnnouncementById = async (req: AuthRequest, res: Response) => {
+  const user = req.user;
+  if (!user || user.businessId === null || user.businessId === undefined) {
+    throw new UnauthorizedError('Unauthorized');
+  }
+  const id = parsePositiveId(req.params.id, 'Announcement ID');
+  logger.info(`[announcement] getById request id=${id} userId=${user.id}`);
+  const row = await announcementRepo.findAnnouncementByIdWithTargets(id, user.businessId);
+  if (!row) {
+    logger.warn(`[announcement] getById not found id=${id} businessId=${user.businessId}`);
+    throw new NotFoundError('Announcement');
+  }
+  logger.info(`[announcement] getById success id=${id}`);
+  ApiResponseHandler.success(res, row, 'Announcement fetched successfully');
 };
 
-export const updateAnnouncement = async (req: Request, res: Response) => {
-    const id = getAnnouncementIdFromRequest(req);
-    const announcementData: Prisma.AnnouncementUncheckedUpdateInput = req.body;
-
-    // Validate input
-    if (announcementData.heading !== undefined && !announcementData.heading.toString().trim()) {
-      throw new BadRequestError('Announcement heading cannot be empty');
-    }
-
-    if (announcementData.content !== undefined && !announcementData.content.toString().trim()) {
-      throw new BadRequestError('Announcement content cannot be empty');
-    }
-
-    // Validate date range if both dates are provided
-    if (announcementData.startDate && announcementData.endDate) {
-      const startDate = new Date(announcementData.startDate.toString());
-      const endDate = new Date(announcementData.endDate.toString());
-      
-      if (startDate >= endDate) {
-        throw new BadRequestError('End date must be after start date');
-      }
-    }
-
-    // Validate at least one role is selected if visibility fields are being updated
-    if (announcementData.visibleToAdmins !== undefined || 
-        announcementData.visibleToTeachers !== undefined || 
-        announcementData.visibleToStudents !== undefined) {
-      
-      const currentAnnouncement = await announcementRepo.findAnnouncementById(id);
-      if (!currentAnnouncement) {
-        throw new NotFoundError('Announcement not found');
-      }
-
-      const newVisibleToAdmins = announcementData.visibleToAdmins ?? currentAnnouncement.visibleToAdmins;
-      const newVisibleToTeachers = announcementData.visibleToTeachers ?? currentAnnouncement.visibleToTeachers;
-      const newVisibleToStudents = announcementData.visibleToStudents ?? currentAnnouncement.visibleToStudents;
-
-      if (!newVisibleToAdmins && !newVisibleToTeachers && !newVisibleToStudents) {
-        throw new BadRequestError('At least one role must be selected for visibility');
-      }
-    }
-
-    const announcement = await announcementRepo.updateAnnouncement(id, announcementData);
-
-    logger.info(`Announcement updated successfully: ${announcement.heading}`);
-
-    ApiResponseHandler.success(res, announcement, 'Announcement updated successfully');
+export const updateAnnouncement = async (req: AuthRequest, res: Response) => {
+  const user = req.user;
+  if (!user) {
+    throw new UnauthorizedError('Unauthorized');
+  }
+  const id = parsePositiveId(req.params.id, 'Announcement ID');
+  const body = req.body as UpdateAnnouncementDto;
+  logger.info(`[announcement] update request id=${id} userId=${user.id}`);
+  const data = await announcementService.updateAnnouncement(user, id, body);
+  logger.info(`[announcement] update response id=${id} userId=${user.id}`);
+  ApiResponseHandler.success(res, data, 'Announcement updated successfully');
 };
 
-export const deleteAnnouncement = async (req: Request, res: Response) => {
-    const id = getAnnouncementIdFromRequest(req);
-
-    await announcementRepo.deleteAnnouncement(id);
-
-    logger.info(`Announcement deleted successfully: ID ${id}`);
-
-    ApiResponseHandler.success(res, null, 'Announcement deleted successfully');
+export const deleteAnnouncement = async (req: AuthRequest, res: Response) => {
+  const user = req.user;
+  if (!user) {
+    throw new UnauthorizedError('Unauthorized');
+  }
+  const id = parsePositiveId(req.params.id, 'Announcement ID');
+  logger.info(`[announcement] delete request id=${id} userId=${user.id}`);
+  await announcementService.deleteAnnouncement(user, id);
+  logger.info(`[announcement] delete success id=${id} userId=${user.id}`);
+  ApiResponseHandler.success(res, null, 'Announcement deleted successfully');
 };

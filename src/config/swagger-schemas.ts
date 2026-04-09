@@ -861,6 +861,19 @@ export const swaggerSchemas = {
   },
 
   // Announcement Schemas
+  AnnouncementTarget: {
+    type: 'object',
+    properties: {
+      id: { type: 'integer' },
+      announcementId: { type: 'integer' },
+      courseId: { type: 'integer', nullable: true },
+      batchId: { type: 'integer', nullable: true },
+      createdAt: {
+        type: 'string',
+        format: 'date-time',
+      },
+    },
+  },
   Announcement: {
     type: 'object',
     properties: {
@@ -906,6 +919,29 @@ export const swaggerSchemas = {
         type: 'boolean',
         description: 'Whether the announcement is visible to students'
       },
+      scope: {
+        type: 'string',
+        enum: ['COURSE', 'BATCH'],
+        description: 'COURSE targets courses (all batches); BATCH targets specific batches'
+      },
+      targetAllCourses: {
+        type: 'boolean',
+        description: 'When scope is COURSE, apply to all courses in the business'
+      },
+      targetAllBatches: {
+        type: 'boolean',
+        description: 'When scope is BATCH, apply to all batches in the business'
+      },
+      createdBy: {
+        type: 'integer',
+        nullable: true,
+        description: 'Creator user id'
+      },
+      updatedBy: {
+        type: 'integer',
+        nullable: true,
+        description: 'Last updater user id'
+      },
       createdAt: {
         type: 'string',
         format: 'date-time',
@@ -915,6 +951,21 @@ export const swaggerSchemas = {
         type: 'string',
         format: 'date-time',
         description: 'Announcement last update timestamp'
+      },
+      targets: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/AnnouncementTarget',
+        },
+      },
+      createdByUser: {
+        type: 'object',
+        nullable: true,
+        properties: {
+          id: { type: 'integer' },
+          name: { type: 'string' },
+          email: { type: 'string' },
+        },
       },
       business: {
         type: 'object',
@@ -933,7 +984,7 @@ export const swaggerSchemas = {
   },
   CreateAnnouncementRequest: {
     type: 'object',
-    required: ['heading', 'content', 'startDate', 'endDate', 'businessId'],
+    required: ['heading', 'content', 'startDate', 'endDate', 'scope'],
     properties: {
       heading: {
         type: 'string',
@@ -960,10 +1011,6 @@ export const swaggerSchemas = {
         default: true,
         description: 'Whether the announcement is active'
       },
-      businessId: {
-        type: 'integer',
-        description: 'ID of the business this announcement belongs to (required)'
-      },
       visibleToAdmins: {
         type: 'boolean',
         default: false,
@@ -978,7 +1025,32 @@ export const swaggerSchemas = {
         type: 'boolean',
         default: false,
         description: 'Whether the announcement is visible to students'
-      }
+      },
+      scope: {
+        type: 'string',
+        enum: ['COURSE', 'BATCH'],
+        description: 'Targeting mode (required)'
+      },
+      targetAllCourses: {
+        type: 'boolean',
+        default: false,
+        description: 'When scope is COURSE, target all courses'
+      },
+      targetAllBatches: {
+        type: 'boolean',
+        default: false,
+        description: 'When scope is BATCH, target all batches'
+      },
+      courseIds: {
+        type: 'array',
+        items: { type: 'integer' },
+        description: 'When scope is COURSE and targetAllCourses is false'
+      },
+      batchIds: {
+        type: 'array',
+        items: { type: 'integer' },
+        description: 'When scope is BATCH and targetAllBatches is false'
+      },
     }
   },
   UpdateAnnouncementRequest: {
@@ -1019,7 +1091,25 @@ export const swaggerSchemas = {
       visibleToStudents: {
         type: 'boolean',
         description: 'Whether the announcement is visible to students'
-      }
+      },
+      scope: {
+        type: 'string',
+        enum: ['COURSE', 'BATCH'],
+      },
+      targetAllCourses: {
+        type: 'boolean',
+      },
+      targetAllBatches: {
+        type: 'boolean',
+      },
+      courseIds: {
+        type: 'array',
+        items: { type: 'integer' },
+      },
+      batchIds: {
+        type: 'array',
+        items: { type: 'integer' },
+      },
     }
   },
 

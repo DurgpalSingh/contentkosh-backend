@@ -1,8 +1,10 @@
 import 'reflect-metadata';
+import http from 'http';
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import swaggerUi from 'swagger-ui-express';
+import { Server as SocketIOServer } from 'socket.io';
 import routes from './routes';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
@@ -15,6 +17,7 @@ import { apiAuditLogger } from './middlewares/audit.middleware';
 import cron from 'node-cron';
 import { auditService } from './services/audit.service';
 import { auditConfig } from './config/audit.config';
+import { registerAnnouncementSocket } from './sockets/announcement.socket';
 
 // Load environment variables
 dotenv.config();
@@ -71,12 +74,23 @@ async function start() {
     // Error handling middleware
     app.use(errorHandler);
 
-    // Start server
-    app.listen(PORT, () => {
+    const httpServer = http.createServer(app);
+    const io = new SocketIOServer(httpServer, {
+      cors: {
+        origin: config.server.frontendUrl,
+        credentials: true,
+        methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization'],
+      },
+    });
+    registerAnnouncementSocket(io);
+
+    httpServer.listen(PORT, () => {
       logger.info(`Server is running on port ${PORT}`);
       logger.info(`Health check: http://localhost:${PORT}/health`);
       logger.info(`API Base URL: http://localhost:${PORT}/api`);
       logger.info(`API Documentation: http://localhost:${PORT}/api-docs`);
+      logger.info(`Socket.IO enabled (announcements)`);
     });
   } catch (err) {
     console.error('Fatal startup error:', err);
