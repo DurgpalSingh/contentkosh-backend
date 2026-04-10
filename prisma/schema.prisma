@@ -43,6 +43,8 @@ model User {
   createdTeachers Teacher[]        @relation("TeacherCreatedBy")
   updatedTeachers Teacher[]        @relation("TeacherUpdatedBy")
   testAttempts    TestAttempt[]
+  createdAnnouncements Announcement[] @relation("AnnouncementCreatedBy")
+  updatedAnnouncements Announcement[] @relation("AnnouncementUpdatedBy")
 
   @@unique([businessId, email])
   @@unique([businessId, mobile])
@@ -109,6 +111,7 @@ model Batch {
   contents   Content[]
   practiceTests PracticeTest[]
   examTests     ExamTest[]
+  announcementTargets AnnouncementTarget[]
 
   @@index([courseId])
   @@map("batches")
@@ -129,24 +132,50 @@ model BatchUser {
 }
 
 model Announcement {
-  id                Int      @id @default(autoincrement())
+  id                Int               @id @default(autoincrement())
   heading           String
   content           String
-  startDate         DateTime @map("start_date")
-  endDate           DateTime @map("end_date")
-  isActive          Boolean  @default(true) @map("is_active")
-  businessId        Int      @map("business_id")
-  visibleToAdmins   Boolean  @default(false) @map("visible_to_admins")
-  visibleToTeachers Boolean  @default(false) @map("visible_to_teachers")
-  visibleToStudents Boolean  @default(false) @map("visible_to_students")
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  startDate         DateTime          @map("start_date")
+  endDate           DateTime          @map("end_date")
+  isActive          Boolean           @default(true) @map("is_active")
+  businessId        Int               @map("business_id")
+  visibleToAdmins   Boolean           @default(false) @map("visible_to_admins")
+  visibleToTeachers Boolean           @default(false) @map("visible_to_teachers")
+  visibleToStudents Boolean           @default(false) @map("visible_to_students")
+  scope             AnnouncementScope @default(BATCH)
+  targetAllCourses  Boolean           @default(false) @map("target_all_courses")
+  targetAllBatches  Boolean           @default(false) @map("target_all_batches")
+  createdBy         Int?              @map("created_by")
+  updatedBy         Int?              @map("updated_by")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
 
   // Relations
-  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  business        Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdByUser   User?                @relation("AnnouncementCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updatedByUser   User?                @relation("AnnouncementUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+  targets         AnnouncementTarget[]
 
   @@index([businessId])
+  @@index([createdBy])
   @@map("announcements")
+}
+
+model AnnouncementTarget {
+  id             Int      @id @default(autoincrement())
+  announcementId Int      @map("announcement_id")
+  courseId       Int?     @map("course_id")
+  batchId        Int?     @map("batch_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  announcement Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  course       Course?       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  batch        Batch?        @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@index([announcementId])
+  @@index([courseId])
+  @@index([batchId])
+  @@map("announcement_targets")
 }
 
 model Exam {
@@ -186,6 +215,7 @@ model Course {
   batches     Batch[]
   exam        Exam         @relation(fields: [examId], references: [id], onDelete: Cascade)
   subjects    Subject[]
+  announcementTargets AnnouncementTarget[]
 
   @@unique([examId, name])
   @@index([examId])
@@ -259,6 +289,11 @@ enum CourseStatus {
 enum SubjectStatus {
   ACTIVE
   INACTIVE
+}
+
+enum AnnouncementScope {
+  COURSE
+  BATCH
 }
 
 enum ContentType {

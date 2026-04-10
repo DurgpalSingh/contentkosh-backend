@@ -1,5 +1,12 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.6] - Announcements Module + Websocket Integration
+**P.R Raised by** : shubh404-SE on **Date** : 2026-04-10
+
+### Added
+  - implimented announcement service logic + updated announcement schema
+  - implimented websockets to get announcements in real time.
+---
 ## Version [1.2.5] - Teacher resticted to his own test only
 **P.R Raised by** : shubh404-SE on **Date** : 2026-04-08
 
