@@ -22,15 +22,30 @@ import logger from '../utils/logger';
 function requireBusinessId(user: IUser): number {
   if (user.businessId === null || user.businessId === undefined) {
     logger.warn(`[announcement] missing businessId userId=${user.id} role=${user.role}`);
-    throw new ForbiddenError('Business context required');
+    throwForbidden('Business context required');
   }
   return user.businessId;
+}
+
+function throwBadRequest(message: string): never {
+  logger.warn(`[announcement] bad request: ${message}`);
+  throw new BadRequestError(message);
+}
+
+function throwForbidden(message: string): never {
+  logger.warn(`[announcement] forbidden: ${message}`);
+  throw new ForbiddenError(message);
+}
+
+function throwNotFound(resource: string): never {
+  logger.warn(`[announcement] not found: ${resource}`);
+  throw new NotFoundError(resource);
 }
 
 function parseIsoDate(label: string, value: string): Date {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) {
-    throw new BadRequestError(`Invalid ${label}`);
+    throwBadRequest(`Invalid ${label}`);
   }
   return d;
 }
@@ -41,49 +56,112 @@ function assertAtLeastOneVisibility(
   visibleToStudents: boolean,
 ): void {
   if (!visibleToAdmins && !visibleToTeachers && !visibleToStudents) {
-    throw new BadRequestError('At least one audience (admins, teachers, or students) must be selected');
+    throwBadRequest('At least one audience (admins, teachers, or students) must be selected');
   }
 }
 
-function buildTargetsFromDto(
+function normalizeAnnouncementTargets(
   dto: CreateAnnouncementDto | UpdateAnnouncementDto,
-  existing?: {
+  existingTargets?: {
     scope: AnnouncementScope;
     targetAllCourses: boolean;
     targetAllBatches: boolean;
+    courseIds: number[];
+    batchIds: number[];
   },
-): Array<{ courseId?: number | null; batchId?: number | null }> {
-  const scope = dto.scope ?? existing?.scope;
-  const targetAllCourses = dto.targetAllCourses ?? existing?.targetAllCourses;
-  const targetAllBatches = dto.targetAllBatches ?? existing?.targetAllBatches;
-
+): {
+  scope: AnnouncementScope;
+  targetAllCourses: boolean;
+  targetAllBatches: boolean;
+  courseIds: number[];
+  batchIds: number[];
+} {
+  const scope = dto.scope ?? existingTargets?.scope;
   if (scope === undefined) {
-    throw new BadRequestError('scope is required');
+    throwBadRequest('scope is required');
   }
 
+  return {
+    scope,
+    targetAllCourses: dto.targetAllCourses ?? existingTargets?.targetAllCourses ?? false,
+    targetAllBatches: dto.targetAllBatches ?? existingTargets?.targetAllBatches ?? false,
+    courseIds: dto.courseIds ?? existingTargets?.courseIds ?? [],
+    batchIds: dto.batchIds ?? existingTargets?.batchIds ?? [],
+  };
+}
+
+function validateHeadingAndContent(heading: string, content: string): void {
+  const checks = [
+    { condition: !heading, message: 'heading is required' },
+    { condition: !content, message: 'content is required' },
+    {
+      condition: heading.length > ANNOUNCEMENT_MAX_HEADING_LENGTH,
+      message: `heading must be at most ${ANNOUNCEMENT_MAX_HEADING_LENGTH} characters`,
+    },
+    {
+      condition: content.length > ANNOUNCEMENT_MAX_CONTENT_LENGTH,
+      message: `content must be at most ${ANNOUNCEMENT_MAX_CONTENT_LENGTH} characters`,
+    },
+  ];
+
+  checks.forEach(({ condition, message }) => {
+    if (condition) throwBadRequest(message);
+  });
+}
+
+function validateAnnouncementDates(startDate: Date, endDate: Date): void {
+  if (endDate < startDate) {
+    throwBadRequest('endDate must be on or after startDate');
+  }
+}
+
+function makeAnnouncementTargets(
+  scope: AnnouncementScope,
+  targetAllCourses: boolean,
+  targetAllBatches: boolean,
+  courseIds: number[],
+  batchIds: number[],
+): Array<{ courseId?: number | null; batchId?: number | null }> {
   if (scope === AnnouncementScope.COURSE) {
-    if (targetAllCourses) {
-      return [];
-    }
-    const ids = dto.courseIds ?? [];
-    if (ids.length === 0) {
-      throw new BadRequestError('courseIds required when scope is COURSE and targetAllCourses is false');
-    }
-    return ids.map((courseId) => ({ courseId, batchId: null }));
+    return targetAllCourses ? [] : courseIds.map((courseId) => ({ courseId, batchId: null }));
   }
 
   if (scope === AnnouncementScope.BATCH) {
-    if (targetAllBatches) {
-      return [];
-    }
-    const ids = dto.batchIds ?? [];
-    if (ids.length === 0) {
-      throw new BadRequestError('batchIds required when scope is BATCH and targetAllBatches is false');
-    }
-    return ids.map((batchId) => ({ batchId, courseId: null }));
+    return targetAllBatches ? [] : batchIds.map((batchId) => ({ batchId, courseId: null }));
   }
 
   return [];
+}
+
+function validateTargetRequirements(
+  scope: AnnouncementScope,
+  targetAllCourses: boolean,
+  targetAllBatches: boolean,
+  courseIds: number[],
+  batchIds: number[],
+): void {
+  const checks = [
+    {
+      condition: scope === AnnouncementScope.COURSE && targetAllCourses && courseIds.length > 0,
+      message: 'courseIds must be empty when targetAllCourses is true',
+    },
+    {
+      condition: scope === AnnouncementScope.COURSE && !targetAllCourses && courseIds.length === 0,
+      message: 'courseIds required when scope is COURSE and targetAllCourses is false',
+    },
+    {
+      condition: scope === AnnouncementScope.BATCH && targetAllBatches && batchIds.length > 0,
+      message: 'batchIds must be empty when targetAllBatches is true',
+    },
+    {
+      condition: scope === AnnouncementScope.BATCH && !targetAllBatches && batchIds.length === 0,
+      message: 'batchIds required when scope is BATCH and targetAllBatches is false',
+    },
+  ];
+
+  checks.forEach(({ condition, message }) => {
+    if (condition) throwBadRequest(message);
+  });
 }
 
 async function validateTargetsBelongToBusiness(
@@ -94,17 +172,63 @@ async function validateTargetsBelongToBusiness(
   courseIds: number[],
   batchIds: number[],
 ): Promise<void> {
-  if (scope === AnnouncementScope.COURSE && !targetAllCourses) {
-    const ok = await announcementRepo.validateCourseIdsBelongToBusiness(businessId, courseIds);
-    if (!ok) {
-      throw new BadRequestError('One or more courses are invalid for this business');
+  const validations = [
+    {
+      condition: scope === AnnouncementScope.COURSE && !targetAllCourses,
+      validator: () => announcementRepo.validateCourseIdsBelongToBusiness(businessId, courseIds),
+      errorMessage: 'One or more courses are invalid for this business',
+    },
+    {
+      condition: scope === AnnouncementScope.BATCH && !targetAllBatches,
+      validator: () => announcementRepo.validateBatchIdsBelongToBusiness(businessId, batchIds),
+      errorMessage: 'One or more batches are invalid for this business',
+    },
+  ];
+
+  for (const validation of validations) {
+    if (!validation.condition) continue;
+    const isValid = await validation.validator();
+    if (!isValid) {
+      throwBadRequest(validation.errorMessage);
     }
   }
-  if (scope === AnnouncementScope.BATCH && !targetAllBatches) {
-    const ok = await announcementRepo.validateBatchIdsBelongToBusiness(businessId, batchIds);
-    if (!ok) {
-      throw new BadRequestError('One or more batches are invalid for this business');
-    }
+}
+
+async function assertTeacherAnnouncementPermissions(
+  businessId: number,
+  userId: number,
+  role: UserRole,
+  scope: AnnouncementScope,
+  targetAllCourses: boolean,
+  targetAllBatches: boolean,
+  batchIds: number[],
+  visibleToStudents: boolean,
+): Promise<void> {
+  if (role !== UserRole.TEACHER) return;
+
+  const validationRules = [
+    {
+      condition: scope !== AnnouncementScope.BATCH,
+      message: 'Teachers can only use batch-scoped announcements',
+    },
+    {
+      condition: !visibleToStudents,
+      message: 'Teacher announcements must be visible to students',
+    },
+    {
+      condition: targetAllCourses,
+      message: 'Invalid target flags for teacher announcement',
+    },
+  ];
+
+  validationRules.forEach(({ condition, message }) => {
+    if (condition) throwBadRequest(message);
+  });
+
+  if (targetAllBatches) {
+    await assertTeacherTargetAllBatches(businessId, userId);
+  } else {
+    await assertTeacherOwnsBatches(businessId, userId, batchIds);
   }
 }
 
@@ -114,11 +238,11 @@ async function assertTeacherOwnsBatches(
   batchIds: number[],
 ): Promise<void> {
   if (batchIds.length === 0) return;
-  const allowed = new Set(await announcementRepo.findActiveBatchIdsForUser(businessId, userId));
-  for (const bid of batchIds) {
-    if (!allowed.has(bid)) {
+  const allowedBatchIds = new Set(await announcementRepo.findActiveBatchIdsForUser(businessId, userId));
+  for (const batchId of batchIds) {
+    if (!allowedBatchIds.has(batchId)) {
       logger.warn(
-        `[announcement] teacher batch denied userId=${userId} batchId=${bid}`,
+        `[announcement] teacher batch denied userId=${userId} batchId=${batchId}`,
       );
       throw new ForbiddenError('You can only target batches you belong to');
     }
@@ -131,7 +255,7 @@ async function assertTeacherTargetAllBatches(
 ): Promise<void> {
   const count = (await announcementRepo.findActiveBatchIdsForUser(businessId, userId)).length;
   if (count === 0) {
-    throw new BadRequestError('You must belong to at least one batch to create announcements');
+    throwBadRequest('You must belong to at least one batch to create announcements');
   }
 }
 
@@ -139,9 +263,9 @@ export const announcementService = {
   async getMyAnnouncements(user: IUser) {
     const businessId = requireBusinessId(user);
     logger.info(`[announcement] getMyAnnouncements userId=${user.id} role=${user.role} businessId=${businessId}`);
-    const rows = await announcementRepo.findMyAnnouncements(businessId, user.id, user.role);
-    logger.info(`[announcement] getMyAnnouncements count=${rows.length}`);
-    return rows;
+    const announcements = await announcementRepo.findMyAnnouncements(businessId, user.id, user.role);
+    logger.info(`[announcement] getMyAnnouncements count=${announcements.length}`);
+    return announcements;
   },
 
   async getManagedAnnouncements(user: IUser) {
@@ -149,97 +273,87 @@ export const announcementService = {
     logger.info(`[announcement] getManagedAnnouncements userId=${user.id} role=${user.role} businessId=${businessId}`);
 
     if (user.role === UserRole.ADMIN || user.role === UserRole.SUPERADMIN) {
-      const rows = await announcementRepo.findAllForBusinessAdmin(businessId);
-      logger.info(`[announcement] getManagedAnnouncements admin count=${rows.length}`);
-      return rows;
+      const announcements = await announcementRepo.findAllForBusinessAdmin(businessId);
+      logger.info(`[announcement] getManagedAnnouncements admin count=${announcements.length}`);
+      return announcements;
     }
 
     if (user.role === UserRole.TEACHER) {
-      const rows = await announcementRepo.findCreatedByUser(businessId, user.id);
-      logger.info(`[announcement] getManagedAnnouncements teacher count=${rows.length}`);
-      return rows;
+      const announcements = await announcementRepo.findCreatedByUser(businessId, user.id);
+      logger.info(`[announcement] getManagedAnnouncements teacher count=${announcements.length}`);
+      return announcements;
     }
 
-    throw new ForbiddenError('Not allowed to list managed announcements');
+    throwForbidden('Not allowed to list managed announcements');
   },
 
   async createAnnouncement(user: IUser, dto: CreateAnnouncementDto) {
     const businessId = requireBusinessId(user);
+    const isTeacher = user.role === UserRole.TEACHER;
+    const canManageAnnouncements =
+      user.role === UserRole.ADMIN ||
+      user.role === UserRole.SUPERADMIN ||
+      isTeacher;
+
     logger.info(
       `[announcement] create entry userId=${user.id} role=${user.role} businessId=${businessId} scope=${dto.scope}`,
     );
 
+    if (!canManageAnnouncements) {
+      throwForbidden('Not allowed to create announcements');
+    }
+
     const heading = dto.heading?.trim() ?? '';
     const content = dto.content?.trim() ?? '';
-    if (!heading) throw new BadRequestError('heading is required');
-    if (!content) throw new BadRequestError('content is required');
-    if (heading.length > ANNOUNCEMENT_MAX_HEADING_LENGTH) {
-      throw new BadRequestError(`heading must be at most ${ANNOUNCEMENT_MAX_HEADING_LENGTH} characters`);
-    }
-    if (content.length > ANNOUNCEMENT_MAX_CONTENT_LENGTH) {
-      throw new BadRequestError(`content must be at most ${ANNOUNCEMENT_MAX_CONTENT_LENGTH} characters`);
-    }
+    validateHeadingAndContent(heading, content);
 
     const startDate = parseIsoDate('startDate', dto.startDate);
     const endDate = parseIsoDate('endDate', dto.endDate);
-    if (endDate < startDate) {
-      throw new BadRequestError('endDate must be on or after startDate');
-    }
+    validateAnnouncementDates(startDate, endDate);
 
     const visibleToAdmins = dto.visibleToAdmins ?? false;
     const visibleToTeachers = dto.visibleToTeachers ?? false;
     const visibleToStudents = dto.visibleToStudents ?? false;
     assertAtLeastOneVisibility(visibleToAdmins, visibleToTeachers, visibleToStudents);
 
-    const targetAllCourses = dto.targetAllCourses ?? false;
-    const targetAllBatches = dto.targetAllBatches ?? false;
-
-    if (dto.scope === AnnouncementScope.COURSE && targetAllCourses && (dto.courseIds?.length ?? 0) > 0) {
-      throw new BadRequestError('courseIds must be empty when targetAllCourses is true');
-    }
-    if (dto.scope === AnnouncementScope.BATCH && targetAllBatches && (dto.batchIds?.length ?? 0) > 0) {
-      throw new BadRequestError('batchIds must be empty when targetAllBatches is true');
-    }
-
-    if (user.role === UserRole.TEACHER) {
-      if (dto.scope !== AnnouncementScope.BATCH) {
-        throw new BadRequestError('Teachers can only create batch-scoped announcements');
-      }
-      if (!visibleToStudents) {
-        throw new BadRequestError('Teacher announcements must be visible to students');
-      }
-      if (targetAllCourses) {
-        throw new BadRequestError('Invalid target flags for teacher announcement');
-      }
-      if (targetAllBatches) {
-        await assertTeacherTargetAllBatches(businessId, user.id);
-      } else {
-        await assertTeacherOwnsBatches(businessId, user.id, dto.batchIds ?? []);
-      }
-    }
-
-    if (user.role !== UserRole.ADMIN && user.role !== UserRole.SUPERADMIN && user.role !== UserRole.TEACHER) {
-      throw new ForbiddenError('Not allowed to create announcements');
-    }
-
-    const courseIds = dto.courseIds ?? [];
-    const batchIds = dto.batchIds ?? [];
-    await validateTargetsBelongToBusiness(
-      businessId,
-      dto.scope,
-      targetAllCourses,
-      targetAllBatches,
-      courseIds,
-      batchIds,
+    const targetSettings = normalizeAnnouncementTargets(dto);
+    validateTargetRequirements(
+      targetSettings.scope,
+      targetSettings.targetAllCourses,
+      targetSettings.targetAllBatches,
+      targetSettings.courseIds,
+      targetSettings.batchIds,
     );
 
-    const targets = buildTargetsFromDto({
-      ...dto,
-      targetAllCourses,
-      targetAllBatches,
-    });
+    await assertTeacherAnnouncementPermissions(
+      businessId,
+      user.id,
+      user.role,
+      targetSettings.scope,
+      targetSettings.targetAllCourses,
+      targetSettings.targetAllBatches,
+      targetSettings.batchIds,
+      visibleToStudents,
+    );
 
-    const created = await announcementRepo.createWithTargets({
+    await validateTargetsBelongToBusiness(
+      businessId,
+      targetSettings.scope,
+      targetSettings.targetAllCourses,
+      targetSettings.targetAllBatches,
+      targetSettings.courseIds,
+      targetSettings.batchIds,
+    );
+
+    const targets = makeAnnouncementTargets(
+      targetSettings.scope,
+      targetSettings.targetAllCourses,
+      targetSettings.targetAllBatches,
+      targetSettings.courseIds,
+      targetSettings.batchIds,
+    );
+
+    const createdAnnouncement = await announcementRepo.createWithTargets({
       heading,
       content,
       startDate,
@@ -249,82 +363,46 @@ export const announcementService = {
       visibleToAdmins,
       visibleToTeachers,
       visibleToStudents,
-      scope: dto.scope,
-      targetAllCourses,
-      targetAllBatches,
+      scope: targetSettings.scope,
+      targetAllCourses: targetSettings.targetAllCourses,
+      targetAllBatches: targetSettings.targetAllBatches,
       createdBy: user.id,
       updatedBy: null,
       targets,
     });
 
     const batchIdsForEmit = await announcementRepo.resolveBatchIdsForEmit(businessId, {
-      scope: created.scope,
-      targetAllCourses: created.targetAllCourses,
-      targetAllBatches: created.targetAllBatches,
-      targets: created.targets.map((t) => ({ courseId: t.courseId, batchId: t.batchId })),
+      scope: createdAnnouncement.scope,
+      targetAllCourses: createdAnnouncement.targetAllCourses,
+      targetAllBatches: createdAnnouncement.targetAllBatches,
+      targets: createdAnnouncement.targets.map((t) => ({ courseId: t.courseId, batchId: t.batchId })),
     });
-    emitAnnouncementCreated(businessId, batchIdsForEmit, { id: created.id, businessId });
+    emitAnnouncementCreated(businessId, batchIdsForEmit, { id: createdAnnouncement.id, businessId });
 
-    logger.info(`[announcement] create success id=${created.id} userId=${user.id}`);
-    return created;
+    logger.info(`[announcement] create success id=${createdAnnouncement.id} userId=${user.id}`);
+    return createdAnnouncement;
   },
 
   async updateAnnouncement(user: IUser, id: number, dto: UpdateAnnouncementDto) {
     const businessId = requireBusinessId(user);
+    const isTeacher = user.role === UserRole.TEACHER;
+    const isAdminOrSuperAdmin =
+      user.role === UserRole.ADMIN || user.role === UserRole.SUPERADMIN;
+
     logger.info(`[announcement] update entry id=${id} userId=${user.id} role=${user.role} businessId=${businessId}`);
 
     const existing = await announcementRepo.findAnnouncementByIdWithTargets(id, businessId);
     if (!existing) {
       logger.warn(`[announcement] update not found id=${id} businessId=${businessId}`);
-      throw new NotFoundError('Announcement');
+      throwNotFound('Announcement');
     }
 
-    if (user.role === UserRole.TEACHER) {
+    if (isTeacher) {
       if (existing.createdBy !== user.id) {
-        throw new ForbiddenError('You can only edit your own announcements');
+        throwForbidden('You can only edit your own announcements');
       }
-    } else if (user.role !== UserRole.ADMIN && user.role !== UserRole.SUPERADMIN) {
-      throw new ForbiddenError('Not allowed to update announcements');
-    }
-
-    const mergedScope = dto.scope ?? existing.scope;
-    const mergedTargetAllCourses = dto.targetAllCourses ?? existing.targetAllCourses;
-    const mergedTargetAllBatches = dto.targetAllBatches ?? existing.targetAllBatches;
-
-    if (user.role === UserRole.TEACHER) {
-      if (mergedScope !== AnnouncementScope.BATCH) {
-        throw new BadRequestError('Teachers can only use batch-scoped announcements');
-      }
-    }
-
-    const heading =
-      dto.heading !== undefined ? dto.heading.trim() : existing.heading;
-    const content =
-      dto.content !== undefined ? dto.content.trim() : existing.content;
-    if (!heading) throw new BadRequestError('heading is required');
-    if (!content) throw new BadRequestError('content is required');
-    if (heading.length > ANNOUNCEMENT_MAX_HEADING_LENGTH) {
-      throw new BadRequestError(`heading must be at most ${ANNOUNCEMENT_MAX_HEADING_LENGTH} characters`);
-    }
-    if (content.length > ANNOUNCEMENT_MAX_CONTENT_LENGTH) {
-      throw new BadRequestError(`content must be at most ${ANNOUNCEMENT_MAX_CONTENT_LENGTH} characters`);
-    }
-
-    const startDate =
-      dto.startDate !== undefined ? parseIsoDate('startDate', dto.startDate) : existing.startDate;
-    const endDate =
-      dto.endDate !== undefined ? parseIsoDate('endDate', dto.endDate) : existing.endDate;
-    if (endDate < startDate) {
-      throw new BadRequestError('endDate must be on or after startDate');
-    }
-
-    const visibleToAdmins = dto.visibleToAdmins ?? existing.visibleToAdmins;
-    const visibleToTeachers = dto.visibleToTeachers ?? existing.visibleToTeachers;
-    const visibleToStudents = dto.visibleToStudents ?? existing.visibleToStudents;
-    assertAtLeastOneVisibility(visibleToAdmins, visibleToTeachers, visibleToStudents);
-
-    if (user.role === UserRole.TEACHER && !visibleToStudents) {
-      throw new BadRequestError('Teacher announcements must be visible to students');
+    } else if (!isAdminOrSuperAdmin) {
+      throwForbidden('Not allowed to update announcements');
     }
 
     const existingCourseIds = existing.targets
@@ -334,66 +412,87 @@ export const announcementService = {
       .map((t) => t.batchId)
       .filter((b): b is number => b !== null && b !== undefined);
 
-    const effectiveCourseIds =
-      dto.courseIds !== undefined ? dto.courseIds : existingCourseIds;
-    const effectiveBatchIds =
-      dto.batchIds !== undefined ? dto.batchIds : existingBatchIds;
+    const targetSettings = normalizeAnnouncementTargets(dto, {
+      scope: existing.scope,
+      targetAllCourses: existing.targetAllCourses,
+      targetAllBatches: existing.targetAllBatches,
+      courseIds: existingCourseIds,
+      batchIds: existingBatchIds,
+    });
 
-    const targetsTouched =
+    if (isTeacher && targetSettings.scope !== AnnouncementScope.BATCH) {
+      throwBadRequest('Teachers can only use batch-scoped announcements');
+    }
+
+    const heading = dto.heading !== undefined ? dto.heading.trim() : existing.heading;
+    const content = dto.content !== undefined ? dto.content.trim() : existing.content;
+    validateHeadingAndContent(heading, content);
+
+    const startDate =
+      dto.startDate !== undefined ? parseIsoDate('startDate', dto.startDate) : existing.startDate;
+    const endDate =
+      dto.endDate !== undefined ? parseIsoDate('endDate', dto.endDate) : existing.endDate;
+    validateAnnouncementDates(startDate, endDate);
+
+    const visibleToAdmins = dto.visibleToAdmins ?? existing.visibleToAdmins;
+    const visibleToTeachers = dto.visibleToTeachers ?? existing.visibleToTeachers;
+    const visibleToStudents = dto.visibleToStudents ?? existing.visibleToStudents;
+    assertAtLeastOneVisibility(visibleToAdmins, visibleToTeachers, visibleToStudents);
+
+    if (isTeacher && !visibleToStudents) {
+      throwBadRequest('Teacher announcements must be visible to students');
+    }
+
+    const targetsUpdated =
       dto.scope !== undefined ||
       dto.targetAllCourses !== undefined ||
       dto.targetAllBatches !== undefined ||
       dto.courseIds !== undefined ||
       dto.batchIds !== undefined;
 
-    if (mergedScope === AnnouncementScope.COURSE && mergedTargetAllCourses && effectiveCourseIds.length > 0) {
-      throw new BadRequestError('courseIds must be empty when targetAllCourses is true');
-    }
-    if (mergedScope === AnnouncementScope.BATCH && mergedTargetAllBatches && effectiveBatchIds.length > 0) {
-      throw new BadRequestError('batchIds must be empty when targetAllBatches is true');
-    }
+    validateTargetRequirements(
+      targetSettings.scope,
+      targetSettings.targetAllCourses,
+      targetSettings.targetAllBatches,
+      targetSettings.courseIds,
+      targetSettings.batchIds,
+    );
 
-    if (targetsTouched) {
+    if (targetsUpdated) {
       await validateTargetsBelongToBusiness(
         businessId,
-        mergedScope,
-        mergedTargetAllCourses,
-        mergedTargetAllBatches,
-        effectiveCourseIds,
-        effectiveBatchIds,
+        targetSettings.scope,
+        targetSettings.targetAllCourses,
+        targetSettings.targetAllBatches,
+        targetSettings.courseIds,
+        targetSettings.batchIds,
       );
     }
 
     let targets: Array<{ courseId?: number | null; batchId?: number | null }> | undefined;
-    if (targetsTouched) {
-      targets = buildTargetsFromDto(
-        {
-          ...dto,
-          scope: mergedScope,
-          targetAllCourses: mergedTargetAllCourses,
-          targetAllBatches: mergedTargetAllBatches,
-          courseIds: effectiveCourseIds,
-          batchIds: effectiveBatchIds,
-        },
-        {
-          scope: mergedScope,
-          targetAllCourses: mergedTargetAllCourses,
-          targetAllBatches: mergedTargetAllBatches,
-        },
+    if (targetsUpdated) {
+      targets = makeAnnouncementTargets(
+        targetSettings.scope,
+        targetSettings.targetAllCourses,
+        targetSettings.targetAllBatches,
+        targetSettings.courseIds,
+        targetSettings.batchIds,
       );
 
-      if (user.role === UserRole.TEACHER) {
-        if (mergedTargetAllBatches) {
-          await assertTeacherTargetAllBatches(businessId, user.id);
-        } else {
-          const ids = targets.map((t) => t.batchId).filter((b): b is number => b !== null && b !== undefined);
-          await assertTeacherOwnsBatches(businessId, user.id, ids);
-        }
-      }
+      await assertTeacherAnnouncementPermissions(
+        businessId,
+        user.id,
+        user.role,
+        targetSettings.scope,
+        targetSettings.targetAllCourses,
+        targetSettings.targetAllBatches,
+        targetSettings.batchIds,
+        visibleToStudents,
+      );
     }
 
     try {
-      const patch: AnnouncementUpdateRepoInput = {
+      const updatePayload: AnnouncementUpdateRepoInput = {
         heading,
         content,
         startDate,
@@ -404,26 +503,26 @@ export const announcementService = {
         visibleToStudents,
         updatedBy: user.id,
       };
-      if (dto.scope !== undefined) patch.scope = dto.scope;
-      if (dto.targetAllCourses !== undefined) patch.targetAllCourses = dto.targetAllCourses;
-      if (dto.targetAllBatches !== undefined) patch.targetAllBatches = dto.targetAllBatches;
-      if (targets !== undefined) patch.targets = targets;
+      if (dto.scope !== undefined) updatePayload.scope = dto.scope;
+      if (dto.targetAllCourses !== undefined) updatePayload.targetAllCourses = dto.targetAllCourses;
+      if (dto.targetAllBatches !== undefined) updatePayload.targetAllBatches = dto.targetAllBatches;
+      if (targets !== undefined) updatePayload.targets = targets;
 
-      const updated = await announcementRepo.updateWithTargets(id, businessId, patch);
+      const updatedAnnouncement = await announcementRepo.updateWithTargets(id, businessId, updatePayload);
 
       const batchIdsForEmit = await announcementRepo.resolveBatchIdsForEmit(businessId, {
-        scope: updated.scope,
-        targetAllCourses: updated.targetAllCourses,
-        targetAllBatches: updated.targetAllBatches,
-        targets: updated.targets.map((t) => ({ courseId: t.courseId, batchId: t.batchId })),
+        scope: updatedAnnouncement.scope,
+        targetAllCourses: updatedAnnouncement.targetAllCourses,
+        targetAllBatches: updatedAnnouncement.targetAllBatches,
+        targets: updatedAnnouncement.targets.map((t) => ({ courseId: t.courseId, batchId: t.batchId })),
       });
-      emitAnnouncementUpdated(businessId, batchIdsForEmit, { id: updated.id, businessId });
+      emitAnnouncementUpdated(businessId, batchIdsForEmit, { id: updatedAnnouncement.id, businessId });
 
-      logger.info(`[announcement] update success id=${updated.id} userId=${user.id}`);
-      return updated;
+      logger.info(`[announcement] update success id=${updatedAnnouncement.id} userId=${user.id}`);
+      return updatedAnnouncement;
     } catch (e) {
       if (e instanceof Error && e.message === 'ANNOUNCEMENT_NOT_FOUND') {
-        throw new NotFoundError('Announcement');
+        throwNotFound('Announcement');
       }
       throw e;
     }
@@ -435,15 +534,15 @@ export const announcementService = {
 
     const existing = await announcementRepo.findAnnouncementByIdWithTargets(id, businessId);
     if (!existing) {
-      throw new NotFoundError('Announcement');
+      throwNotFound('Announcement');
     }
 
     if (user.role === UserRole.TEACHER) {
       if (existing.createdBy !== user.id) {
-        throw new ForbiddenError('You can only delete your own announcements');
+        throwForbidden('You can only delete your own announcements');
       }
     } else if (user.role !== UserRole.ADMIN && user.role !== UserRole.SUPERADMIN) {
-      throw new ForbiddenError('Not allowed to delete announcements');
+      throwForbidden('Not allowed to delete announcements');
     }
 
     const batchIdsForEmit = await announcementRepo.resolveBatchIdsForEmit(businessId, {
@@ -457,7 +556,7 @@ export const announcementService = {
       await announcementRepo.hardDeleteAnnouncement(id, businessId);
     } catch (e) {
       if (e instanceof Error && e.message === 'ANNOUNCEMENT_NOT_FOUND') {
-        throw new NotFoundError('Announcement');
+        throwNotFound('Announcement');
       }
       throw e;
     }
