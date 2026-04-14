@@ -39,6 +39,21 @@ export const getManagedAnnouncements = async (req: AuthRequest, res: Response) =
   ApiResponseHandler.success(res, data, 'Announcements fetched successfully');
 };
 
+export const getUserAnnouncementBundle = async (req: AuthRequest, res: Response) => {
+  const user = req.user;
+  if (!user) {
+    logger.warn('[announcement] getUserAnnouncementBundle missing user');
+    throw new UnauthorizedError('Unauthorized');
+  }
+
+  logger.info(`[announcement] getUserAnnouncementBundle request userId=${user.id}`);
+  const data = await announcementService.getUserAnnouncementBundle(user);
+  logger.info(
+    `[announcement] getUserAnnouncementBundle response userId=${user.id} received=${data.received.length} managed=${data.managed.length}`,
+  );
+  ApiResponseHandler.success(res, data, 'Announcements fetched successfully');
+};
+
 export const createAnnouncement = async (req: AuthRequest, res: Response) => {
   const user = req.user;
   if (!user) {

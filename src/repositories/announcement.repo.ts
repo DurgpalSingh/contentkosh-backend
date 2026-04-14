@@ -258,6 +258,92 @@ export async function findCreatedByUser(
   });
 }
 
+export async function findUserAnnouncementBundle(
+  businessId: number,
+  userId: number,
+  role: UserRole,
+): Promise<{ received: AnnouncementWithRelations[]; managed: AnnouncementWithRelations[] }> {
+  const visibilityField = visibilityFieldForRole(role);
+  if (!visibilityField) {
+    return { received: [], managed: [] };
+  }
+
+  const isAdminOrSuperAdmin = role === UserRole.ADMIN || role === UserRole.SUPERADMIN;
+  const isTeacher = role === UserRole.TEACHER;
+
+  const base: Prisma.AnnouncementWhereInput = {
+    businessId,
+    ...activeDateWhere(),
+    [visibilityField]: true,
+  };
+
+  const orderBy: Prisma.AnnouncementOrderByWithRelationInput = { createdAt: 'desc' };
+
+  const receivedWhere: Prisma.AnnouncementWhereInput = isAdminOrSuperAdmin
+    ? base
+    : {
+        ...base,
+        OR: [
+          { scope: AnnouncementScope.COURSE, targetAllCourses: true },
+          { scope: AnnouncementScope.BATCH, targetAllBatches: true },
+          {
+            scope: AnnouncementScope.COURSE,
+            targetAllCourses: false,
+            targets: {
+              some: {
+                course: {
+                  exam: { businessId },
+                  batches: {
+                    some: {
+                      batchUsers: { some: { userId, isActive: true } },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          {
+            scope: AnnouncementScope.BATCH,
+            targetAllBatches: false,
+            targets: {
+              some: {
+                batch: {
+                  course: { exam: { businessId } },
+                  batchUsers: { some: { userId, isActive: true } },
+                },
+              },
+            },
+          },
+        ],
+      };
+
+  const managedWhere: Prisma.AnnouncementWhereInput | null = isAdminOrSuperAdmin
+    ? { businessId }
+    : isTeacher
+      ? { businessId, createdBy: userId }
+      : null;
+
+  const receivedQuery = prisma.announcement.findMany({
+    where: receivedWhere,
+    include: announcementListInclude,
+    orderBy,
+  });
+
+  if (!managedWhere) {
+    const received = await receivedQuery;
+    return { received, managed: [] };
+  }
+
+  const managedQuery = prisma.announcement.findMany({
+    where: managedWhere,
+    include: announcementListInclude,
+    orderBy,
+  });
+
+  const [received, managed] = await prisma.$transaction([receivedQuery, managedQuery]);
+  return { received, managed };
+}
+
 export interface AnnouncementCreateRepoInput {
   heading: string;
   content: string;

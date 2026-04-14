@@ -6,6 +6,7 @@ import {
   getAnnouncementById,
   getManagedAnnouncements,
   getMyAnnouncements,
+  getUserAnnouncementBundle,
   updateAnnouncement,
 } from '../controllers/announcement.controller';
 import { authorize } from '../middlewares/auth.middleware';
@@ -27,6 +28,22 @@ const router = Router();
  *         description: Forbidden
  */
 router.get('/my', getMyAnnouncements);
+
+/**
+ * @swagger
+ * /api/announcements/user:
+ *   get:
+ *     summary: Get announcements for the current user (received + managed)
+ *     tags: [Announcements]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Announcements fetched successfully
+ *       403:
+ *         description: Forbidden
+ */
+router.get('/user', getUserAnnouncementBundle);
 
 /**
  * @swagger

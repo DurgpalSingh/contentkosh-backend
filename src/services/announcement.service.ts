@@ -268,6 +268,25 @@ export const announcementService = {
     return announcements;
   },
 
+  async getUserAnnouncementBundle(user: IUser) {
+    const businessId = requireBusinessId(user);
+    logger.info(
+      `[announcement] getUserAnnouncementBundle userId=${user.id} role=${user.role} businessId=${businessId}`,
+    );
+
+    const { received, managed } = await announcementRepo.findUserAnnouncementBundle(
+      businessId,
+      user.id,
+      user.role,
+    );
+
+    logger.info(
+      `[announcement] getUserAnnouncementBundle received=${received.length} managed=${managed.length}`,
+    );
+
+    return { received, managed };
+  },
+
   async getManagedAnnouncements(user: IUser) {
     const businessId = requireBusinessId(user);
     logger.info(`[announcement] getManagedAnnouncements userId=${user.id} role=${user.role} businessId=${businessId}`);
