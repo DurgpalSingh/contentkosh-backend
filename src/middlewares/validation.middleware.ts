@@ -9,12 +9,14 @@ import * as userService from '../services/user.service';
 import { ForbiddenError, NotFoundError } from '../errors/api.errors';
 import { ContentService } from '../services/content.service';
 import { TeacherService } from '../services/teacher.service';
+import { StudentService } from '../services/student.service';
 
 const examService = new ExamService();
 const batchService = new BatchService();
 const courseService = new CourseService();
 const contentService = new ContentService();
 const teacherService = new TeacherService();
+const studentService = new StudentService();
 
 export const validateIdParam = (paramName: string = 'id') => {
     return (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -296,3 +298,60 @@ export const authorizeTeacher = async (req: AuthRequest, res: Response, next: Ne
         ApiResponseHandler.error(res, 'Internal server error during authorization');
     }
 }
+
+/**
+ * Middleware to validate and authorize student creation
+ * Only ADMIN or SUPERADMIN can create students
+ */
+export const authorizeStudentAccess = async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+        const businessId = Number(req.body?.businessId);
+
+        if (!businessId || !Number.isInteger(businessId)) {
+            return ApiResponseHandler.badRequest(res, 'Invalid Business ID');
+        }
+
+        if (!req.user) {
+            return ApiResponseHandler.error(res, 'Unauthorized', 401);
+        }
+
+        await studentService.validateStudentCreationAuth(businessId, req.user);
+        next();
+    } catch (error: any) {
+        if (error instanceof ForbiddenError) {
+            return ApiResponseHandler.error(res, error.message, 403);
+        }
+        console.error('Authorization error:', error);
+        ApiResponseHandler.error(res, 'Internal server error during authorization');
+    }
+};
+
+/**
+ * Middleware to validate student access
+ * Users in same business or admins can access student profiles
+ */
+export const authorizeStudent = async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+        const studentId = Number(req.params.studentId);
+
+        if (!studentId || !Number.isInteger(studentId)) {
+            return ApiResponseHandler.badRequest(res, 'Invalid Student ID');
+        }
+
+        if (!req.user) {
+            return ApiResponseHandler.error(res, 'Unauthorized', 401);
+        }
+
+        await studentService.validateStudentAccess(studentId, req.user);
+        next();
+    } catch (error: any) {
+        if (error instanceof NotFoundError) {
+            return ApiResponseHandler.notFound(res, error.message);
+        }
+        if (error instanceof ForbiddenError) {
+            return ApiResponseHandler.error(res, error.message, 403);
+        }
+        console.error('Authorization error:', error);
+        ApiResponseHandler.error(res, 'Internal server error during authorization');
+    }
+};
