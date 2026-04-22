@@ -3,33 +3,37 @@ import { ParsedQuestion } from '../dtos/bulkUpload.dto';
 import logger from '../utils/logger';
 
 /**
- * Recursively extracts all text from a content node and its children.
- * Preserves newlines between block-level children.
+ * Recursively extracts plain text from a node, joining children with newlines.
+ * Skips nested tables entirely (they are metadata/context, not question content).
  */
-function extractText(node: OfficeContentNode): string {
+function extractText(node: OfficeContentNode, skipNestedTables = false): string {
+  if (skipNestedTables && node.type === 'table') return '';
+
   if (!node.children || node.children.length === 0) {
     return (node.text ?? '').trim();
   }
-  return node.children
-    .map(child => extractText(child))
-    .filter(t => t.length > 0)
-    .join('\n');
+
+  const parts = node.children
+    .map(child => extractText(child, skipNestedTables))
+    .filter(t => t.length > 0);
+
+  return parts.join('\n');
 }
 
 /**
- * Extracts all text from a cell node, joining child paragraphs with newlines.
+ * Extracts text from a cell, skipping any nested tables (e.g. location metadata tables).
  */
 function cellText(cell: OfficeContentNode): string {
-  return extractText(cell).trim();
+  return extractText(cell, true).trim();
 }
 
 /**
  * Given a table node, extracts rows as [fieldText, valueText] pairs.
- * Each row has two cells: Field column and Value column.
  */
 function tableToRows(table: OfficeContentNode): Array<[string, string]> {
   const rows: Array<[string, string]> = [];
   const rowNodes = (table.children ?? []).filter(n => n.type === 'row');
+
   for (const row of rowNodes) {
     const cells = (row.children ?? []).filter(n => n.type === 'cell');
     if (cells.length >= 2) {
@@ -38,20 +42,21 @@ function tableToRows(table: OfficeContentNode): Array<[string, string]> {
       rows.push([field, value]);
     }
   }
+
   return rows;
 }
 
 /**
  * Parses option lines from the Options cell value.
- * Handles both "A. Option\nB. Option" and "A. Option B. Option" formats.
+ * Handles "A. Option\nB. Option" and "A. Option B. Option" (newlines lost).
  */
 function parseOptions(raw: string): string[] {
-  // Split on newlines first, then look for A./B./C./D. patterns
-  const lines = raw.split('\n').map(l => l.trim()).filter(l => l.length > 0);
   const options: string[] = [];
+  // Split on newlines first
+  const lines = raw.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
   for (const line of lines) {
-    // Each line may contain multiple options if newlines were lost
-    // Split on option label boundaries: A. B. C. D.
+    // A line may contain multiple options if newlines were collapsed
     const parts = line.split(/(?=[A-D]\.\s)/);
     for (const part of parts) {
       const trimmed = part.trim();
@@ -60,34 +65,34 @@ function parseOptions(raw: string): string[] {
       }
     }
   }
+
   return options;
 }
 
 /**
- * Resolves answer labels for SINGLE_CHOICE/MULTIPLE_CHOICE.
- * The answer cell may contain option text (e.g. "Delhi") or labels (e.g. "B").
- * We try to match against option texts first, then fall back to label matching.
+ * Resolves the answer to option labels (A, B, C...) for choice questions.
+ * The answer cell may contain option text ("Delhi") or labels ("B") or
+ * comma-separated texts ("Java, Python").
  */
 function resolveAnswerLabels(answerRaw: string, options: string[]): string {
   const answerClean = answerRaw.trim();
 
-  // Check if answer is already a label like "B" or "A, C"
-  const labelPattern = /^[A-D](,\s*[A-D])*$/i;
-  if (labelPattern.test(answerClean)) {
+  // Already a label or comma-separated labels like "B" or "A, C"
+  if (/^[A-D](,\s*[A-D])*$/i.test(answerClean)) {
     return answerClean.toUpperCase();
   }
 
-  // Answer may be option text(s) separated by commas — match against option texts
+  // Try to match answer text(s) against option texts
   const answerParts = answerClean.split(',').map(p => p.trim().toLowerCase());
   const matchedLabels: string[] = [];
+
   for (const part of answerParts) {
     for (const opt of options) {
-      // opt is like "A. Mumbai" — extract label and text
       const match = opt.match(/^([A-D])\.\s*(.+)$/i);
       if (match) {
-        const label = match[1]?.toUpperCase() ?? '';
+        const label = (match[1] ?? '').toUpperCase();
         const text = (match[2] ?? '').trim().toLowerCase();
-        if (text === part || text.startsWith(part)) {
+        if (text === part || text.startsWith(part) || part.startsWith(text)) {
           matchedLabels.push(label);
           break;
         }
@@ -95,12 +100,14 @@ function resolveAnswerLabels(answerRaw: string, options: string[]): string {
     }
   }
 
-  if (matchedLabels.length > 0) {
-    return matchedLabels.join(', ');
-  }
+  return matchedLabels.length > 0 ? matchedLabels.join(', ') : answerClean;
+}
 
-  // Return as-is if we can't resolve
-  return answerClean;
+/**
+ * Normalises a field name: lowercase, trim, collapse whitespace.
+ */
+function normaliseField(raw: string): string {
+  return raw.toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
 export class DocParserService {
@@ -111,8 +118,8 @@ export class DocParserService {
 
     logger.info(`DocParserService: AST has ${ast.content.length} top-level nodes`);
 
-    // Find all table nodes in the document (each question is one table)
-    const tables = ast.content.filter(node => node.type === 'table');
+    // Collect all table nodes recursively (handles tables nested inside other containers)
+    const tables = this.collectTables(ast.content);
 
     logger.info(`DocParserService: Found ${tables.length} table(s)`);
 
@@ -121,17 +128,18 @@ export class DocParserService {
     for (const table of tables) {
       const rows = tableToRows(table);
 
-      // Build a field→value map from the rows (case-insensitive field names)
+      // Build field→value map, skipping header rows
       const fieldMap: Record<string, string> = {};
       for (const [field, value] of rows) {
-        // Skip header rows (Field/Value)
-        if (field === 'field' || field === 'value') continue;
-        if (field.length > 0) {
-          fieldMap[field] = value;
+        const norm = normaliseField(field);
+        if (norm === 'field' || norm === 'value' || norm === '') continue;
+        // Only store first occurrence of each field
+        if (!(norm in fieldMap)) {
+          fieldMap[norm] = value;
         }
       }
 
-      // Must have at least a question field to be a question table
+      // Must have a question field to be a question table
       const questionText = fieldMap['question'] ?? '';
       if (!questionText) continue;
 
@@ -142,23 +150,34 @@ export class DocParserService {
 
       const options = optionsRaw ? parseOptions(optionsRaw) : [];
 
-      // Resolve answer to labels for choice questions
       let answer = answerRaw;
       if ((type === 'SINGLE_CHOICE' || type === 'MULTIPLE_CHOICE') && options.length > 0) {
         answer = resolveAnswerLabels(answerRaw, options);
       }
 
-      questions.push({
-        questionText,
-        type,
-        options,
-        answer,
-        solution: solutionRaw,
-      });
+      questions.push({ questionText, type, options, answer, solution: solutionRaw });
     }
 
-    logger.info(`DocParserService: Extracted ${questions.length} question(s) from tables`);
+    logger.info(`DocParserService: Extracted ${questions.length} question(s)`);
 
     return questions;
+  }
+
+  /**
+   * Recursively collects all table nodes from a list of content nodes.
+   * Top-level tables are returned first; nested tables inside non-table nodes are also included.
+   * Tables that are children of other tables (nested metadata tables) are excluded.
+   */
+  private collectTables(nodes: OfficeContentNode[]): OfficeContentNode[] {
+    const tables: OfficeContentNode[] = [];
+    for (const node of nodes) {
+      if (node.type === 'table') {
+        tables.push(node);
+        // Don't recurse into table children — nested tables are metadata, not questions
+      } else if (node.children && node.children.length > 0) {
+        tables.push(...this.collectTables(node.children));
+      }
+    }
+    return tables;
   }
 }
