@@ -1,13 +1,24 @@
-import { Teacher, UserRole } from '@prisma/client';
+import { Teacher } from '@prisma/client';
 import * as teacherRepo from '../repositories/teacher.repo';
-import * as userRepo from '../repositories/user.repo';
 import { CreateTeacherDto, UpdateTeacherDto } from '../dtos/teacher.dto';
 import { TeacherMapper } from '../mappers/teacher.mapper';
-import { NotFoundError, BadRequestError, ForbiddenError } from '../errors/api.errors';
+import { NotFoundError, BadRequestError } from '../errors/api.errors';
 import { IUser } from '../dtos/auth.dto';
+import { ProfileAuthorizationService } from './profile-authorization.service';
 import logger from '../utils/logger';
 
 export class TeacherService {
+    /**
+     * Validate experience years (teacher-specific validation)
+     * @throws BadRequestError if experience years is negative
+     */
+    private static validateExperienceYears(experienceYears: number): void {
+        if (experienceYears < 0) {
+            logger.warn('Validation failed: Negative experience years', { experienceYears });
+            throw new BadRequestError('Experience years cannot be negative');
+        }
+    }
+
     /**
      * Create a new teacher profile
      */
@@ -18,37 +29,23 @@ export class TeacherService {
             createdBy: user.id
         });
 
-        // TODO : need to change these repeated checks
-        // Verify user has permission to create teacher (must be admin or from the same business)
-        if (user.role !== UserRole.ADMIN && user.businessId !== data.businessId) {
-            throw new ForbiddenError('You do not have permission to create teachers for this business');
-        }
+        // Single authorization check for creation
+        ProfileAuthorizationService.validateAccess(user, data.businessId, 'create');
 
-        // Verify the user exists and belongs to the business
-        const targetUser = await userRepo.findPublicById(data.userId);
-        if (!targetUser) {
-            throw new NotFoundError('User not found');
-        }
+        // Validate user exists and belongs to business
+        await ProfileAuthorizationService.validateUserBelongsToBusiness(data.userId, data.businessId);
 
-        if (targetUser.businessId !== data.businessId) {
-            throw new BadRequestError('User does not belong to the specified business');
-        }
-
-        // Check if teacher profile already exists for this user
+        // Check if teacher already exists
         const existingTeacher = await teacherRepo.findTeacherByUserId(data.userId);
-        if (existingTeacher) {
-            throw new BadRequestError('Teacher profile already exists for this user');
-        }
+        ProfileAuthorizationService.ensureProfileDoesNotExist(existingTeacher, data.userId, 'Teacher');
 
-        // Validate experience years
-        if (data.professional.experienceYears < 0) {
-            throw new BadRequestError('Experience years cannot be negative');
-        }
+        // Validate teacher-specific data
+        TeacherService.validateExperienceYears(data.professional.experienceYears);
 
         try {
             const createData = TeacherMapper.toCreateInput(data, user.id);
-
             const teacher = await teacherRepo.createTeacher(createData);
+
             logger.info('Teacher profile created successfully', {
                 teacherId: teacher.id,
                 userId: data.userId
@@ -78,11 +75,7 @@ export class TeacherService {
             throw new NotFoundError('Teacher profile not found');
         }
 
-        // TODO : need to change these repeated checks
-        // Check if user has access (admin or same business)
-        if (user.role !== UserRole.ADMIN && user.businessId !== teacher.businessId) {
-            throw new ForbiddenError('You do not have access to this teacher profile');
-        }
+        ProfileAuthorizationService.validateAccess(user, teacher.businessId, 'read', teacher.userId);
 
         return teacher;
     }
@@ -105,23 +98,17 @@ export class TeacherService {
             throw new NotFoundError('Teacher profile not found');
         }
 
-        // TODO : need to change these repeated checks
-        // Check if user has permission to update (admin, same business, or own profile)
-        if (user.role !== UserRole.ADMIN &&
-            user.businessId !== teacher.businessId &&
-            user.id !== teacher.userId) {
-            throw new ForbiddenError('You do not have permission to update this teacher profile');
-        }
+        ProfileAuthorizationService.validateAccess(user, teacher.businessId, 'write', teacher.userId);
 
-        // Validate experience years if being updated
-        if (data.professional?.experienceYears !== undefined && data.professional.experienceYears < 0) {
-            throw new BadRequestError('Experience years cannot be negative');
+        // Validate teacher-specific data if being updated
+        if (data.professional?.experienceYears !== undefined) {
+            TeacherService.validateExperienceYears(data.professional.experienceYears);
         }
 
         try {
             const updateData = TeacherMapper.toUpdateInput(data, user.id);
-
             const updatedTeacher = await teacherRepo.updateTeacher(teacherId, updateData);
+
             logger.info('Teacher profile updated successfully', {
                 teacherId,
                 updatedBy: user.id
@@ -151,41 +138,35 @@ export class TeacherService {
             throw new NotFoundError('Teacher profile not found');
         }
 
-        // TODO : need to change these repeated checks
-        // Check if user has access (admin or same business)
-        if (user.role !== UserRole.ADMIN && user.businessId !== teacher.businessId) {
-            throw new ForbiddenError('You do not have access to this teacher profile');
-        }
+        ProfileAuthorizationService.validateAccess(user, teacher.businessId, 'read', teacher.userId);
 
         return teacher;
     }
 
+    /**
+     * Validate user can create a teacher for the given business
+     */
     async validateTeacherCreationAuth(businessId: number, user: IUser): Promise<void> {
-
-        // Only ADMIN or SUPERADMIN can create teachers
-        if (user.role !== UserRole.ADMIN && user.role !== UserRole.SUPERADMIN) {
-            throw new ForbiddenError('Only administrators can create teacher profiles');
-        }
-
-        // TODO : need to change these repeated checks
-        // Check if user belongs to the business (except SUPERADMIN)
-        if (user.role === UserRole.ADMIN && user.businessId !== businessId) {
-            throw new ForbiddenError('You do not have access to this business');
-        }
+        ProfileAuthorizationService.validateAccess(user, businessId, 'create');
+        logger.info('TeacherService: Teacher creation authorization validated', {
+            userId: user.id,
+            businessId
+        });
     }
 
+    /**
+     * Validate user can access the given teacher profile
+     */
     async validateTeacherAccess(teacherId: number, user: IUser): Promise<void> {
-
         const teacher = await teacherRepo.findTeacherById(teacherId);
         if (!teacher) {
             throw new NotFoundError('Teacher profile not found');
         }
 
-        // TODO : need to change these repeated checks
-        if (user.role === UserRole.SUPERADMIN || user.id === teacher.userId || user.businessId === teacher.businessId) {
-            return;
-        }
-
-        throw new ForbiddenError('You do not have access to this teacher profile');
+        ProfileAuthorizationService.validateAccess(user, teacher.businessId, 'read', teacher.userId);
+        logger.info('TeacherService: Teacher access validated', {
+            teacherId,
+            userId: user.id
+        });
     }
 }
