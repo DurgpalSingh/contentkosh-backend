@@ -6,6 +6,7 @@ import { QuestionType } from '../constants/test-enums';
 import { DocParserService } from './docParser.service';
 import { QuestionValidatorService } from './questionValidator.service';
 import { bulkUploadSessionStore } from '../utils/bulkUploadSession.store';
+import { sanitizeRequiredQuillHtml, sanitizeOptionalQuillHtml } from '../utils/sanitizeHtml';
 import logger from '../utils/logger';
 
 const CHOICE_TYPES = ['SINGLE_CHOICE', 'MULTIPLE_CHOICE'];
@@ -82,9 +83,9 @@ export class BulkUploadService {
 
         const question = await tx.testQuestion.create({
           data: {
-            text: q.questionText,
+            text: sanitizeRequiredQuillHtml(q.questionText, 'questionText', { testId, testType }),
             type: typeInt,
-            explanation: q.solution ?? null,
+            explanation: sanitizeOptionalQuillHtml(q.solution ?? null, 'explanation', { testId, testType }),
             ...(testType === 'practice'
               ? { practiceTestId: testId }
               : { examTestId: testId }),

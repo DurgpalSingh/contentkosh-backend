@@ -2,61 +2,170 @@ import { OfficeParser, OfficeContentNode } from 'officeparser';
 import { ParsedQuestion } from '../dtos/bulkUpload.dto';
 import logger from '../utils/logger';
 
-/**
- * Recursively extracts plain text from a node, joining children with newlines.
- * Skips nested tables entirely (they are metadata/context, not question content).
- */
-function extractText(node: OfficeContentNode, skipNestedTables = false): string {
-  if (skipNestedTables && node.type === 'table') return '';
+// ---------------------------------------------------------------------------
+// AST → HTML conversion
+// ---------------------------------------------------------------------------
 
+/**
+ * Converts an OfficeContentNode to TipTap-compatible HTML.
+ * Handles paragraphs, headings, lists, tables, bold/italic/underline formatting.
+ * Used for question text and solution/explanation fields.
+ */
+function nodeToHtml(node: OfficeContentNode, isTopLevel = false): string {
+  switch (node.type) {
+    case 'paragraph':
+    case 'text': {
+      const inner = childrenToHtml(node);
+      if (!inner.trim()) return isTopLevel ? '' : '<p></p>';
+      return `<p>${inner}</p>`;
+    }
+
+    case 'heading': {
+      const meta = node.metadata as { level?: number } | undefined;
+      const level = meta?.level ?? 2;
+      const safeLevel = Math.min(Math.max(level, 1), 3);
+      const inner = childrenToHtml(node);
+      return `<h${safeLevel}>${inner}</h${safeLevel}>`;
+    }
+
+    case 'list': {
+      const meta = node.metadata as { listType?: string } | undefined;
+      const tag = meta?.listType === 'ordered' ? 'ol' : 'ul';
+      const inner = childrenToHtml(node);
+      return `<${tag}>${inner}</${tag}>`;
+    }
+
+    case 'table': {
+      const rows = (node.children ?? []).filter(n => n.type === 'row');
+      const rowsHtml = rows.map(row => {
+        const cells = (row.children ?? []).filter(n => n.type === 'cell');
+        const cellsHtml = cells.map(cell => {
+          const cellInner = (cell.children ?? [])
+            .map(child => nodeToHtml(child))
+            .filter(h => h.length > 0)
+            .join('');
+          return `<td>${cellInner || '<p></p>'}</td>`;
+        }).join('');
+        return `<tr>${cellsHtml}</tr>`;
+      }).join('');
+      return `<table><tbody>${rowsHtml}</tbody></table>`;
+    }
+
+    default: {
+      // For any other node type, just render children
+      const inner = childrenToHtml(node);
+      return inner;
+    }
+  }
+}
+
+/**
+ * Renders the children of a node, applying inline formatting.
+ */
+function childrenToHtml(node: OfficeContentNode): string {
+  if (!node.children || node.children.length === 0) {
+    return applyFormatting(node.text ?? '', node);
+  }
+  return node.children.map(child => {
+    if (child.type === 'text') {
+      return applyFormatting(child.text ?? '', child);
+    }
+    // Nested block nodes inside inline context — recurse
+    return nodeToHtml(child);
+  }).join('');
+}
+
+/**
+ * Wraps text in inline formatting tags based on node formatting metadata.
+ */
+function applyFormatting(text: string, node: OfficeContentNode): string {
+  if (!text) return '';
+  const fmt = node.formatting;
+  if (!fmt) return escapeHtml(text);
+
+  let result = escapeHtml(text);
+  if (fmt.bold) result = `<strong>${result}</strong>`;
+  if (fmt.italic) result = `<em>${result}</em>`;
+  if (fmt.underline) result = `<u>${result}</u>`;
+  if (fmt.strikethrough) result = `<s>${result}</s>`;
+  return result;
+}
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/**
+ * Converts a cell's content nodes to HTML, skipping nested tables
+ * (which are metadata/location tables, not question content).
+ */
+function cellToHtml(cell: OfficeContentNode, skipNestedTables = false): string {
+  const children = cell.children ?? [];
+  const parts: string[] = [];
+
+  for (const child of children) {
+    if (skipNestedTables && child.type === 'table') continue;
+    const html = nodeToHtml(child, true);
+    if (html.trim()) parts.push(html);
+  }
+
+  return parts.join('');
+}
+
+/**
+ * Extracts plain text from a cell (for non-rich fields like Type, Answer, Options).
+ * Skips nested tables.
+ */
+function cellToPlainText(cell: OfficeContentNode, skipNestedTables = false): string {
+  const children = cell.children ?? [];
+  const parts: string[] = [];
+
+  for (const child of children) {
+    if (skipNestedTables && child.type === 'table') continue;
+    parts.push(extractPlainText(child));
+  }
+
+  return parts.join('\n').trim();
+}
+
+function extractPlainText(node: OfficeContentNode): string {
   if (!node.children || node.children.length === 0) {
     return (node.text ?? '').trim();
   }
-
-  const parts = node.children
-    .map(child => extractText(child, skipNestedTables))
-    .filter(t => t.length > 0);
-
-  return parts.join('\n');
+  return node.children
+    .map(child => extractPlainText(child))
+    .filter(t => t.length > 0)
+    .join('\n');
 }
 
-/**
- * Extracts text from a cell, skipping any nested tables (e.g. location metadata tables).
- */
-function cellText(cell: OfficeContentNode): string {
-  return extractText(cell, true).trim();
-}
+// ---------------------------------------------------------------------------
+// Table parsing
+// ---------------------------------------------------------------------------
 
-/**
- * Given a table node, extracts rows as [fieldText, valueText] pairs.
- */
-function tableToRows(table: OfficeContentNode): Array<[string, string]> {
-  const rows: Array<[string, string]> = [];
+function tableToRows(table: OfficeContentNode): Array<{ field: string; valueCell: OfficeContentNode }> {
+  const rows: Array<{ field: string; valueCell: OfficeContentNode }> = [];
   const rowNodes = (table.children ?? []).filter(n => n.type === 'row');
 
   for (const row of rowNodes) {
     const cells = (row.children ?? []).filter(n => n.type === 'cell');
     if (cells.length >= 2) {
-      const field = cellText(cells[0] as OfficeContentNode).toLowerCase().trim();
-      const value = cellText(cells[1] as OfficeContentNode).trim();
-      rows.push([field, value]);
+      const field = cellToPlainText(cells[0] as OfficeContentNode).toLowerCase().trim();
+      rows.push({ field, valueCell: cells[1] as OfficeContentNode });
     }
   }
 
   return rows;
 }
 
-/**
- * Parses option lines from the Options cell value.
- * Handles "A. Option\nB. Option" and "A. Option B. Option" (newlines lost).
- */
 function parseOptions(raw: string): string[] {
   const options: string[] = [];
-  // Split on newlines first
   const lines = raw.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
   for (const line of lines) {
-    // A line may contain multiple options if newlines were collapsed
     const parts = line.split(/(?=[A-D]\.\s)/);
     for (const part of parts) {
       const trimmed = part.trim();
@@ -69,20 +178,13 @@ function parseOptions(raw: string): string[] {
   return options;
 }
 
-/**
- * Resolves the answer to option labels (A, B, C...) for choice questions.
- * The answer cell may contain option text ("Delhi") or labels ("B") or
- * comma-separated texts ("Java, Python").
- */
 function resolveAnswerLabels(answerRaw: string, options: string[]): string {
   const answerClean = answerRaw.trim();
 
-  // Already a label or comma-separated labels like "B" or "A, C"
   if (/^[A-D](,\s*[A-D])*$/i.test(answerClean)) {
     return answerClean.toUpperCase();
   }
 
-  // Try to match answer text(s) against option texts
   const answerParts = answerClean.split(',').map(p => p.trim().toLowerCase());
   const matchedLabels: string[] = [];
 
@@ -103,12 +205,13 @@ function resolveAnswerLabels(answerRaw: string, options: string[]): string {
   return matchedLabels.length > 0 ? matchedLabels.join(', ') : answerClean;
 }
 
-/**
- * Normalises a field name: lowercase, trim, collapse whitespace.
- */
 function normaliseField(raw: string): string {
   return raw.toLowerCase().replace(/\s+/g, ' ').trim();
 }
+
+// ---------------------------------------------------------------------------
+// DocParserService
+// ---------------------------------------------------------------------------
 
 export class DocParserService {
   async parse(buffer: Buffer): Promise<ParsedQuestion[]> {
@@ -118,7 +221,6 @@ export class DocParserService {
 
     logger.info(`DocParserService: AST has ${ast.content.length} top-level nodes`);
 
-    // Collect all table nodes recursively (handles tables nested inside other containers)
     const tables = this.collectTables(ast.content);
 
     logger.info(`DocParserService: Found ${tables.length} table(s)`);
@@ -128,25 +230,35 @@ export class DocParserService {
     for (const table of tables) {
       const rows = tableToRows(table);
 
-      // Build field→value map, skipping header rows
-      const fieldMap: Record<string, string> = {};
-      for (const [field, value] of rows) {
+      // Build field → cell map (skip header rows)
+      const fieldCellMap: Record<string, OfficeContentNode> = {};
+      for (const { field, valueCell } of rows) {
         const norm = normaliseField(field);
         if (norm === 'field' || norm === 'value' || norm === '') continue;
-        // Only store first occurrence of each field
-        if (!(norm in fieldMap)) {
-          fieldMap[norm] = value;
+        if (!(norm in fieldCellMap)) {
+          fieldCellMap[norm] = valueCell;
         }
       }
 
-      // Must have a question field to be a question table
-      const questionText = fieldMap['question'] ?? '';
-      if (!questionText) continue;
+      // Must have a question field
+      const questionCell = fieldCellMap['question'];
+      if (!questionCell) continue;
 
-      const type = (fieldMap['type'] ?? '').trim().toUpperCase();
-      const optionsRaw = fieldMap['options'] ?? '';
-      const answerRaw = fieldMap['answer'] ?? '';
-      const solutionRaw = fieldMap['solution'] ?? null;
+      // Question and solution → HTML (rich content)
+      const questionHtml = cellToHtml(questionCell, true);
+      if (!questionHtml.trim()) continue;
+
+      const solutionCell = fieldCellMap['solution'];
+      const solutionHtml = solutionCell ? cellToHtml(solutionCell) : null;
+
+      // Type, Options, Answer → plain text
+      const typeCell = fieldCellMap['type'];
+      const optionsCell = fieldCellMap['options'];
+      const answerCell = fieldCellMap['answer'];
+
+      const type = typeCell ? cellToPlainText(typeCell).trim().toUpperCase() : '';
+      const optionsRaw = optionsCell ? cellToPlainText(optionsCell) : '';
+      const answerRaw = answerCell ? cellToPlainText(answerCell) : '';
 
       const options = optionsRaw ? parseOptions(optionsRaw) : [];
 
@@ -155,7 +267,13 @@ export class DocParserService {
         answer = resolveAnswerLabels(answerRaw, options);
       }
 
-      questions.push({ questionText, type, options, answer, solution: solutionRaw });
+      questions.push({
+        questionText: questionHtml,
+        type,
+        options,
+        answer,
+        solution: solutionHtml,
+      });
     }
 
     logger.info(`DocParserService: Extracted ${questions.length} question(s)`);
@@ -163,17 +281,11 @@ export class DocParserService {
     return questions;
   }
 
-  /**
-   * Recursively collects all table nodes from a list of content nodes.
-   * Top-level tables are returned first; nested tables inside non-table nodes are also included.
-   * Tables that are children of other tables (nested metadata tables) are excluded.
-   */
   private collectTables(nodes: OfficeContentNode[]): OfficeContentNode[] {
     const tables: OfficeContentNode[] = [];
     for (const node of nodes) {
       if (node.type === 'table') {
         tables.push(node);
-        // Don't recurse into table children — nested tables are metadata, not questions
       } else if (node.children && node.children.length > 0) {
         tables.push(...this.collectTables(node.children));
       }
