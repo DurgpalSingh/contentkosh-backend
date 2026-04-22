@@ -4,7 +4,7 @@ import { CreateTeacherDto, UpdateTeacherDto } from '../dtos/teacher.dto';
 import { TeacherMapper } from '../mappers/teacher.mapper';
 import { NotFoundError, BadRequestError } from '../errors/api.errors';
 import { IUser } from '../dtos/auth.dto';
-import { ProfileAuthorizationService } from './profile-authorization.service';
+import { ProfileAuthorizationService } from './profileAuthorization.service';
 import logger from '../utils/logger';
 
 export class TeacherService {

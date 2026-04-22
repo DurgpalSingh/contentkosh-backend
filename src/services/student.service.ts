@@ -4,7 +4,7 @@ import { CreateStudentDto, UpdateStudentDto } from '../dtos/student.dto';
 import { StudentMapper } from '../mappers/student.mapper';
 import { NotFoundError } from '../errors/api.errors';
 import { IUser } from '../dtos/auth.dto';
-import { ProfileAuthorizationService } from './profile-authorization.service';
+import { ProfileAuthorizationService } from './profileAuthorization.service';
 import logger from '../utils/logger';
 
 export class StudentService {
