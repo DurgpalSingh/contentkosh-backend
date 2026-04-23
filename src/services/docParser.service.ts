@@ -85,9 +85,9 @@ function childrenToHtml(node: OfficeContentNode): string {
 function applyFormatting(text: string, node: OfficeContentNode): string {
   if (!text) return '';
   const fmt = node.formatting;
-  if (!fmt) return escapeHtml(text);
+  if (!fmt) return textWithMath(text);
 
-  let result = escapeHtml(text);
+  let result = textWithMath(text);
   if (fmt.bold) result = `<strong>${result}</strong>`;
   if (fmt.italic) result = `<em>${result}</em>`;
   if (fmt.underline) result = `<u>${result}</u>`;
@@ -104,16 +104,44 @@ function escapeHtml(text: string): string {
 }
 
 /**
- * Converts a cell's content nodes to HTML.
- * For the question cell: includes nested tables that are part of the question content,
- * but skips small 2-column metadata tables (like City/District location tables).
+ * Detects inline LaTeX patterns in text and wraps them in TipTap math nodes.
+ * Supports: $...$ for inline math, $$...$$ for block math.
+ * Falls back to escaped plain text for non-math content.
  */
-function cellToHtml(cell: OfficeContentNode, skipMetadataTables = false): string {
+function textWithMath(text: string): string {
+  if (!text) return '';
+
+  // Block math: $$...$$
+  const blockMathPattern = /\$\$(.+?)\$\$/gs;
+  // Inline math: $...$
+  const inlineMathPattern = /\$(.+?)\$/g;
+
+  let result = escapeHtml(text);
+
+  // Replace $$...$$ with block math nodes
+  result = result.replace(blockMathPattern, (_match, latex: string) => {
+    return `<span data-type="block-math" data-latex="${escapeHtml(latex.trim())}"></span>`;
+  });
+
+  // Replace $...$ with inline math nodes
+  result = result.replace(inlineMathPattern, (_match, latex: string) => {
+    return `<span data-type="inline-math" data-latex="${escapeHtml(latex.trim())}"></span>`;
+  });
+
+  return result;
+}
+
+/**
+ * Converts a cell's content nodes to HTML.
+ * Includes ALL content — paragraphs, nested tables, lists, etc.
+ * The skipMetadataTables flag is intentionally NOT used anymore since
+ * we cannot reliably distinguish metadata tables from question content tables.
+ */
+function cellToHtml(cell: OfficeContentNode): string {
   const children = cell.children ?? [];
   const parts: string[] = [];
 
   for (const child of children) {
-    if (skipMetadataTables && child.type === 'table' && isMetadataTable(child)) continue;
     const html = nodeToHtml(child, true);
     if (html.trim()) parts.push(html);
   }
@@ -122,17 +150,11 @@ function cellToHtml(cell: OfficeContentNode, skipMetadataTables = false): string
 }
 
 /**
- * Heuristic: a metadata table is a small 2-column table where the first column
- * contains short label-like text (e.g. "City", "District") — not question content.
- * We identify it by: all rows have exactly 2 cells, and the table has <= 4 rows.
+ * @deprecated No longer used — kept for reference.
+ * Heuristic was too broad and incorrectly skipped question content tables.
  */
-function isMetadataTable(table: OfficeContentNode): boolean {
-  const rows = (table.children ?? []).filter(n => n.type === 'row');
-  if (rows.length === 0 || rows.length > 4) return false;
-  return rows.every(row => {
-    const cells = (row.children ?? []).filter(n => n.type === 'cell');
-    return cells.length === 2;
-  });
+function isMetadataTable(_table: OfficeContentNode): boolean {
+  return false;
 }
 
 /**
@@ -263,12 +285,17 @@ export class DocParserService {
       const questionCell = fieldCellMap['question'];
       if (!questionCell) continue;
 
+      // Debug: log the question cell structure
+      logger.info(`DocParserService: question cell children types: ${(questionCell.children ?? []).map(c => c.type).join(', ')}`);
+      logger.info(`DocParserService: question cell full: ${JSON.stringify(questionCell, null, 2).slice(0, 500)}`);
+
       // Question and solution → HTML (rich content)
-      const questionHtml = cellToHtml(questionCell, true);
+      const questionHtml = cellToHtml(questionCell);
+      logger.info(`DocParserService: questionHtml="${questionHtml.slice(0, 200)}"`);
       if (!questionHtml.trim()) continue;
 
       const solutionCell = fieldCellMap['solution'];
-      const solutionHtml = solutionCell ? cellToHtml(solutionCell, false) : null;
+      const solutionHtml = solutionCell ? cellToHtml(solutionCell) : null;
 
       // Type, Options, Answer → plain text
       const typeCell = fieldCellMap['type'];
