@@ -37,14 +37,18 @@ function nodeToHtml(node: OfficeContentNode, isTopLevel = false): string {
 
     case 'table': {
       const rows = (node.children ?? []).filter(n => n.type === 'row');
-      const rowsHtml = rows.map(row => {
+      if (rows.length === 0) return '';
+      const rowsHtml = rows.map((row, rowIdx) => {
         const cells = (row.children ?? []).filter(n => n.type === 'cell');
+        // First row uses <th> if it looks like a header (first row of table)
+        const isHeaderRow = rowIdx === 0;
         const cellsHtml = cells.map(cell => {
+          const tag = isHeaderRow ? 'th' : 'td';
           const cellInner = (cell.children ?? [])
             .map(child => nodeToHtml(child))
             .filter(h => h.length > 0)
-            .join('');
-          return `<td>${cellInner || '<p></p>'}</td>`;
+            .join('') || '<p></p>';
+          return `<${tag}>${cellInner}</${tag}>`;
         }).join('');
         return `<tr>${cellsHtml}</tr>`;
       }).join('');
@@ -100,20 +104,35 @@ function escapeHtml(text: string): string {
 }
 
 /**
- * Converts a cell's content nodes to HTML, skipping nested tables
- * (which are metadata/location tables, not question content).
+ * Converts a cell's content nodes to HTML.
+ * For the question cell: includes nested tables that are part of the question content,
+ * but skips small 2-column metadata tables (like City/District location tables).
  */
-function cellToHtml(cell: OfficeContentNode, skipNestedTables = false): string {
+function cellToHtml(cell: OfficeContentNode, skipMetadataTables = false): string {
   const children = cell.children ?? [];
   const parts: string[] = [];
 
   for (const child of children) {
-    if (skipNestedTables && child.type === 'table') continue;
+    if (skipMetadataTables && child.type === 'table' && isMetadataTable(child)) continue;
     const html = nodeToHtml(child, true);
     if (html.trim()) parts.push(html);
   }
 
   return parts.join('');
+}
+
+/**
+ * Heuristic: a metadata table is a small 2-column table where the first column
+ * contains short label-like text (e.g. "City", "District") — not question content.
+ * We identify it by: all rows have exactly 2 cells, and the table has <= 4 rows.
+ */
+function isMetadataTable(table: OfficeContentNode): boolean {
+  const rows = (table.children ?? []).filter(n => n.type === 'row');
+  if (rows.length === 0 || rows.length > 4) return false;
+  return rows.every(row => {
+    const cells = (row.children ?? []).filter(n => n.type === 'cell');
+    return cells.length === 2;
+  });
 }
 
 /**
@@ -249,7 +268,7 @@ export class DocParserService {
       if (!questionHtml.trim()) continue;
 
       const solutionCell = fieldCellMap['solution'];
-      const solutionHtml = solutionCell ? cellToHtml(solutionCell) : null;
+      const solutionHtml = solutionCell ? cellToHtml(solutionCell, false) : null;
 
       // Type, Options, Answer → plain text
       const typeCell = fieldCellMap['type'];
@@ -286,6 +305,7 @@ export class DocParserService {
     for (const node of nodes) {
       if (node.type === 'table') {
         tables.push(node);
+        // Do NOT recurse into table children — nested tables are metadata, not questions
       } else if (node.children && node.children.length > 0) {
         tables.push(...this.collectTables(node.children));
       }
