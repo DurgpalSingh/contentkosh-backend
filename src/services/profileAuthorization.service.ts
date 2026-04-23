@@ -4,84 +4,72 @@ import { NotFoundError, BadRequestError, ForbiddenError } from '../errors/api.er
 import * as userRepo from '../repositories/user.repo';
 import logger from '../utils/logger';
 
-type AccessLevel = 'read' | 'write' | 'create';
+export const ACCESS_LEVEL = {
+    READ: 'read',
+    WRITE: 'write',
+    CREATE: 'create',
+} as const;
+
+export type AccessLevel = typeof ACCESS_LEVEL[keyof typeof ACCESS_LEVEL];
 
 /**
  * Centralized authorization service for profile management (Student, Teacher, etc.)
- * Handles all common authorization and validation logic to avoid code duplication
  */
 export class ProfileAuthorizationService {
     /**
-     * Validate user authorization based on access level
-     * - read: SUPERADMIN, same business, or owner
-     * - write: ADMIN/SUPERADMIN, same business, or owner
-     * - create: ADMIN/SUPERADMIN only (with business check)
-     * @throws ForbiddenError if user doesn't have permission
+     * Validate user authorization based on access level.
+     * - READ/WRITE: SUPERADMIN, same-business ADMIN, or profile owner
+     * - CREATE: ADMIN/SUPERADMIN only (ADMIN must belong to the business)
      */
     static validateAccess(
         user: IUser,
         businessId: number,
-        level: AccessLevel = 'read',
-        userId?: number
+        level: AccessLevel = ACCESS_LEVEL.READ,
+        userId?: number,
     ): void {
-        switch (level) {
-            case 'create':
-                return this.checkCreationAccess(user, businessId);
-            case 'write':
-                return this.checkWriteAccess(user, businessId, userId);
-            case 'read':
-                return this.checkReadAccess(user, businessId, userId);
+        if (level === ACCESS_LEVEL.CREATE) {
+            return this.checkCreationAccess(user, businessId);
         }
+        return this.checkProfileAccess(user, businessId, level, userId);
     }
 
     /**
-     * Check read access: SUPERADMIN, same business, or profile owner
+     * Shared check for READ and WRITE: SUPERADMIN, same-business ADMIN, or profile owner.
      */
-    private static checkReadAccess(user: IUser, businessId: number, userId?: number): void {
-        if (
+    private static checkProfileAccess(
+        user: IUser,
+        businessId: number,
+        level: AccessLevel,
+        userId?: number,
+    ): void {
+        const allowed =
             user.role === UserRole.SUPERADMIN ||
             (user.role === UserRole.ADMIN && user.businessId === businessId) ||
-            (userId && user.id === userId)
-        ) {
-            return;
-        }
+            (userId !== undefined && user.id === userId);
 
-        logger.warn('Access denied: Insufficient permissions for read access', {
+        if (allowed) return;
+
+        logger.warn(`Access denied: Insufficient permissions for ${level} access`, {
             userId: user.id,
             userRole: user.role,
-            targetBusinessId: businessId
+            targetBusinessId: businessId,
         });
-        throw new ForbiddenError('You do not have access to this profile');
+
+        throw new ForbiddenError(
+            level === ACCESS_LEVEL.WRITE
+                ? 'You do not have permission to update this profile'
+                : 'You do not have access to this profile',
+        );
     }
 
     /**
-     * Check write access: ADMIN/SUPERADMIN, same business, or profile owner
-     */
-    private static checkWriteAccess(user: IUser, businessId: number, userId?: number): void {
-        if (
-            user.role === UserRole.SUPERADMIN ||
-            (user.role === UserRole.ADMIN && user.businessId === businessId) ||
-            (userId && user.id === userId)
-        ) {
-            return;
-        }
-
-        logger.warn('Access denied: Insufficient permissions for write access', {
-            userId: user.id,
-            userRole: user.role,
-            targetBusinessId: businessId
-        });
-        throw new ForbiddenError('You do not have permission to update this profile');
-    }
-
-    /**
-     * Check creation access: Only ADMIN/SUPERADMIN, and ADMIN must belong to business
+     * CREATE access: only ADMIN/SUPERADMIN; ADMIN must belong to the target business.
      */
     private static checkCreationAccess(user: IUser, businessId: number): void {
         if (user.role !== UserRole.ADMIN && user.role !== UserRole.SUPERADMIN) {
             logger.warn('Access denied: Insufficient role for profile creation', {
                 userId: user.id,
-                userRole: user.role
+                userRole: user.role,
             });
             throw new ForbiddenError('Only administrators can create profiles');
         }
@@ -90,22 +78,18 @@ export class ProfileAuthorizationService {
             logger.warn('Access denied: Admin cannot access this business', {
                 userId: user.id,
                 userBusinessId: user.businessId,
-                targetBusinessId: businessId
+                targetBusinessId: businessId,
             });
             throw new ForbiddenError('You do not have access to this business');
         }
     }
 
     /**
-     * Validate that user exists and belongs to specified business
-     * Used during profile creation to verify target user
+     * Validate that a user exists and belongs to the specified business.
      * @throws NotFoundError if user not found
      * @throws BadRequestError if user doesn't belong to business
      */
-    static async validateUserBelongsToBusiness(
-        userId: number,
-        businessId: number
-    ): Promise<void> {
+    static async validateUserBelongsToBusiness(userId: number, businessId: number): Promise<void> {
         const targetUser = await userRepo.findPublicById(userId);
         if (!targetUser) {
             logger.warn('Validation failed: User not found', { userId });
@@ -116,25 +100,25 @@ export class ProfileAuthorizationService {
             logger.warn('Validation failed: User does not belong to business', {
                 userId,
                 userBusinessId: targetUser.businessId,
-                targetBusinessId: businessId
+                targetBusinessId: businessId,
             });
             throw new BadRequestError('User does not belong to the specified business');
         }
     }
 
     /**
-     * Validate that a profile doesn't already exist
+     * Ensure a profile does not already exist for the given user.
      * @throws BadRequestError if profile already exists
      */
     static ensureProfileDoesNotExist(
-        existingProfile: any,
+        existingProfile: { id: unknown } | null | undefined,
         userId: number,
-        profileType: string
+        profileType: string,
     ): void {
         if (existingProfile) {
             logger.warn(`Validation failed: ${profileType} profile already exists`, {
                 userId,
-                profileId: existingProfile.id
+                profileId: existingProfile.id,
             });
             throw new BadRequestError(`${profileType} profile already exists for this user`);
         }

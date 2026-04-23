@@ -4,7 +4,7 @@ import { CreateStudentDto, UpdateStudentDto } from '../dtos/student.dto';
 import { StudentMapper } from '../mappers/student.mapper';
 import { NotFoundError } from '../errors/api.errors';
 import { IUser } from '../dtos/auth.dto';
-import { ProfileAuthorizationService } from './profileAuthorization.service';
+import { ProfileAuthorizationService, ACCESS_LEVEL } from './profileAuthorization.service';
 import logger from '../utils/logger';
 
 export class StudentService {
@@ -19,7 +19,7 @@ export class StudentService {
         });
 
         // Single authorization check for creation
-        ProfileAuthorizationService.validateAccess(user, data.businessId, 'create');
+        ProfileAuthorizationService.validateAccess(user, data.businessId, ACCESS_LEVEL.CREATE);
 
         // Validate user exists and belongs to business
         await ProfileAuthorizationService.validateUserBelongsToBusiness(data.userId, data.businessId);
@@ -48,7 +48,7 @@ export class StudentService {
             throw new NotFoundError('Student profile not found');
         }
 
-        ProfileAuthorizationService.validateAccess(user, student.businessId, 'read', student.userId);
+        ProfileAuthorizationService.validateAccess(user, student.businessId, ACCESS_LEVEL.READ, student.userId);
 
         logger.info('StudentService: Retrieved student profile by ID', {
             studentId,
@@ -67,7 +67,7 @@ export class StudentService {
             throw new NotFoundError('Student profile not found');
         }
 
-        ProfileAuthorizationService.validateAccess(user, student.businessId, 'read', student.userId);
+        ProfileAuthorizationService.validateAccess(user, student.businessId, ACCESS_LEVEL.READ, student.userId);
 
         logger.info('StudentService: Retrieved student profile by user ID', {
             userId,
@@ -87,7 +87,7 @@ export class StudentService {
             throw new NotFoundError('Student profile not found');
         }
 
-        ProfileAuthorizationService.validateAccess(user, student.businessId, 'write', student.userId);
+        ProfileAuthorizationService.validateAccess(user, student.businessId, ACCESS_LEVEL.WRITE, student.userId);
 
         const updateData = StudentMapper.toUpdateInput(data, user.id);
         const updatedStudent = await studentRepo.updateStudent(studentId, updateData);
@@ -104,7 +104,7 @@ export class StudentService {
      * Validate user can create a student for the given business
      */
     async validateStudentCreationAuth(businessId: number, user: IUser): Promise<void> {
-        ProfileAuthorizationService.validateAccess(user, businessId, 'create');
+        ProfileAuthorizationService.validateAccess(user, businessId, ACCESS_LEVEL.CREATE);
         logger.info('StudentService: Student creation authorization validated', {
             userId: user.id,
             businessId
@@ -120,7 +120,7 @@ export class StudentService {
             throw new NotFoundError('Student profile not found');
         }
 
-        ProfileAuthorizationService.validateAccess(user, student.businessId, 'read', student.userId);
+        ProfileAuthorizationService.validateAccess(user, student.businessId, ACCESS_LEVEL.READ, student.userId);
         logger.info('StudentService: Student access validated', {
             studentId,
             userId: user.id
