@@ -1,5 +1,13 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.7] - Bulk import questions with doc
+**P.R Raised by** : shubh404-SE on **Date** : 2026-04-23
+
+### Added
+  - Implimented apis to import questions directly from doc.
+  - used `officeparser` to parse doc and extract all required fields for a question. 
+  - providing a preview api to see parsed questions before adding.
+---
 ## Version [1.2.6] - Student Management API
 **P.R raised by**  : Shubh404-SE 
 **Date** : 2026-04-21
