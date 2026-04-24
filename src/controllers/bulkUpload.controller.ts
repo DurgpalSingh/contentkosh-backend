@@ -1,5 +1,4 @@
-import { Response, NextFunction } from 'express';
-import multer from 'multer';
+import { Response } from 'express';
 import { ApiResponseHandler } from '../utils/apiResponse';
 import { AuthRequest } from '../dtos/auth.dto';
 import { ApiError, NotFoundError } from '../errors/api.errors';
@@ -10,13 +9,12 @@ import logger from '../utils/logger';
 const bulkUploadService = new BulkUploadService();
 
 export const bulkUploadController = {
-  async uploadAndPreview(req: AuthRequest, res: Response, next: NextFunction) {
+  async uploadAndPreview(req: AuthRequest, res: Response) {
     try {
-      logger.info('Uploading and previewing file', { userId: req.user?.id, fileName: req.file?.originalname });
+      logger.info('BulkUpload: uploadAndPreview', { userId: req.user?.id, file: req.file?.originalname });
       getBusinessId(req);
 
       if (!req.file) {
-        logger.warn('No file uploaded', { userId: req.user?.id });
         return ApiResponseHandler.badRequest(res, 'No file uploaded');
       }
 
@@ -28,9 +26,6 @@ export const bulkUploadController = {
       const result = await bulkUploadService.parseAndPreview(req.file.buffer, testId, testType);
       return ApiResponseHandler.success(res, result, 'File parsed successfully');
     } catch (e: unknown) {
-      if (e instanceof multer.MulterError || (e instanceof Error && e.message === 'INVALID_FILE_TYPE')) {
-        return res.status(422).json({ message: 'Only .doc and .docx files are supported.' });
-      }
       if (e instanceof ApiError && e.statusCode === 422) {
         return res.status(422).json({ message: e.message });
       }

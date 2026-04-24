@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import { authorize } from '../middlewares/auth.middleware';
 import { UserRole } from '@prisma/client';
@@ -6,25 +6,47 @@ import { validateDto } from '../middlewares/validation/dto.middleware';
 import { authorizeBusinessAccess, validateIdParam } from '../middlewares/validation.middleware';
 import { BulkUploadConfirmDto } from '../dtos/bulkUpload.dto';
 import { bulkUploadController } from '../controllers/bulkUpload.controller';
-
-const ALLOWED_MIME_TYPES = [
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
-  'application/msword', // .doc
-  'application/rtf',   // .rtf (officeparser supports this too)
-  'text/rtf',
-];
+import { BULK_UPLOAD_FILE_CONFIG } from '../config/file-type';
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 },
+  limits: { fileSize: BULK_UPLOAD_FILE_CONFIG.maxSizeBytes },
   fileFilter: (_req, file, cb) => {
-    if (ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+    if (BULK_UPLOAD_FILE_CONFIG.allowedMimeTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
       cb(new Error('INVALID_FILE_TYPE'));
     }
   },
 });
+
+/**
+ * Middleware that wraps multer's upload and converts multer/file-type errors
+ * into clean 422 JSON responses — keeping the controller free of upload concerns.
+ */
+function uploadSingle(req: Request, res: Response, next: NextFunction): void {
+  upload.single('file')(req, res, (err: unknown) => {
+    if (!err) return next();
+
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        res.status(422).json({
+          message: `File size cannot exceed ${BULK_UPLOAD_FILE_CONFIG.maxSizeBytes / (1024 * 1024)} MB`,
+        });
+        return;
+      }
+      res.status(422).json({ message: err.message });
+      return;
+    }
+
+    if (err instanceof Error && err.message === 'INVALID_FILE_TYPE') {
+      res.status(422).json({ message: BULK_UPLOAD_FILE_CONFIG.errorMessage });
+      return;
+    }
+
+    next(err);
+  });
+}
 
 export const bulkUploadRouter = Router();
 
@@ -133,7 +155,7 @@ bulkUploadRouter.post(
   authorize(UserRole.ADMIN, UserRole.TEACHER, UserRole.SUPERADMIN),
   validateIdParam('businessId'),
   authorizeBusinessAccess,
-  upload.single('file'),
+  uploadSingle,
   bulkUploadController.uploadAndPreview,
 );
 
