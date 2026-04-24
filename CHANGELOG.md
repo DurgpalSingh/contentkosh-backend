@@ -1,5 +1,28 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.6] - Student Management API
+**P.R raised by**  : Shubh404-SE 
+**Date** : 2026-04-21
+
+### Added
+- **Student Management API**: Introduced full lifecycle management for student profiles with strict authorization and validation.
+  - **Create Student Profile**:
+    - `POST /api/teachers/profile`
+    - Admin-only creation with business ownership validation.
+    - Supports professional and personal details with nested DTO validation.
+  - **Get Student Profile**:
+    - `GET /api/teachers/:teacherId`
+    - Accessible to Admins and authorized business users.
+  - **Update Student Profile**:
+    - `PUT /api/teachers/:teacherId`
+    - Supports partial updates for professional details, personal details, and status.
+
+- **DTOs**:
+  - Added `CreateStudentDto` and `UpdateStudentDto`
+- **Service Layer**:
+- **Controller Layer**
+- **Authorization & Validation**:
+---
 ## Version [1.2.5] - Teacher resticted to his own test only
 **P.R Raised by** : shubh404-SE on **Date** : 2026-04-08
 
