@@ -6,6 +6,7 @@ import swaggerUi from 'swagger-ui-express';
 import routes from './routes';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
+import path from 'path';
 import { errorHandler } from './middlewares/error.middleware';
 import { config } from './config/config';
 import logger from './utils/logger';
@@ -37,6 +38,7 @@ async function start() {
     app.use(cookieParser());
     app.use(express.json());
     app.use(express.urlencoded({ extended: true }));
+    app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
 
     // Audit Logging
     app.use(apiAuditLogger);

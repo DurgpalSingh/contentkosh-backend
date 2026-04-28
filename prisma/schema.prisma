@@ -20,6 +20,7 @@ model User {
   name          String
   email         String
   mobile        String?
+  profilePicture String?   @map("profile_picture")
   password      String     @map("password_hash")
   role          UserRole   @default(USER)
   status        UserStatus @default(ACTIVE)

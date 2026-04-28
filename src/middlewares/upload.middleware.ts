@@ -4,8 +4,9 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { BadRequestError } from '../errors/api.errors';
 import { ContentType } from '@prisma/client';
+import { AuthRequest } from '../dtos/auth.dto';
 
-import { FILE_TYPE_CONFIG } from '../config/file-type';
+import { FILE_TYPE_CONFIG, IMAGE_UPLOAD_CONFIG } from '../config/file-type';
 
 const BYTES_IN_MB = 1024 * 1024;
 
@@ -56,17 +57,29 @@ const limitsByTypeLabel = activeRules
   .join(', ');
 
 const removeUploadedFile = (filePath?: string): void => {
-  if (!filePath) {
-    return;
-  }
-
+  if (!filePath) return;
   try {
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-    }
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
   } catch {
     // Ignore cleanup errors to avoid masking validation failures.
   }
+};
+
+const ensureDirExists = (dir: string) => {
+  try {
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  } catch (err) {
+    // Let callers surface errors when needed; keep it silent for now.
+  }
+};
+
+const getFirstFileFromRecord = (files?: Record<string, Express.Multer.File[]>, keys?: string[]) => {
+  if (!files || !keys) return undefined;
+  for (const k of keys) {
+    const f = files[k];
+    if (f && f.length > 0) return f[0];
+  }
+  return undefined;
 };
 
 const getRuleByOriginalName = (originalname: string): UploadRule | undefined => {
@@ -197,6 +210,130 @@ export const validateFileSize = (req: Request, res: Response, next: NextFunction
   req.body.type = rule.contentType;
   req.body.filePath = req.file.path;
   req.body.fileSize = req.file.size;
+
+  next();
+};
+
+const profileFieldConfigs = {
+  [IMAGE_UPLOAD_CONFIG.profilePicture.fieldName]: IMAGE_UPLOAD_CONFIG.profilePicture,
+  profilePhoto: IMAGE_UPLOAD_CONFIG.profilePicture,
+  [IMAGE_UPLOAD_CONFIG.businessLogo.fieldName]: IMAGE_UPLOAD_CONFIG.businessLogo
+} as const;
+
+type ProfileFieldName = keyof typeof profileFieldConfigs;
+const PROFILE_PICTURE_FIELD_ALIASES = [IMAGE_UPLOAD_CONFIG.profilePicture.fieldName, 'profilePhoto'] as const;
+const BUSINESS_LOGO_FIELD_NAMES = [IMAGE_UPLOAD_CONFIG.businessLogo.fieldName] as const;
+
+const createImageFieldsUpload = () =>
+  multer({
+    storage: profileStorage,
+    fileFilter: (req, file, cb) => {
+      const authReq = req as AuthRequest;
+      if (file.fieldname === IMAGE_UPLOAD_CONFIG.businessLogo.fieldName && authReq.user?.role !== 'ADMIN') {
+        return cb(new BadRequestError('Only admin can upload business logo'));
+      }
+      const field = file.fieldname as ProfileFieldName;
+      const config = profileFieldConfigs[field];
+      if (!config) {
+        return cb(new BadRequestError('Unexpected image field'));
+      }
+      const ext = path.extname(file.originalname).toLowerCase();
+      if (!config.extensions.includes(ext)) {
+        return cb(new BadRequestError(`Invalid file type for ${file.fieldname}`));
+      }
+      if (!config.mimeTypes.includes(file.mimetype)) {
+        return cb(new BadRequestError(`Invalid mime type for ${file.fieldname}`));
+      }
+      cb(null, true);
+    },
+    limits: {
+      fileSize: Math.max(
+        IMAGE_UPLOAD_CONFIG.profilePicture.maxSizeBytes,
+        IMAGE_UPLOAD_CONFIG.businessLogo.maxSizeBytes
+      )
+    }
+  });
+
+for (const cfg of Object.values(profileFieldConfigs)) {
+  ensureDirExists(cfg.uploadDir);
+}
+
+const profileStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const field = file.fieldname as ProfileFieldName;
+    const config = profileFieldConfigs[field];
+    if (!config) return cb(new BadRequestError('Unexpected image field'), '');
+    cb(null, config.uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname);
+    cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
+  }
+});
+
+const profileUpload = createImageFieldsUpload();
+
+export const uploadProfileAssets = (req: Request, res: Response, next: NextFunction) => {
+  profileUpload.fields([
+    { name: IMAGE_UPLOAD_CONFIG.profilePicture.fieldName, maxCount: 1 },
+    { name: 'profilePhoto', maxCount: 1 },
+    { name: IMAGE_UPLOAD_CONFIG.businessLogo.fieldName, maxCount: 1 }
+  ])(req, res, (error: any) => {
+    if (error) return normalizeUploadError(error, next);
+
+    const files = req.files as Record<string, Express.Multer.File[]> | undefined;
+    // Validate each configured field
+    for (const [fieldName, cfg] of Object.entries(profileFieldConfigs)) {
+      const file = files?.[fieldName]?.[0];
+      if (!file) continue;
+      if (file.size > cfg.maxSizeBytes) {
+        removeUploadedFile(file.path);
+        return next(new BadRequestError(`File size cannot exceed ${formatSizeInMb(cfg.maxSizeBytes)} for ${fieldName}`));
+      }
+    }
+
+    next();
+  });
+};
+
+const toPublicAssetPath = (filePath: string): string => {
+  const normalized = filePath.replace(/\\/g, '/');
+  return normalized.startsWith('/') ? normalized : `/${normalized}`;
+};
+
+const parseBodyJsonObject = (value: unknown): Record<string, unknown> => {
+  if (!value) return {};
+  if (typeof value === 'object' && !Array.isArray(value)) return value as Record<string, unknown>;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+      return {};
+    } catch {
+      return {};
+    }
+  }
+  return {};
+};
+
+export const mapProfileUploadToSettingsPayload = (req: Request, res: Response, next: NextFunction) => {
+  const files = req.files as Record<string, Express.Multer.File[]> | undefined;
+  const profilePictureFile = getFirstFileFromRecord(files, [...PROFILE_PICTURE_FIELD_ALIASES]);
+  const businessLogoFile = getFirstFileFromRecord(files, [...BUSINESS_LOGO_FIELD_NAMES]);
+
+  const userDetails = parseBodyJsonObject(req.body.userDetails);
+  const profileDetails = parseBodyJsonObject(req.body.profileDetails);
+  const businessDetails = parseBodyJsonObject(req.body.businessDetails);
+
+  if (profilePictureFile) userDetails.profilePicture = toPublicAssetPath(profilePictureFile.path);
+  if (businessLogoFile) businessDetails.logo = toPublicAssetPath(businessLogoFile.path);
+
+  req.body.userDetails = Object.keys(userDetails).length > 0 ? userDetails : undefined;
+  req.body.profileDetails = Object.keys(profileDetails).length > 0 ? profileDetails : undefined;
+  req.body.businessDetails = Object.keys(businessDetails).length > 0 ? businessDetails : undefined;
 
   next();
 };
