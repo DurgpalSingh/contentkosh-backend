@@ -23,7 +23,7 @@ export const bulkUploadController = {
         return ApiResponseHandler.badRequest(res, 'testId and testType are required');
       }
 
-      const result = await bulkUploadService.parseAndPreview(req.file.buffer, testId, testType);
+      const result = await bulkUploadService.parseAndPreview(req.file.buffer, req.file.mimetype, req.file.originalname, testId, testType);
       return ApiResponseHandler.success(res, result, 'File parsed successfully');
     } catch (e: unknown) {
       if (e instanceof ApiError && e.statusCode === 422) {

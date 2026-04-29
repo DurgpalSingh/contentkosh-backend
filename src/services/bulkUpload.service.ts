@@ -4,6 +4,7 @@ import { ParsedQuestion, PreviewResponse } from '../dtos/bulkUpload.dto';
 import { ApiError, NotFoundError } from '../errors/api.errors';
 import { QuestionType } from '../constants/test-enums';
 import { DocParserService } from './docParser.service';
+import { ExcelParserService } from './excelParser.service';
 import { QuestionValidatorService } from './questionValidator.service';
 import { bulkUploadSessionStore } from '../utils/bulkUploadSession.store';
 import { sanitizeRequiredQuillHtml, sanitizeOptionalQuillHtml } from '../utils/sanitizeHtml';
@@ -22,16 +23,28 @@ const TYPE_MAP: Record<string, number> = {
 
 export class BulkUploadService {
   private docParser = new DocParserService();
+  private excelParser = new ExcelParserService();
   private validator = new QuestionValidatorService();
 
   async parseAndPreview(
     fileBuffer: Buffer,
+    fileMime: string | undefined,
+    originalName: string | undefined,
     testId: string,
     testType: 'practice' | 'exam',
   ): Promise<PreviewResponse> {
     logger.info(`BulkUploadService.parseAndPreview: testId=${testId}, testType=${testType}`);
 
-    const questions: ParsedQuestion[] = await this.docParser.parse(fileBuffer);
+    // Choose parser based on MIME type or file extension
+    const mime = (fileMime || '').toLowerCase();
+    const name = (originalName || '').toLowerCase();
+    let questions: ParsedQuestion[] = [];
+
+    if (mime.includes('spreadsheet') || mime.includes('excel') || name.endsWith('.xls') || name.endsWith('.xlsx')) {
+      questions = await this.excelParser.parse(fileBuffer);
+    } else {
+      questions = await this.docParser.parse(fileBuffer);
+    }
 
     if (questions.length === 0) {
       throw new ApiError('No question blocks found in the document', 422);

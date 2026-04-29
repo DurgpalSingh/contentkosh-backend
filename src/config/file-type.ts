@@ -70,6 +70,8 @@ export const FILE_TYPE_CONFIG: Record<ContentType, {
 const DEFAULT_BULK_UPLOAD_MIME_TYPES = [
     // MIME_TYPES.DOC,   // application/msword (.doc)
     MIME_TYPES.DOCX,  // application/vnd.openxmlformats-officedocument.wordprocessingml.document (.docx)
+    MIME_TYPES.XLS,   // application/vnd.ms-excel (.xls)
+    MIME_TYPES.XLSX,  // application/vnd.openxmlformats-officedocument.spreadsheetml.sheet (.xlsx)
 ];
 
 export const BULK_UPLOAD_FILE_CONFIG = {
@@ -79,5 +81,5 @@ export const BULK_UPLOAD_FILE_CONFIG = {
 
     maxSizeBytes: Number(process.env.BULK_UPLOAD_MAX_SIZE_MB || 10) * BYTES_IN_MB,
 
-    errorMessage: 'Only Word documents (.doc, .docx) are supported for bulk upload',
+    errorMessage: 'Only Word or Excel files (.doc, .docx, .xls, .xlsx) are supported for bulk upload',
 } as const;
