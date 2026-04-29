@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { authenticate } from '../middlewares/auth.middleware';
 import { uploadProfileAssets, mapProfileUploadToSettingsPayload } from '../middlewares/upload.middleware';
 import { getSettingsProfile, updateSettingsProfile } from '../controllers/settingsProfile.controller';
+import { validateDto } from '../middlewares/validation/dto.middleware';
+import { UpdateSettingsProfileDto } from '../dtos/settingsProfile.dto';
 
 const router = Router();
 
@@ -68,6 +70,7 @@ router.put(
   authenticate,
   uploadProfileAssets,
   mapProfileUploadToSettingsPayload,
+  validateDto(UpdateSettingsProfileDto, true),
   updateSettingsProfile
 );
 
