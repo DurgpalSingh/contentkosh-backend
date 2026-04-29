@@ -200,3 +200,48 @@ export const validateFileSize = (req: Request, res: Response, next: NextFunction
 
   next();
 };
+
+// ---------------------------------------------------------------------------
+// Bulk question upload — memory storage, MIME-type validation
+// ---------------------------------------------------------------------------
+import { BULK_UPLOAD_FILE_CONFIG } from '../config/file-type';
+
+const bulkUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: BULK_UPLOAD_FILE_CONFIG.maxSizeBytes },
+  fileFilter: (_req, file, cb) => {
+    if (BULK_UPLOAD_FILE_CONFIG.allowedMimeTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('INVALID_FILE_TYPE'));
+    }
+  },
+});
+
+/**
+ * Memory-storage upload middleware for bulk question import.
+ * Validates MIME type and file size, normalises errors using the same
+ * pattern as uploadSingleFile — no multer concerns leak into the controller.
+ */
+export const uploadBulkFile = (req: Request, res: Response, next: NextFunction): void => {
+  bulkUpload.single('file')(req, res, (error: any) => {
+    if (!error) return next();
+
+    if (error instanceof multer.MulterError) {
+      if (error.code === 'LIMIT_FILE_SIZE') {
+        return next(
+          new BadRequestError(
+            `File size cannot exceed ${formatSizeInMb(BULK_UPLOAD_FILE_CONFIG.maxSizeBytes)}`,
+          ),
+        );
+      }
+      return next(new BadRequestError(`Upload error: ${error.message}`));
+    }
+
+    if (error instanceof Error && error.message === 'INVALID_FILE_TYPE') {
+      return next(new BadRequestError(BULK_UPLOAD_FILE_CONFIG.errorMessage));
+    }
+
+    next(error);
+  });
+};

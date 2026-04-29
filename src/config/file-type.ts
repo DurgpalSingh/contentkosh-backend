@@ -59,3 +59,27 @@ export const FILE_TYPE_CONFIG: Record<ContentType, {
         defaultMimeType: MIME_TYPES.DEFAULT
     }
 };
+
+// ---------------------------------------------------------------------------
+// Bulk Question Upload config
+// Configurable via environment variables — no code changes needed to add formats.
+// BULK_UPLOAD_ALLOWED_MIME_TYPES: comma-separated MIME types (default: doc + docx)
+// BULK_UPLOAD_MAX_SIZE_MB: max file size in MB (default: 10)
+// ---------------------------------------------------------------------------
+
+const DEFAULT_BULK_UPLOAD_MIME_TYPES = [
+    // MIME_TYPES.DOC,   // application/msword (.doc)
+    MIME_TYPES.DOCX,  // application/vnd.openxmlformats-officedocument.wordprocessingml.document (.docx)
+    MIME_TYPES.XLS,   // application/vnd.ms-excel (.xls)
+    MIME_TYPES.XLSX,  // application/vnd.openxmlformats-officedocument.spreadsheetml.sheet (.xlsx)
+];
+
+export const BULK_UPLOAD_FILE_CONFIG = {
+    allowedMimeTypes: process.env.BULK_UPLOAD_ALLOWED_MIME_TYPES
+        ? process.env.BULK_UPLOAD_ALLOWED_MIME_TYPES.split(',').map(t => t.trim())
+        : DEFAULT_BULK_UPLOAD_MIME_TYPES,
+
+    maxSizeBytes: Number(process.env.BULK_UPLOAD_MAX_SIZE_MB || 10) * BYTES_IN_MB,
+
+    errorMessage: 'Only Word or Excel files (.doc, .docx, .xls, .xlsx) are supported for bulk upload',
+} as const;
