@@ -17,8 +17,38 @@ import { UpdateStudentDto } from '../dtos/student.dto';
 export class SettingsProfileService {
   async getProfile(currentUser: IUser) {
     logger.info('Settings profile fetch requested', { userId: currentUser.id, role: currentUser.role });
-    const profile = await userRepo.findSettingsProfileByUserId(currentUser.id);
-    if (!profile) throw new NotFoundError('User profile not found');
+
+    // Reuse existing repo/service functions rather than a custom combined repo call
+    const user = await userRepo.findPublicById(currentUser.id);
+    if (!user) {
+      logger.warn('Settings profile fetch failed - user not found', { userId: currentUser.id });
+      throw new NotFoundError('User profile not found');
+    }
+
+    // Attach full business / teacher / student details where applicable
+    let business = null;
+    let teacher = null;
+    let student = null;
+
+    if (user.businessId) {
+      business = await businessRepo.findBusinessById(Number(user.businessId));
+    }
+
+    if (currentUser.role === UserRole.TEACHER) {
+      teacher = await teacherRepo.findTeacherByUserId(currentUser.id);
+    }
+
+    if (currentUser.role === UserRole.STUDENT) {
+      student = await studentRepo.findStudentByUserId(currentUser.id);
+    }
+
+    const profile = {
+      ...user,
+      business,
+      teacher,
+      student
+    };
+
     logger.info('Settings profile fetch success', { userId: currentUser.id });
     return profile;
   }
@@ -39,6 +69,19 @@ export class SettingsProfileService {
     if (!existing) {
       logger.warn('Settings profile update rejected - user not found', { userId: currentUser.id });
       throw new NotFoundError('User profile not found');
+    }
+
+    if (payload.userDetails) {
+      const details = payload.userDetails as SettingsUserDetailsDto;
+      // DTO validation is handled in route middleware; directly map allowed fields
+      const userUpdate: Record<string, unknown> = {};
+      if (details.name !== undefined) userUpdate.name = details.name;
+      if (details.mobile !== undefined) userUpdate.mobile = details.mobile;
+      if (details.profilePicture !== undefined) userUpdate.profilePicture = details.profilePicture;
+      if (Object.keys(userUpdate).length > 0) {
+        await userRepo.updateUser(currentUser.id, userUpdate);
+        logger.info('Settings profile user details updated', { userId: currentUser.id });
+      }
     }
 
     // Collect updates to run in a single transaction
@@ -79,9 +122,8 @@ export class SettingsProfileService {
       if (Object.keys(personal).length > 0) (updateTeacherDto as any).personal = personal;
 
       const updateData = TeacherMapper.toUpdateInput(updateTeacherDto, currentUser.id);
-      teacherId = teacher.id;
-      teacherUpdateData = updateData;
-      logger.info('Settings profile teacher details prepared for update', { userId: currentUser.id, teacherId });
+      await teacherRepo.updateTeacher(teacher.id, updateData);
+      logger.info('Settings profile teacher details updated', { userId: currentUser.id, teacherId: teacher.id });
     }
 
     let studentId: number | undefined;
@@ -103,9 +145,8 @@ export class SettingsProfileService {
       if (details.bio !== undefined) (updateStudentDto as any).bio = details.bio;
 
       const updateData = StudentMapper.toUpdateInput(updateStudentDto, currentUser.id);
-      studentId = student.id;
-      studentUpdateData = updateData;
-      logger.info('Settings profile student details prepared for update', { userId: currentUser.id, studentId });
+      await studentRepo.updateStudent(student.id, updateData);
+      logger.info('Settings profile student details updated', { userId: currentUser.id, studentId: student.id });
     }
 
     let businessId: number | undefined;
@@ -122,6 +163,7 @@ export class SettingsProfileService {
       }
 
       const details = payload.businessDetails as BusinessDetailsDto;
+      // Directly map allowed business fields (validation done by DTO middleware)
       const businessUpdate: Record<string, unknown> = {};
       if (details.instituteName !== undefined) businessUpdate.instituteName = details.instituteName;
       if (details.tagline !== undefined) businessUpdate.tagline = details.tagline ?? null;
@@ -131,8 +173,8 @@ export class SettingsProfileService {
       if (details.logo !== undefined) businessUpdate.logo = details.logo ?? null;
 
       if (Object.keys(businessUpdate).length > 0) {
-        businessUpdateData = businessUpdate;
-        logger.info('Settings profile business details prepared for update', { userId: currentUser.id, businessId });
+        await businessRepo.updateBusiness(businessId, businessUpdate as any);
+        logger.info('Settings profile business details updated', { userId: currentUser.id, businessId });
       }
     }
 
