@@ -140,7 +140,7 @@ export class UpdateSettingsProfileDto {
     return plainToInstance(SettingsUserDetailsDto, parsed);
   })
   @IsObject()
-  userDetails?: Record<string, unknown>;
+  userDetails?: SettingsUserDetailsDto;
 
   @IsOptional()
   @Transform(({ value }) => {
@@ -149,7 +149,7 @@ export class UpdateSettingsProfileDto {
     return plainToInstance(SettingsProfileDetailsDto, parsed);
   })
   @IsObject()
-  profileDetails?: Record<string, unknown>;
+  profileDetails?: SettingsProfileDetailsDto;
 
   @IsOptional()
   @Transform(({ value }) => {
@@ -158,5 +158,5 @@ export class UpdateSettingsProfileDto {
     return plainToInstance(BusinessDetailsDto, parsed);
   })
   @IsObject()
-  businessDetails?: Record<string, unknown>;
+  businessDetails?: BusinessDetailsDto;
 }
