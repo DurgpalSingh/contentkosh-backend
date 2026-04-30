@@ -145,3 +145,38 @@ export function findByEmailWithBusinesses(email: string) {
   });
 }
 
+export function findSettingsProfileByUserId(userId: number) {
+  return prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      mobile: true,
+      profilePicture: true,
+      role: true,
+      status: true,
+      businessId: true,
+      createdAt: true,
+      updatedAt: true,
+      business: {
+        select: {
+          id: true,
+          instituteName: true,
+          slug: true,
+          logo: true,
+          tagline: true,
+          contactNumber: true,
+          email: true,
+          address: true,
+          youtubeUrl: true,
+          instagramUrl: true,
+          linkedinUrl: true,
+          facebookUrl: true
+        }
+      },
+      teacher: true,
+      student: true
+    } as any
+  });
+}
