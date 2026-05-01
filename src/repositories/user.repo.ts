@@ -1,4 +1,4 @@
-import { PrismaClient, Prisma, UserRole, UserStatus } from '@prisma/client';
+import { Prisma, UserRole, UserStatus } from '@prisma/client';
 import { prisma } from '../config/database';
 import { AlreadyExistsError } from '../errors/api.errors';
 
@@ -70,6 +70,7 @@ export function findPublicById(id: number) {
       name: true,
       password: true,
       mobile: true,
+      profilePicture: true,
       role: true,
       businessId: true,
       createdAt: true,
@@ -111,7 +112,7 @@ export async function findByBusinessId(businessId: number, role?: UserRole) {
   }));
 }
 
-export function updateUser(id: number, data: { name?: string; mobile?: string; role?: UserRole; status?: UserStatus; password?: string; businessId?: number }) {
+export function updateUser(id: number, data: { name?: string; mobile?: string; role?: UserRole; status?: UserStatus; password?: string; businessId?: number; profilePicture?: string | null }) {
   return prisma.user.update({
     where: { id },
     data,
@@ -141,5 +142,41 @@ export function findByEmailWithBusinesses(email: string) {
       updatedAt: true,
       business: { select: { id: true, instituteName: true, slug: true } }
     }
+  });
+}
+
+export function findSettingsProfileByUserId(userId: number) {
+  return prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      mobile: true,
+      profilePicture: true,
+      role: true,
+      status: true,
+      businessId: true,
+      createdAt: true,
+      updatedAt: true,
+      business: {
+        select: {
+          id: true,
+          instituteName: true,
+          slug: true,
+          logo: true,
+          tagline: true,
+          contactNumber: true,
+          email: true,
+          address: true,
+          youtubeUrl: true,
+          instagramUrl: true,
+          linkedinUrl: true,
+          facebookUrl: true
+        }
+      },
+      teacher: true,
+      student: true
+    } as any
   });
 }

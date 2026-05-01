@@ -67,11 +67,12 @@ export const updateUser = async (userId: number, userData: UpdateUserDto) => {
     }
 
     // Build update object, only including defined properties
-    const updateData: { name?: string; mobile?: string; role?: UserRole; status?: UserStatus } = {};
+    const updateData: { name?: string; mobile?: string; role?: UserRole; status?: UserStatus; profilePicture?: string | null } = {};
     if (userData.name !== undefined) updateData.name = userData.name;
     if (userData.mobile !== undefined) updateData.mobile = userData.mobile;
     if (userData.role !== undefined) updateData.role = userData.role;
     if (userData.status !== undefined) updateData.status = userData.status;
+    if (userData.profilePicture !== undefined) updateData.profilePicture = userData.profilePicture;
 
     const updatedUser = await userRepo.updateUser(userId, updateData);
     return updatedUser;

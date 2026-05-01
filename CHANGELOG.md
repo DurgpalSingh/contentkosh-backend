@@ -1,5 +1,13 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.7] - Settings Profile API
+**P.R raised by**  : Shubh404-SE 
+**Date** : 2026-04-21
+
+### Added
+  - Added 2 new apis to get and edit profile of a user.
+  - added feature to upload profile photo and logo
+--- 
 ## Version [1.2.6] - Student Management API
 **P.R raised by**  : Shubh404-SE 
 **Date** : 2026-04-21

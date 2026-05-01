@@ -43,4 +43,8 @@ export class UpdateUserDto {
     @IsOptional()
     @IsEnum(UserStatus, { message: 'Valid status is required (ACTIVE, INACTIVE)' })
     status?: UserStatus;
+
+    @IsOptional()
+    @IsString()
+    profilePicture?: string | null;
 }

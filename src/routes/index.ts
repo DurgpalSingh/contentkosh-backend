@@ -12,6 +12,7 @@ import studentRoutes from './student.routes';
 import healthRoutes from './health.routes';
 import authRoutes from './auth.routes';
 import dashboardRoutes from './dashboard.routes';
+import settingsProfileRoutes from './settingsProfile.routes';
 import { practiceTestRouter } from './practiceTest.routes';
 import { examTestRouter } from './examTest.routes';
 import { authenticate } from '../middlewares/auth.middleware';
@@ -37,5 +38,6 @@ router.use('/api', contentRoutes);
 router.use('/api/teachers', authenticate, teacherRoutes);
 router.use('/api/students', authenticate, studentRoutes);
 router.use('/api', dashboardRoutes);
+router.use('/api', settingsProfileRoutes);
 
 export default router; 
