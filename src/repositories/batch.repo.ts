@@ -401,3 +401,87 @@ export async function isActiveUserInBatch(userId: number, batchId: number): Prom
   });
   return Boolean(membership);
 }
+
+export async function findActiveBatchIdsForUser(
+  businessId: number,
+  userId: number,
+): Promise<number[]> {
+  const rows = await prisma.batchUser.findMany({
+    where: {
+      userId,
+      isActive: true,
+      batch: {
+        course: {
+          exam: { businessId },
+        },
+      },
+    },
+    select: { batchId: true },
+  });
+  return [...new Set(rows.map((r) => r.batchId))];
+}
+
+export async function findUserBatchAndCourseMembership(
+  businessId: number,
+  userId: number,
+): Promise<{ batchIds: number[]; courseIds: number[] }> {
+  const rows = await prisma.batchUser.findMany({
+    where: {
+      userId,
+      isActive: true,
+      batch: {
+        course: {
+          exam: { businessId },
+        },
+      },
+    },
+    select: {
+      batchId: true,
+      batch: { select: { courseId: true } },
+    },
+  });
+  const batchIds = [...new Set(rows.map((r) => r.batchId))];
+  const courseIds = [...new Set(rows.map((r) => r.batch.courseId))];
+  return { batchIds, courseIds };
+}
+
+export async function findAllBatchIdsInBusiness(businessId: number): Promise<number[]> {
+  const rows = await prisma.batch.findMany({
+    where: {
+      course: {
+        exam: { businessId },
+      },
+    },
+    select: { id: true },
+  });
+  return rows.map((r) => r.id);
+}
+
+export async function findBatchIdsForCourseIds(
+  businessId: number,
+  courseIds: number[],
+): Promise<number[]> {
+  if (courseIds.length === 0) return [];
+  const rows = await prisma.batch.findMany({
+    where: {
+      courseId: { in: courseIds },
+      course: { exam: { businessId } },
+    },
+    select: { id: true },
+  });
+  return rows.map((r) => r.id);
+}
+
+export async function validateBatchIdsBelongToBusiness(
+  businessId: number,
+  batchIds: number[],
+): Promise<boolean> {
+  if (batchIds.length === 0) return true;
+  const count = await prisma.batch.count({
+    where: {
+      id: { in: batchIds },
+      course: { exam: { businessId } },
+    },
+  });
+  return count === batchIds.length;
+}
