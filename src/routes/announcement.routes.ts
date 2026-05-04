@@ -15,19 +15,19 @@ const router = Router();
 
 /**
  * @swagger
- * /api/announcements/my:
+ * /api/announcements/received:
  *   get:
- *     summary: Get announcements targeted to the current user
+ *     summary: Get received announcements targeted to the current user
  *     tags: [Announcements]
  *     security:
  *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: User-specific announcements fetched successfully
+ *         description: Received announcements fetched successfully
  *       403:
  *         description: Forbidden
  */
-router.get('/my', getMyAnnouncements);
+router.get('/received', getMyAnnouncements);
 
 /**
  * @swagger

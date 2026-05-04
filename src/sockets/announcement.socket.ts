@@ -1,7 +1,7 @@
 import type { Server, Socket } from 'socket.io';
 import { config } from '../config/config';
 import { ANNOUNCEMENT_SOCKET_EVENTS, ANNOUNCEMENT_SOCKET_ROOMS } from '../constants/announcement.constants';
-import * as announcementRepo from '../repositories/announcement.repo';
+import { findActiveBatchIdsForUser } from '../repositories/batch.repo';
 import { AuthService } from '../services/auth.service';
 import { setAnnouncementIo } from './announcementEmitter';
 import logger from '../utils/logger';
@@ -61,7 +61,7 @@ export function registerAnnouncementSocket(io: Server): void {
     const businessId = user.businessId;
     socket.join(ANNOUNCEMENT_SOCKET_ROOMS.business(businessId));
 
-    const batchIds = await announcementRepo.findActiveBatchIdsForUser(businessId, user.id);
+    const batchIds = await findActiveBatchIdsForUser(businessId, user.id);
     for (const batchId of batchIds) {
       socket.join(ANNOUNCEMENT_SOCKET_ROOMS.batch(batchId));
     }

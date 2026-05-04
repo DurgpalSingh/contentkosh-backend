@@ -1,9 +1,17 @@
 import {
   AnnouncementScope,
   Prisma,
-  UserRole,
 } from '@prisma/client';
 import { prisma } from '../config/database';
+import {
+  VISIBILITY_FIELD_ADMINS,
+  VISIBILITY_FIELD_TEACHERS,
+} from '../constants/announcement.constants';
+import {
+  findAllBatchIdsInBusiness,
+  findBatchIdsForCourseIds,
+  findUserBatchAndCourseMembership,
+} from './batch.repo';
 
 const creatorSelect = {
   id: true,
@@ -19,26 +27,6 @@ export const announcementListInclude = {
 export type AnnouncementWithRelations = Prisma.AnnouncementGetPayload<{
   include: typeof announcementListInclude;
 }>;
-
-const announcementBaseSelect = {
-  id: true,
-  heading: true,
-  content: true,
-  startDate: true,
-  endDate: true,
-  isActive: true,
-  businessId: true,
-  visibleToAdmins: true,
-  visibleToTeachers: true,
-  visibleToStudents: true,
-  scope: true,
-  targetAllCourses: true,
-  targetAllBatches: true,
-  createdBy: true,
-  updatedBy: true,
-  createdAt: true,
-  updatedAt: true,
-} as const;
 
 export async function findAnnouncementByIdWithTargets(
   id: number,
@@ -59,104 +47,6 @@ export async function findAnnouncementByIdWithTargetsAnyBusiness(
   });
 }
 
-export async function findActiveBatchIdsForUser(
-  businessId: number,
-  userId: number,
-): Promise<number[]> {
-  const rows = await prisma.batchUser.findMany({
-    where: {
-      userId,
-      isActive: true,
-      batch: {
-        course: {
-          exam: { businessId },
-        },
-      },
-    },
-    select: { batchId: true },
-  });
-  return [...new Set(rows.map((r) => r.batchId))];
-}
-
-export async function findUserBatchAndCourseMembership(
-  businessId: number,
-  userId: number,
-): Promise<{ batchIds: number[]; courseIds: number[] }> {
-  const rows = await prisma.batchUser.findMany({
-    where: {
-      userId,
-      isActive: true,
-      batch: {
-        course: {
-          exam: { businessId },
-        },
-      },
-    },
-    select: {
-      batchId: true,
-      batch: { select: { courseId: true } },
-    },
-  });
-  const batchIds = [...new Set(rows.map((r) => r.batchId))];
-  const courseIds = [...new Set(rows.map((r) => r.batch.courseId))];
-  return { batchIds, courseIds };
-}
-
-export async function findAllBatchIdsInBusiness(businessId: number): Promise<number[]> {
-  const rows = await prisma.batch.findMany({
-    where: {
-      course: {
-        exam: { businessId },
-      },
-    },
-    select: { id: true },
-  });
-  return rows.map((r) => r.id);
-}
-
-export async function findBatchIdsForCourseIds(
-  businessId: number,
-  courseIds: number[],
-): Promise<number[]> {
-  if (courseIds.length === 0) return [];
-  const rows = await prisma.batch.findMany({
-    where: {
-      courseId: { in: courseIds },
-      course: { exam: { businessId } },
-    },
-    select: { id: true },
-  });
-  return rows.map((r) => r.id);
-}
-
-export async function validateCourseIdsBelongToBusiness(
-  businessId: number,
-  courseIds: number[],
-): Promise<boolean> {
-  if (courseIds.length === 0) return true;
-  const count = await prisma.course.count({
-    where: {
-      id: { in: courseIds },
-      exam: { businessId },
-    },
-  });
-  return count === courseIds.length;
-}
-
-export async function validateBatchIdsBelongToBusiness(
-  businessId: number,
-  batchIds: number[],
-): Promise<boolean> {
-  if (batchIds.length === 0) return true;
-  const count = await prisma.batch.count({
-    where: {
-      id: { in: batchIds },
-      course: { exam: { businessId } },
-    },
-  });
-  return count === batchIds.length;
-}
-
 function activeDateWhere(): Prisma.AnnouncementWhereInput {
   const now = new Date();
   return {
@@ -164,15 +54,6 @@ function activeDateWhere(): Prisma.AnnouncementWhereInput {
     startDate: { lte: now },
     endDate: { gte: now },
   };
-}
-
-function visibilityFieldForRole(
-  role: UserRole,
-): 'visibleToAdmins' | 'visibleToTeachers' | 'visibleToStudents' | null {
-  if (role === UserRole.ADMIN || role === UserRole.SUPERADMIN) return 'visibleToAdmins';
-  if (role === UserRole.TEACHER) return 'visibleToTeachers';
-  if (role === UserRole.STUDENT) return 'visibleToStudents';
-  return null;
 }
 
 function buildTargetOrForTeacherOrStudent(
@@ -203,9 +84,8 @@ function buildTargetOrForTeacherOrStudent(
 export async function findMyAnnouncements(
   businessId: number,
   userId: number,
-  role: UserRole,
+  visibilityField: 'visibleToAdmins' | 'visibleToTeachers' | 'visibleToStudents' | null,
 ): Promise<AnnouncementWithRelations[]> {
-  const visibilityField = visibilityFieldForRole(role);
   if (!visibilityField) {
     return [];
   }
@@ -216,7 +96,7 @@ export async function findMyAnnouncements(
     [visibilityField]: true,
   };
 
-  if (role === UserRole.ADMIN || role === UserRole.SUPERADMIN) {
+  if (visibilityField === VISIBILITY_FIELD_ADMINS) {
     return prisma.announcement.findMany({
       where: base,
       include: announcementListInclude,
@@ -258,18 +138,64 @@ export async function findCreatedByUser(
   });
 }
 
+function buildReceivedWhereForNonAdmin(
+  businessId: number,
+  userId: number,
+  base: Prisma.AnnouncementWhereInput,
+): Prisma.AnnouncementWhereInput {
+  return {
+    ...base,
+    OR: [
+      { scope: AnnouncementScope.COURSE, targetAllCourses: true },
+      { scope: AnnouncementScope.BATCH, targetAllBatches: true },
+      {
+        scope: AnnouncementScope.COURSE,
+        targetAllCourses: false,
+        targets: {
+          some: {
+            course: {
+              exam: { businessId },
+              batches: {
+                some: {
+                  batchUsers: { some: { userId, isActive: true } },
+                },
+              },
+            },
+          },
+        },
+      },
+      {
+        scope: AnnouncementScope.BATCH,
+        targetAllBatches: false,
+        targets: {
+          some: {
+            batch: {
+              course: { exam: { businessId } },
+              batchUsers: { some: { userId, isActive: true } },
+            },
+          },
+        },
+      },
+    ],
+  };
+}
+
+const managedWhereByVisibility: Record<
+  typeof VISIBILITY_FIELD_ADMINS | typeof VISIBILITY_FIELD_TEACHERS,
+  (businessId: number, userId: number) => Prisma.AnnouncementWhereInput
+> = {
+  [VISIBILITY_FIELD_ADMINS]: (businessId) => ({ businessId }),
+  [VISIBILITY_FIELD_TEACHERS]: (businessId, userId) => ({ businessId, createdBy: userId }),
+};
+
 export async function findUserAnnouncementBundle(
   businessId: number,
   userId: number,
-  role: UserRole,
+  visibilityField: 'visibleToAdmins' | 'visibleToTeachers' | 'visibleToStudents' | null,
 ): Promise<{ received: AnnouncementWithRelations[]; managed: AnnouncementWithRelations[] }> {
-  const visibilityField = visibilityFieldForRole(role);
   if (!visibilityField) {
     return { received: [], managed: [] };
   }
-
-  const isAdminOrSuperAdmin = role === UserRole.ADMIN || role === UserRole.SUPERADMIN;
-  const isTeacher = role === UserRole.TEACHER;
 
   const base: Prisma.AnnouncementWhereInput = {
     businessId,
@@ -279,68 +205,29 @@ export async function findUserAnnouncementBundle(
 
   const orderBy: Prisma.AnnouncementOrderByWithRelationInput = { createdAt: 'desc' };
 
-  const receivedWhere: Prisma.AnnouncementWhereInput = isAdminOrSuperAdmin
+  const isAdmin = visibilityField === VISIBILITY_FIELD_ADMINS;
+  const receivedWhere = isAdmin
     ? base
-    : {
-        ...base,
-        OR: [
-          { scope: AnnouncementScope.COURSE, targetAllCourses: true },
-          { scope: AnnouncementScope.BATCH, targetAllBatches: true },
-          {
-            scope: AnnouncementScope.COURSE,
-            targetAllCourses: false,
-            targets: {
-              some: {
-                course: {
-                  exam: { businessId },
-                  batches: {
-                    some: {
-                      batchUsers: { some: { userId, isActive: true } },
-                    },
-                  },
-                },
-              },
-            },
-          },
-          {
-            scope: AnnouncementScope.BATCH,
-            targetAllBatches: false,
-            targets: {
-              some: {
-                batch: {
-                  course: { exam: { businessId } },
-                  batchUsers: { some: { userId, isActive: true } },
-                },
-              },
-            },
-          },
-        ],
-      };
+    : buildReceivedWhereForNonAdmin(businessId, userId, base);
 
-  const managedWhere: Prisma.AnnouncementWhereInput | null = isAdminOrSuperAdmin
-    ? { businessId }
-    : isTeacher
-      ? { businessId, createdBy: userId }
-      : null;
+  const managedWhereFn = managedWhereByVisibility[visibilityField as typeof VISIBILITY_FIELD_ADMINS | typeof VISIBILITY_FIELD_TEACHERS];
 
-  const receivedQuery = prisma.announcement.findMany({
-    where: receivedWhere,
-    include: announcementListInclude,
-    orderBy,
-  });
-
-  if (!managedWhere) {
-    const received = await receivedQuery;
+  if (!managedWhereFn) {
+    const received = await prisma.announcement.findMany({
+      where: receivedWhere,
+      include: announcementListInclude,
+      orderBy,
+    });
     return { received, managed: [] };
   }
 
-  const managedQuery = prisma.announcement.findMany({
-    where: managedWhere,
-    include: announcementListInclude,
-    orderBy,
-  });
+  const managedWhere = managedWhereFn(businessId, userId);
 
-  const [received, managed] = await prisma.$transaction([receivedQuery, managedQuery]);
+  const [received, managed] = await prisma.$transaction([
+    prisma.announcement.findMany({ where: receivedWhere, include: announcementListInclude, orderBy }),
+    prisma.announcement.findMany({ where: managedWhere, include: announcementListInclude, orderBy }),
+  ]);
+
   return { received, managed };
 }
 
@@ -399,19 +286,19 @@ export async function createWithTargets(
 }
 
 export interface AnnouncementUpdateRepoInput {
-  heading?: string;
-  content?: string;
-  startDate?: Date;
-  endDate?: Date;
-  isActive?: boolean;
-  visibleToAdmins?: boolean;
-  visibleToTeachers?: boolean;
-  visibleToStudents?: boolean;
-  scope?: AnnouncementScope;
-  targetAllCourses?: boolean;
-  targetAllBatches?: boolean;
+  heading: string;
+  content: string;
+  startDate: Date;
+  endDate: Date;
+  isActive: boolean;
+  visibleToAdmins: boolean;
+  visibleToTeachers: boolean;
+  visibleToStudents: boolean;
+  scope: AnnouncementScope;
+  targetAllCourses: boolean;
+  targetAllBatches: boolean;
   updatedBy: number | null;
-  targets?: Array<{ courseId?: number | null; batchId?: number | null }>;
+  targets?: Array<{ courseId?: number | null; batchId?: number | null }> | undefined;
 }
 
 export async function updateWithTargets(
@@ -427,21 +314,22 @@ export async function updateWithTargets(
       throw new Error('ANNOUNCEMENT_NOT_FOUND');
     }
 
-    const data: Prisma.AnnouncementUpdateInput = {};
-    if (patch.heading !== undefined) data.heading = patch.heading;
-    if (patch.content !== undefined) data.content = patch.content;
-    if (patch.startDate !== undefined) data.startDate = patch.startDate;
-    if (patch.endDate !== undefined) data.endDate = patch.endDate;
-    if (patch.isActive !== undefined) data.isActive = patch.isActive;
-    if (patch.visibleToAdmins !== undefined) data.visibleToAdmins = patch.visibleToAdmins;
-    if (patch.visibleToTeachers !== undefined) data.visibleToTeachers = patch.visibleToTeachers;
-    if (patch.visibleToStudents !== undefined) data.visibleToStudents = patch.visibleToStudents;
-    if (patch.scope !== undefined) data.scope = patch.scope;
-    if (patch.targetAllCourses !== undefined) data.targetAllCourses = patch.targetAllCourses;
-    if (patch.targetAllBatches !== undefined) data.targetAllBatches = patch.targetAllBatches;
-    if (patch.updatedBy !== null && patch.updatedBy !== undefined) {
-      data.updatedByUser = { connect: { id: patch.updatedBy } };
-    }
+    const data: Prisma.AnnouncementUpdateInput = {
+      heading: patch.heading,
+      content: patch.content,
+      startDate: patch.startDate,
+      endDate: patch.endDate,
+      isActive: patch.isActive,
+      visibleToAdmins: patch.visibleToAdmins,
+      visibleToTeachers: patch.visibleToTeachers,
+      visibleToStudents: patch.visibleToStudents,
+      scope: patch.scope,
+      targetAllCourses: patch.targetAllCourses,
+      targetAllBatches: patch.targetAllBatches,
+      ...(patch.updatedBy !== null
+        ? { updatedByUser: { connect: { id: patch.updatedBy } } }
+        : {}),
+    };
 
     if (patch.targets !== undefined) {
       await tx.announcementTarget.deleteMany({ where: { announcementId: id } });
