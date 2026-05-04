@@ -51,17 +51,10 @@ export function registerAnnouncementSocket(io: Server): void {
       return;
     }
 
-    if (user.businessId === null || user.businessId === undefined) {
-      logger.warn(`[announcement-socket] connection rejected: no business userId=${user.id}`);
-      socket.emit(ANNOUNCEMENT_SOCKET_EVENTS.UNAUTHORIZED, { message: 'Business context required' });
-      socket.disconnect(true);
-      return;
-    }
-
     const businessId = user.businessId;
-    socket.join(ANNOUNCEMENT_SOCKET_ROOMS.business(businessId));
+    socket.join(ANNOUNCEMENT_SOCKET_ROOMS.business(businessId!));
 
-    const batchIds = await findActiveBatchIdsForUser(businessId, user.id);
+    const batchIds = await findActiveBatchIdsForUser(businessId!, user.id);
     for (const batchId of batchIds) {
       socket.join(ANNOUNCEMENT_SOCKET_ROOMS.batch(batchId));
     }

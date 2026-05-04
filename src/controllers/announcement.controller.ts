@@ -4,8 +4,9 @@ import type { AuthRequest } from '../dtos/auth.dto';
 import * as announcementRepo from '../repositories/announcement.repo';
 import { announcementService } from '../services/announcement.service';
 import { ApiResponseHandler } from '../utils/apiResponse';
-import { parsePositiveId, requireBusinessId, throwNotFound } from '../utils/announceUtils';
+import { parsePositiveId } from '../utils/announceUtils';
 import logger from '../utils/logger';
+import { requireBusinessId, throwNotFound } from '../utils/commonUtils';
 
 export const getMyAnnouncements = async (req: AuthRequest, res: Response) => {
   const user = req.user!;
