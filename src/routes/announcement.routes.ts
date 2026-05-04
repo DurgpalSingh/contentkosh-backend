@@ -27,7 +27,7 @@ const router = Router();
  *       403:
  *         description: Forbidden
  */
-router.get('/received', getMyAnnouncements);
+router.get('/', getMyAnnouncements);
 
 /**
  * @swagger
