@@ -1,5 +1,10 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.9] - Profile picture filed added in responce
+**P.R Raised by** : shubh404-SE on **Date** : 2026-05-05
+### Changed
+  - added profile picture field in response of get profile api.
+---
 ## Version [1.2.8] - Announcements Module + Websocket Integration
 **P.R Raised by** : shubh404-SE on **Date** : 2026-04-10
 
