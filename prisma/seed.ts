@@ -1,4 +1,11 @@
-import { PrismaClient, UserRole, UserStatus, CourseStatus, SubjectStatus } from '@prisma/client';
+import {
+  PrismaClient,
+  UserRole,
+  UserStatus,
+  CourseStatus,
+  SubjectStatus,
+  AnnouncementScope,
+} from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { PERMISSIONS } from '../src/constants/permission.constants';
 
@@ -343,7 +350,9 @@ async function main() {
   );
   console.log('✅ Seeding permissions:', permissions.map(p => p.code));
 
-  // Create announcements
+  const adminUserId = users[1].id;
+
+  // Create announcements (scope + targeting + audit fields)
   const announcements = await Promise.all([
     prisma.announcement.create({
       data: {
@@ -356,6 +365,10 @@ async function main() {
         visibleToAdmins: true,
         visibleToTeachers: true,
         visibleToStudents: true,
+        scope: AnnouncementScope.BATCH,
+        targetAllCourses: false,
+        targetAllBatches: true,
+        createdBy: adminUserId,
       },
     }),
     prisma.announcement.create({
@@ -369,6 +382,13 @@ async function main() {
         visibleToAdmins: true,
         visibleToTeachers: true,
         visibleToStudents: true,
+        scope: AnnouncementScope.COURSE,
+        targetAllCourses: false,
+        targetAllBatches: false,
+        createdBy: adminUserId,
+        targets: {
+          create: [{ courseId: courses[0].id }],
+        },
       },
     }),
     prisma.announcement.create({
@@ -382,6 +402,10 @@ async function main() {
         visibleToAdmins: true,
         visibleToTeachers: true,
         visibleToStudents: false,
+        scope: AnnouncementScope.BATCH,
+        targetAllCourses: false,
+        targetAllBatches: true,
+        createdBy: adminUserId,
       },
     }),
   ]);

@@ -17,7 +17,7 @@ export async function createCourse(data: Prisma.CourseUncheckedCreateInput) {
 }
 
 export async function findCourseById(id: number, options: CourseFindOptions = {}) {
-  const { where, orderBy, skip, take, ...findOptions } = options;
+  const { where: _where, orderBy: _orderBy, skip: _skip, take: _take, ...findOptions } = options;
   return prisma.course.findUnique({
     where: { id },
     ...findOptions,
@@ -53,4 +53,18 @@ export async function deleteCourse(id: number) {
   return prisma.course.delete({
     where: { id },
   });
+}
+
+export async function validateCourseIdsBelongToBusiness(
+  businessId: number,
+  courseIds: number[],
+): Promise<boolean> {
+  if (courseIds.length === 0) return true;
+  const count = await prisma.course.count({
+    where: {
+      id: { in: courseIds },
+      exam: { businessId },
+    },
+  });
+  return count === courseIds.length;
 }
