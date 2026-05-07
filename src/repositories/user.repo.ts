@@ -92,6 +92,7 @@ export async function findByBusinessId(businessId: number, role?: UserRole) {
       name: true,
       email: true,
       mobile: true,
+      profilePicture: true,
       role: true,
       status: true,
       createdAt: true
@@ -107,7 +108,8 @@ export async function findByBusinessId(businessId: number, role?: UserRole) {
       id: u.id,
       name: u.name,
       email: u.email,
-      mobile: u.mobile
+      mobile: u.mobile,
+      profilePicture: u.profilePicture
     }
   }));
 }

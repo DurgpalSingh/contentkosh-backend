@@ -23,6 +23,7 @@ const userSelect = {
   id: true,
   email: true,
   name: true,
+  profilePicture: true,
 };
 
 export interface BatchFindOptions {

@@ -87,6 +87,10 @@ export const swaggerSchemas = {
         type: 'string',
         description: 'Mobile number'
       },
+      profilePicture: {
+        type: 'string',
+        description: 'Profile picture URL'
+      },
       role: {
         type: 'string',
         enum: ['ADMIN', 'TEACHER', 'STUDENT', 'USER'],
