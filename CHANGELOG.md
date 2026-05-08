@@ -1,5 +1,10 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.11] - Test module controller test cases fixed
+**P.R Raised by** : shubh404-SE on **Date** : 2026-05-08
+
+### Changed
+  - fixed test cases for test module controller, Added a check to 
 
 ## Version [1.2.10] - Profile picture filed added in responce
 **P.R Raised by** : dpsingh-SE on **Date** : 2026-05-08

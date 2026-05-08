@@ -54,7 +54,10 @@ export const practiceTestController = {
     try {
       const businessId = getBusinessId(req);
       const user = req.user!;
-      const practiceTestId = req.params.practiceTestId!;
+      const practiceTestId = req.params.practiceTestId;
+      if (!practiceTestId) {
+        throw new BadRequestError('practiceTestId is required');
+      }
       const practiceTestRecord = await practiceTestService.get(businessId, practiceTestId, { id: user.id, role: user.role });
       const { questions, ...testData } = practiceTestRecord;
       const responsePayload = {
