@@ -1,5 +1,11 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+
+## Version [1.2.10] - Profile picture filed added in responce
+**P.R Raised by** : dpsingh-SE on **Date** : 2026-05-08
+### Changed
+  - add uat config file.
+---------------------------------------------------------------
 ## Version [1.2.9] - Profile picture filed added in responce
 **P.R Raised by** : shubh404-SE on **Date** : 2026-05-05
 ### Changed
