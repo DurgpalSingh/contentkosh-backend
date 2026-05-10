@@ -1,6 +1,6 @@
 # Changelog
 All notable changes to this project will be documented in this file.
-## Version [1.2.112] - Profile picture filed added in responce
+## Version [1.2.112] - UAT config update for cross-origin requests
 **P.R Raised by** : shubh404-SE on **Date** : 2026-05-10
 ### Changed
   - updated uat config file for `COOKIE_SAME_SITE=none` for cross-origin requests.
