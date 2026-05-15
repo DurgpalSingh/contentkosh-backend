@@ -1,5 +1,13 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.13] - Announcement access fixes + profile response improvements
+**P.R Raised by** : shubh404-SE on **Date** : 2026-05-15
+### Changed
+  - fixed announcement access by ID for teacher/student to enforce audience visibility, active window, and batch/course target membership.
+  - fixed announcement realtime delivery mismatch by securing announcement detail fetch path used by socket flow.
+  - added shared controller error handler utility and applied it in announcement controller catch blocks.
+  - added `profilePicture` in student/teacher profile API user payload by updating shared user select and mappers.
+---
 ## Version [1.2.12] - UAT config update for cross-origin requests
 **P.R Raised by** : shubh404-SE on **Date** : 2026-05-10
 ### Changed

@@ -27,7 +27,8 @@ export class StudentMapper {
           name: student.user.name,
           email: student.user.email,
           mobile: student.user.mobile,
-          role: student.user.role
+          role: student.user.role,
+          profilePicture: student.user.profilePicture,
         }
       })
     };

@@ -1,6 +1,15 @@
 import { IsNotEmpty, IsString, IsOptional, IsEmail, MinLength, IsEnum } from 'class-validator';
 import { Transform } from 'class-transformer';
-import { UserRole, UserStatus } from '@prisma/client';
+import { Prisma, UserRole, UserStatus } from '@prisma/client';
+
+export const USER_BASIC_SELECT: Prisma.UserSelect = {
+    id: true,
+    name: true,
+    email: true,
+    mobile: true,
+    role: true,
+    profilePicture: true,
+};
 
 export class CreateUserDto {
     @IsNotEmpty({ message: 'User name is required' })

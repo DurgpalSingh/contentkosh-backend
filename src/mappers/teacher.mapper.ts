@@ -29,7 +29,8 @@ export class TeacherMapper {
           name: teacher.user.name,
           email: teacher.user.email,
           mobile: teacher.user.mobile,
-          role: teacher.user.role
+          role: teacher.user.role,
+          profilePicture: teacher.user.profilePicture,
         }
       })
     };

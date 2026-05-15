@@ -1,17 +1,10 @@
 import { Prisma, Student } from '@prisma/client';
 import { prisma } from '../config/database';
-
-const userBasicSelect: Prisma.UserSelect = {
-  id: true,
-  name: true,
-  email: true,
-  mobile: true,
-  role: true
-};
+import { USER_BASIC_SELECT } from '../dtos/user.dto';
 
 const studentDefaultInclude: Prisma.StudentInclude = {
   user: {
-    select: userBasicSelect
+    select: USER_BASIC_SELECT
   },
   business: {
     select: {
@@ -20,10 +13,10 @@ const studentDefaultInclude: Prisma.StudentInclude = {
     }
   },
   createdByUser: {
-    select: userBasicSelect
+    select: USER_BASIC_SELECT
   },
   updatedByUser: {
-    select: userBasicSelect
+    select: USER_BASIC_SELECT
   }
 };
 
