@@ -130,6 +130,27 @@ async function assertTeacherAnnouncementPermissions(
 // ---------------------------------------------------------------------------
 
 export const announcementService = {
+  async getAnnouncementByIdForUser(user: IUser, id: number) {
+    const businessId = requireBusinessId(user);
+    const visibilityField = visibilityFieldForRole(user.role);
+    if (!visibilityField) {
+      throwNotFound('Announcement');
+    }
+
+    const isAdminVisibility = visibilityField === VISIBILITY_FIELD_ADMINS;
+    const row = isAdminVisibility
+      ? await announcementRepo.findAnnouncementByIdWithTargets(id, businessId)
+      : await announcementRepo.findVisibleAnnouncementByIdForUser(
+        businessId,
+        user.id,
+        id,
+        visibilityField,
+      );
+
+    if (!row) throwNotFound('Announcement');
+    return row;
+  },
+
   async getMyAnnouncements(user: IUser) {
     const businessId = requireBusinessId(user);
     logger.info(`[announcement] getMyAnnouncements userId=${user.id} role=${user.role} businessId=${businessId}`);

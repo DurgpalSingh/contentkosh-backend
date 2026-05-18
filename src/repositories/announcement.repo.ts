@@ -47,6 +47,31 @@ export async function findAnnouncementByIdWithTargetsAnyBusiness(
   });
 }
 
+export async function findVisibleAnnouncementByIdForUser(
+  businessId: number,
+  userId: number,
+  announcementId: number,
+  visibilityField: 'visibleToTeachers' | 'visibleToStudents',
+): Promise<AnnouncementWithRelations | null> {
+  const base: Prisma.AnnouncementWhereInput = {
+    id: announcementId,
+    businessId,
+    ...activeDateWhere(),
+    [visibilityField]: true,
+  };
+
+  const { batchIds, courseIds } = await findUserBatchAndCourseMembership(businessId, userId);
+  const targetOr = buildTargetOrForTeacherOrStudent(batchIds, courseIds);
+
+  return prisma.announcement.findFirst({
+    where: {
+      ...base,
+      OR: targetOr,
+    },
+    include: announcementListInclude,
+  });
+}
+
 function activeDateWhere(): Prisma.AnnouncementWhereInput {
   const now = new Date();
   return {
