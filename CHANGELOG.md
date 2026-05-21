@@ -1,5 +1,10 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.14] - UAT frontend url for COPS
+**P.R Raised by** : shubh404-SE on **Date** : 2026-05-21
+### Changed
+  - updated uat config file for frontend url for cops.
+---
 ## Version [1.2.13] - Announcement access fixes + profile response improvements
 **P.R Raised by** : shubh404-SE on **Date** : 2026-05-15
 ### Changed
