@@ -1,5 +1,10 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.15] - UAT cookie domain added
+**P.R Raised by** : shubh404-SE on **Date** : 2026-05-21
+### Changed
+  - updated uat config file to add cookie domain.
+---
 ## Version [1.2.14] - UAT frontend url for COPS
 **P.R Raised by** : shubh404-SE on **Date** : 2026-05-21
 ### Changed
