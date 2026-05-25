@@ -5,9 +5,15 @@ import { TestStatus, ResultVisibilityExam } from '../constants/test-enums';
 import logger from '../utils/logger';
 import { CreateExamTestDto, CreateQuestionDto, UpdateExamTestDto, UpdateQuestionDto } from '../dtos/test.dto';
 import { UserRole } from '@prisma/client';
-import { validateQuestionPayload, assertBatchBelongsToBusiness } from '../utils/test.utils';
-import { assertTestBatchAccess, assertSubjectForBatch } from '../utils/test.utils';
-import { sanitizeQuestionFieldsForCreate, sanitizeQuestionFieldsForUpdate } from '../utils/test.utils';
+import {
+  validateQuestionPayload,
+  assertBatchBelongsToBusiness,
+  assertTestBatchAccess,
+  assertSubjectForBatch,
+  assertCanModifyTestQuestions,
+  sanitizeQuestionFieldsForCreate,
+  sanitizeQuestionFieldsForUpdate,
+} from '../utils/test.utils';
 
 export class ExamTestService {
   private isElevated(role: UserRole) {
@@ -100,12 +106,20 @@ export class ExamTestService {
   async get(businessId: number, examTestId: string, user: { id: number; role: UserRole }) {
     logger.info(`[exam-test] get businessId=${businessId} examTestId=${examTestId} userId=${user.id} role=${user.role}`);
     const examTestRecord = await this.getWithAccess(businessId, examTestId, user);
+    const hasAttempts = await questionRepo.hasAttemptsForExamTest(businessId, examTestId);
     const canSeeQuestions = this.isElevated(user.role) || user.role === UserRole.TEACHER;
     if (canSeeQuestions) {
       const questions = await questionRepo.listExamTestQuestions(businessId, examTestId);
-      return { ...examTestRecord, questions } as typeof examTestRecord & { questions: typeof questions };
+      return {
+        ...examTestRecord,
+        hasAttempts,
+        questions,
+      } as typeof examTestRecord & { hasAttempts: boolean; questions: typeof questions };
     }
-    return examTestRecord as typeof examTestRecord & { questions?: undefined };
+    return {
+      ...examTestRecord,
+      hasAttempts,
+    } as typeof examTestRecord & { hasAttempts: boolean; questions?: undefined };
   }
 
   async update(
@@ -215,8 +229,7 @@ export class ExamTestService {
       `[exam-test] createQuestion businessId=${businessId} examTestId=${examTestId} type=${dto?.type} userId=${user.id}`,
     );
     await this.getWithAccess(businessId, examTestId, user);
-    const hasAttempts = await questionRepo.hasAttemptsForExamTest(businessId, examTestId);
-    if (hasAttempts) throw new BadRequestError('Cannot modify questions after attempts have started');
+    await assertCanModifyTestQuestions(businessId, examTestId, 'exam');
 
     validateQuestionPayload({
       type: dto.type,
@@ -248,8 +261,7 @@ export class ExamTestService {
     if (!examTestId) throw new BadRequestError('Question does not belong to an exam test');
     await this.getWithAccess(businessId, examTestId, user);
 
-    const hasAttempts = await questionRepo.hasAttemptsForExamTest(businessId, examTestId);
-    if (hasAttempts) throw new BadRequestError('Cannot modify questions after attempts have started');
+    await assertCanModifyTestQuestions(businessId, examTestId, 'exam');
 
     const resolvedQuestionType = dto.type ?? existing.type;
     const optionUpdates = dto.options !== undefined
@@ -300,8 +312,7 @@ export class ExamTestService {
     if (!examTestId) throw new BadRequestError('Question does not belong to an exam test');
     await this.getWithAccess(businessId, examTestId, user);
 
-    const hasAttempts = await questionRepo.hasAttemptsForExamTest(businessId, examTestId);
-    if (hasAttempts) throw new BadRequestError('Cannot modify questions after attempts have started');
+    await assertCanModifyTestQuestions(businessId, examTestId, 'exam');
 
     await questionRepo.deleteQuestion(businessId, questionId);
   }

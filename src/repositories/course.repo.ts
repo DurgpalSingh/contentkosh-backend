@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
+import { ACTIVE_COURSE_WHERE, activeCourseWhereForBusiness } from '../constants/hierarchyFilters';
 
 export interface CourseFindOptions {
   select?: Prisma.CourseSelect;
@@ -35,6 +36,7 @@ export async function findCoursesByExamId(examId: number, options: CourseFindOpt
   return prisma.course.findMany({
     where: {
       examId,
+      ...ACTIVE_COURSE_WHERE,
       ...where,
     },
     orderBy: options.orderBy || { name: 'asc' },
@@ -63,7 +65,7 @@ export async function validateCourseIdsBelongToBusiness(
   const count = await prisma.course.count({
     where: {
       id: { in: courseIds },
-      exam: { businessId },
+      ...activeCourseWhereForBusiness(businessId),
     },
   });
   return count === courseIds.length;

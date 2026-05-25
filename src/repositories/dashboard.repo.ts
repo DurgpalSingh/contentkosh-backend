@@ -1,5 +1,6 @@
 import { prisma } from '../config/database';
 import { ContentStatus, ExamStatus, Prisma, UserRole, UserStatus } from '@prisma/client';
+import { activeBatchWhereForBusiness } from '../constants/hierarchyFilters';
 
 const DASHBOARD_PREVIEW_LIMIT = 5;
 
@@ -27,8 +28,7 @@ const getActiveAnnouncementsWhere = (
 };
 
 const getTeacherBatchWhere = (businessId: number, userId: number): Prisma.BatchWhereInput => ({
-    isActive: true,
-    course: { exam: { businessId, status: ExamStatus.ACTIVE } },
+    ...activeBatchWhereForBusiness(businessId),
     batchUsers: {
         some: {
             userId,
@@ -42,8 +42,7 @@ const getTeacherBatchWhere = (businessId: number, userId: number): Prisma.BatchW
 });
 
 const getStudentBatchWhere = (businessId: number, userId: number): Prisma.BatchWhereInput => ({
-    isActive: true,
-    course: { exam: { businessId, status: ExamStatus.ACTIVE } },
+    ...activeBatchWhereForBusiness(businessId),
     batchUsers: {
         some: {
             userId,

@@ -9,6 +9,7 @@ import { BadRequestError, ForbiddenError, NotFoundError } from '../errors/api.er
 import { QuestionType } from '../constants/test-enums';
 import * as batchRepo from '../repositories/batch.repo';
 import * as subjectRepo from '../repositories/subject.repo';
+import * as questionRepo from '../repositories/testQuestion.repo';
 import logger from './logger';
 import { sanitizeOptionalQuillHtml, sanitizeRequiredQuillHtml } from './sanitizeHtml';
 
@@ -43,6 +44,21 @@ export function validateQuestionPayload(payload: {
   }
 }
 
+export type TestQuestionModifyKind = 'practice' | 'exam';
+
+export async function assertCanModifyTestQuestions(
+  businessId: number,
+  testId: string,
+  testType: TestQuestionModifyKind,
+): Promise<void> {
+  const hasAttempts =
+    testType === 'practice'
+      ? await questionRepo.hasAttemptsForPracticeTest(businessId, testId)
+      : await questionRepo.hasAttemptsForExamTest(businessId, testId);
+  if (hasAttempts) {
+    throw new BadRequestError('Cannot modify questions after attempts have started');
+  }
+}
 
 /**
  * Sanitizes Quill HTML for question text and explanation on create.
@@ -143,7 +159,7 @@ type AssertSubjectForBatchParams = {
 export async function assertSubjectForBatch(params: AssertSubjectForBatchParams): Promise<void> {
   const { batchId, subjectId, businessId, userId } = params;
 
-  const batch = await batchRepo.findBatchById(batchId);
+  const batch = await batchRepo.findBatchById(batchId, { requireActiveHierarchy: true });
   if (!batch) {
     logger.warn('[test-module] Subject validation failed: batch not found', {
       businessId,

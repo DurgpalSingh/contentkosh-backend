@@ -54,9 +54,10 @@ export const examTestController = {
         throw new BadRequestError('examTestId is required');
       }
       const examTestRecord = await examTestService.get(businessId, examTestId, { id: user.id, role: user.role });
-      const { questions, ...testData } = examTestRecord;
+      const { questions, hasAttempts, ...testData } = examTestRecord;
       const responsePayload = {
         ...TestMapper.examTest(testData),
+        hasAttempts,
         ...(questions ? { questions: questions.map(TestMapper.question) } : {}),
       };
       return ApiResponseHandler.success(res, responsePayload, 'Exam test fetched successfully');
