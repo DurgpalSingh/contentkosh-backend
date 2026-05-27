@@ -1,273 +1,157 @@
-# Contentkosh Backend
+# ContentKosh — Backend
 
-A Node.js/TypeScript backend API for the Contentkosh application with Prisma ORM and PostgreSQL.
+Backend API for the ContentKosh application — Node.js + TypeScript, Express, Prisma (Postgres).
 
-## Features
+## Quick overview
 
-- **User Management**: Registration, login, and profile management with Prisma ORM
-- **Authentication**: JWT-based authentication with bcrypt password hashing
-- **Database**: PostgreSQL with Prisma ORM and migrations
-- **Error Handling**: Comprehensive error handling middleware
-- **Logging**: Winston-based logging system
-- **TypeScript**: Full TypeScript support with strict type checking
-- **API Documentation**: Interactive Swagger/OpenAPI documentation
-
-## Tech Stack
-
-- **Runtime**: Node.js
-- **Language**: TypeScript
-- **Framework**: Express.js
-- **Database**: PostgreSQL + Prisma ORM
-- **Authentication**: JWT + bcryptjs
-- **Logging**: Winston
-- **API Documentation**: Swagger/OpenAPI
-- **Development**: Nodemon, ts-node
-
-## Project Structure
-
-```
-src/
-├── config/
-│   ├── config.ts            # Application configuration
-│   ├── database.ts          # Prisma client configuration
-│   └── swagger.ts           # Swagger documentation configuration
-├── controllers/
-│   └── userController.ts    # User-related operations
-├── middlewares/
-│   ├── auth.middleware.ts   # Authentication middleware
-│   └── errorHandler.ts      # Error handling middleware
-├── models/
-│   └── User.ts             # User model with Prisma operations
-├── services/
-│   └── authService.ts      # Authentication service (JWT, password hashing)
-├── repositories/
-│   └── user.repo.ts        # User repository for database operations
-├── dtos/
-│   └── auth.dto.ts         # Data transfer objects
-├── routes/
-│   ├── index.ts            # Main routes
-│   └── userRoutes.ts       # User routes with Swagger docs
-├── utils/
-│   ├── apiResponse.ts      # API response handler
-│   └── logger.ts           # Logging utility
-├── contexts/
-│   └── request-context.ts  # Request context management
-└── index.ts                # Application entry point
-
-prisma/
-└── schema.prisma           # Database schema and Prisma configuration
-```
-
-## Architecture
-
-The application follows a clean architecture pattern with proper separation of concerns:
-
-- **Controllers**: Handle HTTP requests and responses
-- **Services**: Contain business logic (authentication, validation, etc.)
-- **Repositories**: Handle database operations only
-- **Middlewares**: Handle cross-cutting concerns (auth, error handling)
-- **Config**: Centralized configuration management
-- **DTOs**: Data transfer objects for type safety
+- Implements authentication (JWT), user management, Prisma ORM, file upload support, and Swagger API docs.
+- Main entrypoint: `src/index.ts`.
 
 ## Prerequisites
 
-- Node.js (v16 or higher)
-- PostgreSQL (v12 or higher)
-- npm or yarn
+- Node.js 16+ (recommended 18+)
+- PostgreSQL (12+)
+- npm (or yarn/pnpm)
 
-## Installation
+## Setup (local development)
 
-1. Clone the repository:
+1. Install dependencies:
+
 ```bash
-git clone <repository-url>
-cd backend
-```
-
-2. Install dependencies:
-```bash
+cd contentkosh-backend
 npm install
 ```
 
-3. Set up PostgreSQL:
-   - Install PostgreSQL on your system
-   - Create a database named `contentkosh`
+2. Configure environment:
 
-4. Configure environment variables:
-   - Copy `.env.example` to `.env` (if it doesn't exist)
-   - Update the `DATABASE_URL` in `.env`:
-   ```env
-   DATABASE_URL="postgresql://username:password@localhost:5432/contentkosh?schema=public"
-   ```
+- Copy an environment template or create `.env` in the `contentkosh-backend` folder. You can use `env.local` or `env.uat` as a starting point.
+- At minimum set:
 
-5. Set up the database:
-```bash
-# Generate Prisma client
-npm run db:generate
-
-# Push schema to database (for development)
-npm run db:push
-
-# Or use migrations (for production)
-npm run db:migrate
+```
+DATABASE_URL=<postgres-connection-string>
+JWT_SECRET=<a-strong-secret>
+NEXT_PUBLIC_API_URL=http://localhost:3000
 ```
 
-## Development
+3. Prepare database (Prisma):
 
-Start the development server:
+```bash
+# generate Prisma client
+npm run db:generate
+
+# apply migrations (development)
+npm run db:migrate
+
+# or, for a quick dev sync (no migrations):
+npm run db:push
+
+# seed initial data (optional)
+npm run db:seed
+```
+
+4. Run development server:
+
 ```bash
 npm run dev
 ```
 
-The server will start on `http://localhost:8080`
+By default the server runs on port `8080` (see `PORT` env var). Swagger UI is available at `http://localhost:8080/api-docs`.
 
-## API Documentation
+## Useful scripts
 
-### Swagger UI
-Access the interactive API documentation at:
-```
-http://localhost:8080/api-docs
-```
+- `npm run dev` — start dev server with `nodemon` (hot reload)
+- `npm run build` — run tests then compile TypeScript (`tsc -p tsconfig.build.json`)
+- `npm start` — run production bundle from `dist/`
+- `npm run db:generate` — `prisma generate`
+- `npm run db:migrate` — create/apply migrations
+- `npm run db:push` — push schema to database (no migrations)
+- `npm run db:studio` — open Prisma Studio
+- `npm run db:reset-seed` — reset DB and run seed
+- `npm test` — run Jest tests
 
-The Swagger UI provides:
-- **Interactive API testing** - Test endpoints directly from the browser
-- **Request/Response schemas** - View expected data structures
-- **Authentication** - Test protected endpoints with JWT tokens
-- **Error responses** - See all possible error scenarios
+## Environment variables
 
-### API Endpoints
+- `DATABASE_URL` — PostgreSQL connection string used by Prisma
+- `PORT` — server port (default 8080)
+- `JWT_SECRET` — secret used to sign JWT tokens
+- `FRONTEND_URL` / `NEXT_PUBLIC_API_URL` — frontend base URL used for CORS / callbacks
+- File-upload related variables are present in `.env` (allowed types, sizes, upload dir)
 
-#### Health Check
-- `GET /health` - Check API health
+Check the `.env`, `.env.local`, or `.env.uat` files in the repo root to see concrete examples.
 
-#### User Management
-- `POST /api/users/register` - Register a new user
-  ```json
-  {
-    "email": "user@example.com",
-    "password": "password123",
-    "name": "John Doe"
-  }
-  ```
-- `POST /api/users/login` - Login user
-  ```json
-  {
-    "email": "user@example.com",
-    "password": "password123"
-  }
-  ```
-- `GET /api/users/profile` - Get user profile (requires Authorization header)
+## API docs
 
-## Database Schema
+- Swagger UI (interactive): `http://localhost:8080/api-docs`
+- Raw OpenAPI JSON available at `http://localhost:8080/swagger.json` (used by the web client codegen)
 
-### Users Table (Prisma Schema)
-```prisma
-model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  password  String
-  name      String
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+## Database — Prisma notes
 
-  @@map("users")
-}
-```
+- Schema: `prisma/schema.prisma` — models and relations live here.
+- To generate the client: `npm run db:generate`
+- To inspect data: `npm run db:studio`
 
-## Available Scripts
+## Testing
 
-- `npm run dev` - Start development server with hot reload
-- `npm run build` - Build the project for production
-- `npm start` - Start production server
-- `npm run db:generate` - Generate Prisma client
-- `npm run db:push` - Push schema changes to database
-- `npm run db:migrate` - Create and apply database migrations
-- `npm run db:studio` - Open Prisma Studio (database GUI)
-- `npm run db:reset` - Reset database and apply migrations
-- `npm test` - Run tests (not implemented yet)
+- Unit/integration tests use Jest. Run `npm test` or `npm run test:watch` during development.
 
-## Environment Variables
+## Project layout (high level)
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `PORT` | Server port | 8080 |
-| `NODE_ENV` | Environment | development |
-| `DATABASE_URL` | PostgreSQL connection string | - |
-| `JWT_SECRET` | JWT secret key | your-secret-key |
-| `JWT_EXPIRES_IN` | JWT expiration | 24h |
+- `src/` — application source (controllers, services, repositories, middlewares, routes)
+- `prisma/` — Prisma schema and seed scripts
+- `scripts/` — small utilities (e.g. doc generation)
 
-## Testing the API
+## Troubleshooting
 
-### Using Swagger UI (Recommended)
-1. Start the server: `npm run dev`
-2. Open `http://localhost:8080/api-docs`
-3. Use the interactive interface to test endpoints
-
-### Using cURL
-
-#### Register a new user:
-```bash
-curl -X POST http://localhost:8080/api/users/register \
-  -H "Content-Type: application/json" \
-  -d '{"email":"test@example.com","password":"password123","name":"Test User"}'
-```
-
-#### Login:
-```bash
-curl -X POST http://localhost:8080/api/users/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"test@example.com","password":"password123"}'
-```
-
-#### Get profile (with token):
-```bash
-curl -X GET http://localhost:8080/api/users/profile \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN"
-```
-
-## Database Management
-
-### Using Prisma Studio
-```bash
-npm run db:studio
-```
-This opens a web interface to view and edit your database.
-
-### Creating Migrations
-```bash
-npm run db:migrate
-```
-This creates a new migration file and applies it to the database.
-
-### Pushing Schema Changes (Development)
-```bash
-npm run db:push
-```
-This pushes schema changes directly to the database without creating migration files.
-
-## TODO
-
-- [x] Implement database connection (PostgreSQL + Prisma)
-- [x] Add JWT authentication
-- [x] Add password hashing with bcrypt
-- [x] Implement user registration and login
-- [x] Separate concerns (models, services, controllers)
-- [x] Add API documentation (Swagger)
-- [ ] Add input validation middleware
-- [ ] Add user roles and permissions
-- [ ] Implement content management
-- [ ] Add file upload functionality
-- [ ] Add pagination for listings
-- [ ] Add search functionality
-- [ ] Add tests
+- If Prisma fails to connect, verify `DATABASE_URL` and that Postgres is running and accessible.
+- If swagger/codegen fails, start the backend first and visit `/swagger.json` to confirm it's reachable.
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+- Fork the repository and create a branch using the pattern `feature/your-feature` or `fix/issue-123`.
+- Run tests and linters locally before opening a PR:
 
-## License
+```bash
+npm install
+# run lint (if available)
+npm run lint || true
+npm test
+```
 
-This project is licensed under the ISC License. 
+- Commit message guidance: use present-tense, be descriptive, and reference issue numbers (example: `Fix: validate user input (#123)`).
+- Open a Pull Request with a clear description, test instructions, and any relevant screenshots or API requests.
+- Maintain code review etiquette: respond to review comments, update the branch, and squash/fixup commits if requested.
+
+## Development
+
+Local development checklist and common commands:
+
+1. Ensure PostgreSQL is running and reachable.
+2. Create or copy `.env` and set required variables (`DATABASE_URL`, `JWT_SECRET`, `PORT`, etc.).
+3. Install dependencies:
+
+```bash
+npm install
+```
+
+4. Prepare the database:
+
+```bash
+npm run db:generate
+npm run db:migrate
+# optional: seed initial data
+npm run db:seed
+```
+
+5. Start the dev server:
+
+```bash
+npm run dev
+```
+
+6. Common maintenance commands:
+
+- `npm run db:studio` — open Prisma Studio to inspect data
+- `npm run db:push` — push schema changes without generating migrations (dev only)
+- `npm run db:reset-seed` — reset database and re-seed (dev only)
+
+If you prefer separate files, I can create dedicated `CONTRIBUTING.md` and `DEVELOPMENT.md` files — let me know.

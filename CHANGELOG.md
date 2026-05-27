@@ -1,5 +1,11 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.16] - Readme file updated
+**P.R Raised by** : shubh404-SE on **Date** : 2026-05-27
+
+### Changed
+  - `Readme.md` updated
+---
 ## Version [1.2.15] - UAT cookie domain added
 **P.R Raised by** : shubh404-SE on **Date** : 2026-05-21
 ### Changed
