@@ -1,5 +1,10 @@
 import { Prisma, UserRole } from '@prisma/client';
 import { prisma } from '../config/database';
+import {
+  ACTIVE_BATCH_WHERE,
+  activeBatchWhereForBusiness,
+  activeCourseWhereForBusiness,
+} from '../constants/hierarchyFilters';
 
 const batchSelect = {
   id: true,
@@ -34,6 +39,8 @@ export interface BatchFindOptions {
   select?: Prisma.BatchSelect;
   include?: Prisma.BatchInclude;
   includeStudents?: boolean;
+  /** When true, batch must have active course + exam (user-facing / validation paths). */
+  requireActiveHierarchy?: boolean;
 }
 
 export async function createBatch(data: Prisma.BatchCreateInput) {
@@ -51,7 +58,30 @@ export async function createBatch(data: Prisma.BatchCreateInput) {
 }
 
 export async function findBatchById(id: number, options: BatchFindOptions = {}) {
-  const query: any = { where: { id } };
+  if (options.requireActiveHierarchy) {
+    const query: Prisma.BatchFindFirstArgs = {
+      where: {
+        id,
+        ...ACTIVE_BATCH_WHERE,
+        ...(options.where ?? {}),
+      },
+    };
+
+    if (options.select) {
+      query.select = options.select;
+    } else if (options.include) {
+      query.include = options.include;
+    } else {
+      query.select = {
+        ...batchSelect,
+        course: { select: courseSelect },
+      };
+    }
+
+    return prisma.batch.findFirst(query);
+  }
+
+  const query: Prisma.BatchFindUniqueArgs = { where: { id } };
 
   if (options.select) {
     query.select = options.select;
@@ -60,7 +90,7 @@ export async function findBatchById(id: number, options: BatchFindOptions = {}) 
   } else {
     query.select = {
       ...batchSelect,
-      course: { select: courseSelect }
+      course: { select: courseSelect },
     };
   }
 
@@ -68,8 +98,11 @@ export async function findBatchById(id: number, options: BatchFindOptions = {}) 
 }
 
 export async function findBatchBusinessId(batchId: number): Promise<number | null> {
-  const batch = await prisma.batch.findUnique({
-    where: { id: batchId },
+  const batch = await prisma.batch.findFirst({
+    where: {
+      id: batchId,
+      ...ACTIVE_BATCH_WHERE,
+    },
     select: {
       course: {
         select: {
@@ -113,6 +146,7 @@ export async function findBatchesByCourseId(courseId: number, options: BatchFind
   const query: Prisma.BatchFindManyArgs = {
     where: {
       courseId,
+      ...ACTIVE_BATCH_WHERE,
       ...(options.where || {}),
     },
     orderBy: options.orderBy || { createdAt: 'desc' },
@@ -374,9 +408,7 @@ export function applyBatchAccessFilters(
   if (access.role !== UserRole.SUPERADMIN && access.businessId) {
     next.where = {
       ...next.where,
-      course: {
-        exam: { businessId: access.businessId }
-      }
+      ...activeBatchWhereForBusiness(access.businessId),
     };
   }
 
@@ -411,11 +443,7 @@ export async function findActiveBatchIdsForUser(
     where: {
       userId,
       isActive: true,
-      batch: {
-        course: {
-          exam: { businessId },
-        },
-      },
+      batch: activeBatchWhereForBusiness(businessId),
     },
     select: { batchId: true },
   });
@@ -430,11 +458,7 @@ export async function findUserBatchAndCourseMembership(
     where: {
       userId,
       isActive: true,
-      batch: {
-        course: {
-          exam: { businessId },
-        },
-      },
+      batch: activeBatchWhereForBusiness(businessId),
     },
     select: {
       batchId: true,
@@ -448,11 +472,7 @@ export async function findUserBatchAndCourseMembership(
 
 export async function findAllBatchIdsInBusiness(businessId: number): Promise<number[]> {
   const rows = await prisma.batch.findMany({
-    where: {
-      course: {
-        exam: { businessId },
-      },
-    },
+    where: activeBatchWhereForBusiness(businessId),
     select: { id: true },
   });
   return rows.map((r) => r.id);
@@ -466,7 +486,7 @@ export async function findBatchIdsForCourseIds(
   const rows = await prisma.batch.findMany({
     where: {
       courseId: { in: courseIds },
-      course: { exam: { businessId } },
+      ...activeBatchWhereForBusiness(businessId),
     },
     select: { id: true },
   });
@@ -481,7 +501,7 @@ export async function validateBatchIdsBelongToBusiness(
   const count = await prisma.batch.count({
     where: {
       id: { in: batchIds },
-      course: { exam: { businessId } },
+      ...activeBatchWhereForBusiness(businessId),
     },
   });
   return count === batchIds.length;

@@ -308,9 +308,13 @@ export class ContentService {
       userId: user.id
     });
 
-    const batch = await batchRepo.findBatchById(batchId, {
-      include: { course: { include: { exam: true } } }
-    }) as any;
+    const batch = (await batchRepo.findBatchById(batchId, {
+      requireActiveHierarchy: true,
+      include: { course: { include: { exam: true } } },
+    })) as {
+      courseId: number;
+      course?: { exam?: { businessId: number } };
+    } | null;
 
     if (!batch) {
       logger.warn('ContentService: Batch not found during subject validation', {
@@ -354,7 +358,10 @@ export class ContentService {
   }
 
   private async batchAccessContext(batchId: number, user: IUser) {
-    const batch = await batchRepo.findBatchById(batchId, { include: { course: { include: { exam: true } } } }) as any;
+    const batch = (await batchRepo.findBatchById(batchId, {
+      requireActiveHierarchy: true,
+      include: { course: { include: { exam: true } } },
+    })) as { course?: { exam?: { businessId: number; id: number } } } | null;
 
     if (!batch) {
       throw new NotFoundError('Batch not found');

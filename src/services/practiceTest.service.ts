@@ -5,9 +5,15 @@ import { TestStatus } from '../constants/test-enums';
 import logger from '../utils/logger';
 import { CreatePracticeTestDto, CreateQuestionDto, UpdatePracticeTestDto, UpdateQuestionDto } from '../dtos/test.dto';
 import { UserRole } from '@prisma/client';
-import { validateQuestionPayload, assertBatchBelongsToBusiness } from '../utils/test.utils';
-import { assertTestBatchAccess, assertSubjectForBatch } from '../utils/test.utils';
-import { sanitizeQuestionFieldsForCreate, sanitizeQuestionFieldsForUpdate } from '../utils/test.utils';
+import {
+  validateQuestionPayload,
+  assertBatchBelongsToBusiness,
+  assertTestBatchAccess,
+  assertSubjectForBatch,
+  assertCanModifyTestQuestions,
+  sanitizeQuestionFieldsForCreate,
+  sanitizeQuestionFieldsForUpdate,
+} from '../utils/test.utils';
 
 export class PracticeTestService {
   private isElevated(role: UserRole) {
@@ -92,12 +98,20 @@ export class PracticeTestService {
       `[practice-test] get businessId=${businessId} practiceTestId=${practiceTestId} userId=${user.id} role=${user.role}`,
     );
     const practiceTestRecord = await this.getWithAccess(businessId, practiceTestId, user);
+    const hasAttempts = await questionRepo.hasAttemptsForPracticeTest(businessId, practiceTestId);
     const canSeeQuestions = this.isElevated(user.role) || user.role === UserRole.TEACHER;
     if (canSeeQuestions) {
       const questions = await questionRepo.listPracticeTestQuestions(businessId, practiceTestId);
-      return { ...practiceTestRecord, questions } as typeof practiceTestRecord & { questions: typeof questions };
+      return {
+        ...practiceTestRecord,
+        hasAttempts,
+        questions,
+      } as typeof practiceTestRecord & { hasAttempts: boolean; questions: typeof questions };
     }
-    return practiceTestRecord as typeof practiceTestRecord & { questions?: undefined };
+    return {
+      ...practiceTestRecord,
+      hasAttempts,
+    } as typeof practiceTestRecord & { hasAttempts: boolean; questions?: undefined };
   }
 
   async update(
@@ -190,8 +204,7 @@ export class PracticeTestService {
       `[practice-test] createQuestion businessId=${businessId} practiceTestId=${practiceTestId} type=${dto?.type} userId=${user.id}`,
     );
     await this.getWithAccess(businessId, practiceTestId, user);
-    const hasAttempts = await questionRepo.hasAttemptsForPracticeTest(businessId, practiceTestId);
-    if (hasAttempts) throw new BadRequestError('Cannot modify questions after attempts have started');
+    await assertCanModifyTestQuestions(businessId, practiceTestId, 'practice');
 
     validateQuestionPayload({
       type: dto.type,
@@ -225,8 +238,7 @@ export class PracticeTestService {
     if (!practiceTestId) throw new BadRequestError('Question does not belong to a practice test');
     await this.getWithAccess(businessId, practiceTestId, user);
 
-    const hasAttempts = await questionRepo.hasAttemptsForPracticeTest(businessId, practiceTestId);
-    if (hasAttempts) throw new BadRequestError('Cannot modify questions after attempts have started');
+    await assertCanModifyTestQuestions(businessId, practiceTestId, 'practice');
 
     const resolvedQuestionType = dto.type ?? existing.type;
     const optionUpdates = dto.options !== undefined
@@ -278,8 +290,7 @@ export class PracticeTestService {
     if (!practiceTestId) throw new BadRequestError('Question does not belong to a practice test');
     await this.getWithAccess(businessId, practiceTestId, user);
 
-    const hasAttempts = await questionRepo.hasAttemptsForPracticeTest(businessId, practiceTestId);
-    if (hasAttempts) throw new BadRequestError('Cannot modify questions after attempts have started');
+    await assertCanModifyTestQuestions(businessId, practiceTestId, 'practice');
 
     await questionRepo.deleteQuestion(businessId, questionId);
   }

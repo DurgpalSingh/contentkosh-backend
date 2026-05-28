@@ -1,5 +1,6 @@
 import { Prisma, Content } from '@prisma/client';
 import { prisma } from '../config/database';
+import { ACTIVE_BATCH_WHERE } from '../constants/hierarchyFilters';
 
 const userBasicSelect: Prisma.UserSelect = {
   id: true,
@@ -75,7 +76,8 @@ export const findContentsByBatchId = async (
 ): Promise<Content[]> => {
   const where: Prisma.ContentWhereInput = {
     batchId,
-    ...options.where
+    batch: ACTIVE_BATCH_WHERE,
+    ...options.where,
   };
 
   // If select is provided, use it; otherwise use include

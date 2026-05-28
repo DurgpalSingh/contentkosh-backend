@@ -1,11 +1,21 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.17] - Test guards, hierarchy filters, and exam-delete visibility
+**Date** : 2026-05-26
+
+### Added
+  - Shared hierarchy filters in `src/constants/hierarchyFilters.ts` for consistent parent-chain checks.
+  - `assertCanModifyTestQuestions` in `src/utils/test.utils.ts` to block create/update/delete of test questions after any student attempt exists (practice and exam tests).
+
+### Changed
+  - used hierarchyFilters in all repo to add parent active chain checks.
+---
 ## Version [1.2.16] - Readme file updated
 **P.R Raised by** : shubh404-SE on **Date** : 2026-05-27
 
 ### Changed
   - `Readme.md` updated
----
+
 ## Version [1.2.15] - UAT cookie domain added
 **P.R Raised by** : shubh404-SE on **Date** : 2026-05-21
 ### Changed

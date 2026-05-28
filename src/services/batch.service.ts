@@ -9,6 +9,7 @@ import { IUser } from '../dtos/auth.dto';
 import logger from '../utils/logger';
 import { BatchMapper } from '../mappers/batch.mapper';
 import { QueryBuilder } from '../utils/queryBuilder';
+import { activeBatchWhereForBusiness } from '../constants/hierarchyFilters';
 
 export class BatchService {
     private normalizeStudentBatchIncludes(options: any) {
@@ -238,7 +239,7 @@ export class BatchService {
 
         options.where = {
             ...(options.where || {}),
-            isActive: true,
+            ...activeBatchWhereForBusiness(user.businessId!),
         };
         const scopedOptions = batchRepo.applyBatchAccessFilters(options, {
             role: user.role,

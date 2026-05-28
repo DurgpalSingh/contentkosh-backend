@@ -1,5 +1,7 @@
 import {
   AnnouncementScope,
+  CourseStatus,
+  ExamStatus,
   Prisma,
 } from '@prisma/client';
 import { prisma } from '../config/database';
@@ -179,9 +181,11 @@ function buildReceivedWhereForNonAdmin(
         targets: {
           some: {
             course: {
-              exam: { businessId },
+              status: CourseStatus.ACTIVE,
+              exam: { businessId, status: ExamStatus.ACTIVE },
               batches: {
                 some: {
+                  isActive: true,
                   batchUsers: { some: { userId, isActive: true } },
                 },
               },
@@ -195,7 +199,11 @@ function buildReceivedWhereForNonAdmin(
         targets: {
           some: {
             batch: {
-              course: { exam: { businessId } },
+              isActive: true,
+              course: {
+                status: CourseStatus.ACTIVE,
+                exam: { businessId, status: ExamStatus.ACTIVE },
+              },
               batchUsers: { some: { userId, isActive: true } },
             },
           },

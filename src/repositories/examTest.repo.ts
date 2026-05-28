@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { TestStatus } from '../constants/test-enums';
+import { ACTIVE_BATCH_WHERE } from '../constants/hierarchyFilters';
 
 const examTestSelect = {
   id: true,
@@ -63,7 +64,9 @@ export function findExamTestById(
   id: string,
   options: ExamTestFindOptions = {},
 ) {
-  const query: Prisma.ExamTestFindFirstArgs = { where: { id, businessId } };
+  const query: Prisma.ExamTestFindFirstArgs = {
+    where: { id, businessId, batch: ACTIVE_BATCH_WHERE },
+  };
 
   if (options.select) query.select = options.select;
   else if (options.include) query.include = options.include;
@@ -83,6 +86,7 @@ export function findExamTestByIdForUser(
       id,
       businessId,
       batch: {
+        ...ACTIVE_BATCH_WHERE,
         batchUsers: {
           some: { userId, isActive: true },
         },
@@ -104,6 +108,7 @@ export function findExamTestsByBusinessId(
   const query: Prisma.ExamTestFindManyArgs = {
     where: {
       businessId,
+      batch: ACTIVE_BATCH_WHERE,
       ...(options.where ?? {}),
     },
     orderBy: options.orderBy ?? { createdAt: 'desc' },
@@ -128,6 +133,7 @@ export function findExamTestsByBusinessIdForUser(
     where: {
       businessId,
       batch: {
+        ...ACTIVE_BATCH_WHERE,
         batchUsers: {
           some: { userId, isActive: true },
         },
@@ -167,6 +173,7 @@ export function findPublishedExamTestsForStudent(businessId: number, userId: num
       businessId,
       status: TestStatus.PUBLISHED,
       batch: {
+        ...ACTIVE_BATCH_WHERE,
         batchUsers: { some: { userId, isActive: true } },
       },
     },
