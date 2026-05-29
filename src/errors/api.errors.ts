@@ -18,7 +18,10 @@ export class NotFoundError extends ApiError {
 
 export class AlreadyExistsError extends ApiError {
   constructor(resource: string = 'Resource') {
-    super(`${resource} already exists`, 409); // HTTP 409 Conflict
+    const message = /already exists$/i.test(resource.trim())
+      ? resource
+      : `${resource} already exists`;
+    super(message, 409); // HTTP 409 Conflict
     this.name = 'AlreadyExistsError';
   }
 }

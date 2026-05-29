@@ -55,17 +55,19 @@ export class PracticeTestService {
       entityId: 'create',
     });
 
-    await assertSubjectForBatch({
-      batchId: dto.batchId,
-      subjectId: dto.subjectId,
-      businessId,
-      userId: user.id,
-    });
+    if (dto.subjectId !== undefined && dto.subjectId !== null) {
+      await assertSubjectForBatch({
+        batchId: dto.batchId,
+        subjectId: dto.subjectId,
+        businessId,
+        userId: user.id,
+      });
+    }
 
     const createdPracticeTest = await practiceRepo.createPracticeTest({
       businessId,
       batchId: dto.batchId,
-      subjectId: dto.subjectId,
+      subjectId: dto.subjectId ?? null,
       name: dto.name,
       description: dto.description ?? null,
       status: dto.status ?? TestStatus.DRAFT,

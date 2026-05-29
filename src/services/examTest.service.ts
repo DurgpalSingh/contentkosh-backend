@@ -55,12 +55,14 @@ export class ExamTestService {
       entityId: 'create',
     });
 
-    await assertSubjectForBatch({
-      batchId: dto.batchId,
-      subjectId: dto.subjectId,
-      businessId,
-      userId: user.id,
-    });
+    if (dto.subjectId !== undefined && dto.subjectId !== null) {
+      await assertSubjectForBatch({
+        batchId: dto.batchId,
+        subjectId: dto.subjectId,
+        businessId,
+        userId: user.id,
+      });
+    }
 
     const startAt = new Date(dto.startAt);
     const deadlineAt = new Date(dto.deadlineAt);
@@ -71,7 +73,7 @@ export class ExamTestService {
     const createdExamTest = await examRepo.createExamTest({
       businessId,
       batchId: dto.batchId,
-      subjectId: dto.subjectId,
+      subjectId: dto.subjectId ?? null,
       name: dto.name,
       description: dto.description ?? null,
       status: dto.status ?? TestStatus.DRAFT,

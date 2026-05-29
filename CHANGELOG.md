@@ -1,5 +1,11 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.18] - subject optional for test and content
+**Date** : 2026-05-29
+
+### Changed
+  - subject field  is now optional for test and content.
+  - removed duplicte "already exists" stetment in error message.
 ## Version [1.2.17] - Test guards, hierarchy filters, and exam-delete visibility
 **Date** : 2026-05-26
 
