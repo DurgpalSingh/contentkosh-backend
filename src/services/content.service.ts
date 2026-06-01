@@ -30,7 +30,6 @@ export class ContentService {
     this.validateFilePath(data.filePath, data.type);
 
     try {
-      await this.validateSubjectForBatch(batchId, data.subjectId, user);
       const createData: Prisma.ContentCreateInput = {
         title: data.title,
         type: data.type,
@@ -40,12 +39,16 @@ export class ContentService {
         batch: {
           connect: { id: batchId }
         },
-        subject: {
-          connect: { id: data.subjectId }
-        },
         uploader: {
           connect: { id: user.id }
-        }
+        },
+        ...(data.subjectId !== undefined
+          ? {
+              subject: {
+                connect: { id: data.subjectId }
+              }
+            }
+          : {})
       };
       const content = await contentRepo.createContent(createData);
       logger.info('ContentService: Content created', {
@@ -119,18 +122,20 @@ export class ContentService {
       throw new ForbiddenError('You can only update content you uploaded');
     }
 
-    await this.validateSubjectForBatch(existingContent.batchId, data.subjectId, user);
-
     const updateData: Prisma.ContentUpdateInput = {
       ...(data.title && { title: data.title }),
       ...(data.status !== undefined && { status: data.status }),
-      subject: {
-        connect: { id: data.subjectId }
-      },
       updater: {
         connect: { id: user.id }
       },
-      updatedAt: new Date()
+      updatedAt: new Date(),
+      ...(data.subjectId !== undefined
+        ? {
+            subject: {
+              connect: { id: data.subjectId }
+            }
+          }
+        : {})
     };
 
     const content = await contentRepo.updateContent(id, updateData);
