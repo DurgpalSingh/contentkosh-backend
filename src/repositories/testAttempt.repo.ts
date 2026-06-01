@@ -379,6 +379,22 @@ export async function getExamTestQuestionIds(examTestId: string) {
   return rows.map((r) => r.id);
 }
 
+export async function getPracticeTestQuestionSummaries(practiceTestId: string) {
+  return prisma.testQuestion.findMany({
+    where: { practiceTestId },
+    select: { id: true, text: true },
+    orderBy: { createdAt: 'asc' },
+  });
+}
+
+export async function getExamTestQuestionSummaries(examTestId: string) {
+  return prisma.testQuestion.findMany({
+    where: { examTestId },
+    select: { id: true, text: true },
+    orderBy: { createdAt: 'asc' },
+  });
+}
+
 export async function getPracticeTestCorrectCountsByQuestion(
   practiceTestId: string,
   attemptStatuses: number[],
