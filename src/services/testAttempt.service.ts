@@ -440,8 +440,15 @@ export class TestAttemptService {
       timeRemainingSeconds = Math.max(0, Math.floor((effectiveEnd.getTime() - now.getTime()) / 1000));
     }
 
+    // Compute answered count from stored answers so we can show attempted/unattempted even when student answers are hidden
+    const answeredCount = (attemptRecord.answers ?? []).filter((a) => {
+      const hasSel = Array.isArray(a.selectedOptionIds) && a.selectedOptionIds.length > 0;
+      const hasText = typeof a.textAnswer === 'string' && a.textAnswer.trim().length > 0;
+      return hasSel || hasText;
+    }).length;
+
     return {
-      attempt: { ...buildAttemptSummary(maskedAttempt), ...(timeRemainingSeconds !== null ? { timeRemainingSeconds } : {}) },
+      attempt: { ...buildAttemptSummary(maskedAttempt), ...(timeRemainingSeconds !== null ? { timeRemainingSeconds } : {}), answeredCount },
       test: attemptRecord.examTest,
       questions: questionsWithAnswers,
     };
@@ -815,7 +822,7 @@ export class TestAttemptService {
     const finalAttemptStatuses = [AttemptStatus.SUBMITTED, AttemptStatus.AUTO_SUBMITTED];
     const attemptRecords = await attemptRepo.getPracticeTestAnalyticsAttempts(practiceTestId, finalAttemptStatuses);
 
-    const questionIdList = await attemptRepo.getPracticeTestQuestionIds(practiceTestId);
+    const questionSummaries = await attemptRepo.getPracticeTestQuestionSummaries(practiceTestId);
     const correctCountRows = await attemptRepo.getPracticeTestCorrectCountsByQuestion(practiceTestId, finalAttemptStatuses);
     const correctCountsByQuestionId = new Map(correctCountRows.map((r) => [r.questionId, r.correctCount]));
 
@@ -823,11 +830,13 @@ export class TestAttemptService {
     const summaryStats = computeAttemptSummaryStats(attemptRecords, { passThresholdPercent: PASS_THRESHOLD_PERCENT_PRACTICE });
     const { totalAttempts, averageScore, averagePercentage, passRate, highestScore, lowestScore } = summaryStats;
 
-    const questionStats = questionIdList.map((questionId) => {
+    const questionStats = questionSummaries.map((question) => {
+      const questionId = question.id;
       const correctCount = correctCountsByQuestionId.get(questionId) ?? 0;
       const accuracy = totalAttempts ? (correctCount / totalAttempts) * 100 : 0;
       return {
         questionId,
+        questionText: question.text,
         correctCount,
         totalAttempts,
         accuracy,
@@ -927,7 +936,7 @@ export class TestAttemptService {
     const finalAttemptStatuses = [AttemptStatus.SUBMITTED, AttemptStatus.AUTO_SUBMITTED];
     const attemptRecords = await attemptRepo.getExamTestAnalyticsAttempts(examTestId, finalAttemptStatuses);
 
-    const questionIdList = await attemptRepo.getExamTestQuestionIds(examTestId);
+    const questionSummaries = await attemptRepo.getExamTestQuestionSummaries(examTestId);
     const correctCountRows = await attemptRepo.getExamTestCorrectCountsByQuestion(examTestId, finalAttemptStatuses);
     const correctCountsByQuestionId = new Map(correctCountRows.map((r) => [r.questionId, r.correctCount]));
 
@@ -935,11 +944,13 @@ export class TestAttemptService {
     const summaryStats = computeAttemptSummaryStats(attemptRecords, { passThresholdPercent: PASS_THRESHOLD_PERCENT_EXAM });
     const { totalAttempts, averageScore, averagePercentage, passRate, highestScore, lowestScore } = summaryStats;
 
-    const questionStats = questionIdList.map((questionId) => {
+    const questionStats = questionSummaries.map((question) => {
+      const questionId = question.id;
       const correctCount = correctCountsByQuestionId.get(questionId) ?? 0;
       const accuracy = totalAttempts ? (correctCount / totalAttempts) * 100 : 0;
       return {
         questionId,
+        questionText: question.text,
         correctCount,
         totalAttempts,
         accuracy,
