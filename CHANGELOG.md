@@ -1,5 +1,11 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.20] - profile setting permission 
+**P.R Raised by** : shubh404-SE on **Date** : 2026-06-02
+
+### Changed
+  - permission check for profile setting api, teacher and student can create their own profile from settings.
+---
 ## Version [1.2.19] - test analytics question text instead of question id
 **P.R Raised by** : shubh404-SE on
 **Date** : 2026-06-02
