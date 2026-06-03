@@ -6,6 +6,8 @@ import * as teacherRepo from '../repositories/teacher.repo';
 import * as studentRepo from '../repositories/student.repo';
 import * as settingsProfileRepo from '../repositories/settingsProfile.repo';
 import { buildSettingsProfileUpdateInputs } from '../mappers/settingsProfile.mapper';
+import { TeacherMapper } from '../mappers/teacher.mapper';
+import { StudentMapper } from '../mappers/student.mapper';
 import { NotFoundError, BadRequestError, ForbiddenError } from '../errors/api.errors';
 import logger from '../utils/logger';
 
@@ -51,11 +53,39 @@ export class SettingsProfileService {
     if (teacherUpdate && currentUser.role === UserRole.TEACHER) {
       const teacher = await teacherRepo.findTeacherByUserId(currentUser.id);
       if (!teacher) {
-        logger.warn('Settings profile teacher update rejected - teacher not found', { userId: currentUser.id });
-        throw new NotFoundError('Teacher profile not found');
+        // Create teacher profile for the user when missing
+        const businessId = Number(existing.businessId);
+        if (!Number.isFinite(businessId) || businessId <= 0) {
+          logger.warn('Settings profile teacher creation rejected due to missing business', { userId: currentUser.id });
+          throw new BadRequestError('Teacher user does not belong to a business');
+        }
+        // Build create DTO from provided profileDetails in payload via mapper expectations
+        const createDto: any = {
+          userId: currentUser.id,
+          businessId,
+          professional: {
+            qualification: (payload.profileDetails as any)?.qualification || '',
+            experienceYears: (payload.profileDetails as any)?.experienceYears || 0,
+            designation: (payload.profileDetails as any)?.designation || '',
+            bio: (payload.profileDetails as any)?.bio,
+            languages: (payload.profileDetails as any)?.languages || []
+          },
+          personal: {
+            gender: (payload.profileDetails as any)?.gender,
+            dob: (payload.profileDetails as any)?.dob,
+            address: (payload.profileDetails as any)?.address
+          }
+        };
+        const createInput = TeacherMapper.toCreateInput(createDto, currentUser.id);
+        const created = await teacherRepo.createTeacher(createInput as any);
+        teacherId = created.id;
+        // nothing to update further since create used provided values
+        teacherUpdateToApply = undefined;
+        logger.info('Settings profile teacher created for user', { userId: currentUser.id, teacherId });
+      } else {
+        teacherId = teacher.id;
+        logger.info('Settings profile teacher details prepared for update', { userId: currentUser.id, teacherId });
       }
-      teacherId = teacher.id;
-      logger.info('Settings profile teacher details prepared for update', { userId: currentUser.id, teacherId });
     } else {
       teacherUpdateToApply = undefined;
     }
@@ -65,11 +95,31 @@ export class SettingsProfileService {
     if (studentUpdate && currentUser.role === UserRole.STUDENT) {
       const student = await studentRepo.findStudentByUserId(currentUser.id);
       if (!student) {
-        logger.warn('Settings profile student update rejected - student not found', { userId: currentUser.id });
-        throw new NotFoundError('Student profile not found');
+        // Create student profile for the user when missing
+        const businessId = Number(existing.businessId);
+        if (!Number.isFinite(businessId) || businessId <= 0) {
+          logger.warn('Settings profile student creation rejected due to missing business', { userId: currentUser.id });
+          throw new BadRequestError('Student user does not belong to a business');
+        }
+        const createDto: any = {
+          userId: currentUser.id,
+          businessId,
+          dob: (payload.profileDetails as any)?.dob,
+          gender: (payload.profileDetails as any)?.gender,
+          languages: (payload.profileDetails as any)?.languages || [],
+          address: (payload.profileDetails as any)?.address,
+          city: (payload.profileDetails as any)?.city,
+          bio: (payload.profileDetails as any)?.bio
+        };
+        const createInput = StudentMapper.toCreateInput(createDto, currentUser.id);
+        const created = await studentRepo.createStudent(createInput as any);
+        studentId = created.id;
+        studentUpdateToApply = undefined;
+        logger.info('Settings profile student created for user', { userId: currentUser.id, studentId });
+      } else {
+        studentId = student.id;
+        logger.info('Settings profile student details prepared for update', { userId: currentUser.id, studentId });
       }
-      studentId = student.id;
-      logger.info('Settings profile student details prepared for update', { userId: currentUser.id, studentId });
     } else {
       studentUpdateToApply = undefined;
     }
