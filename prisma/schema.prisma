@@ -76,6 +76,8 @@ model Business {
   id            Int      @id @default(autoincrement())
   instituteName String   @map("institute_name")
   slug          String?  @unique @map("slug")
+  schemaName    String?  @unique @map("schema_name")
+  provisioningStatus BusinessProvisioningStatus @default(PENDING) @map("provisioning_status")
   logo          String?  // URL or file path to logo
   tagline       String?
   contactNumber String?        @map("contact_number")
@@ -88,6 +90,8 @@ model Business {
   createdAt     DateTime       @default(now()) @map("created_at")
   updatedAt     DateTime       @updatedAt @map("updated_at")
   isDeleted     Boolean        @default(false) @map("is_deleted")
+  provisionedAt DateTime?      @map("provisioned_at")
+  archivedAt    DateTime?      @map("archived_at")
   announcements Announcement[]
   exams         Exam[]
   users         User[]
@@ -95,8 +99,22 @@ model Business {
   students      Student[]
   practiceTests PracticeTest[]
   examTests     ExamTest[]
+  slugHistory   BusinessSlugHistory[]
 
   @@map("business")
+}
+
+model BusinessSlugHistory {
+  id         Int      @id @default(autoincrement())
+  businessId Int      @map("business_id")
+  slug       String
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([slug])
+  @@index([businessId])
+  @@map("business_slug_history")
 }
 
 model Batch {
@@ -299,6 +317,13 @@ enum SubjectStatus {
 enum AnnouncementScope {
   COURSE
   BATCH
+}
+
+enum BusinessProvisioningStatus {
+  PENDING
+  ACTIVE
+  FAILED
+  ARCHIVED
 }
 
 enum ContentType {

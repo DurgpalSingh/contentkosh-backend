@@ -36,7 +36,7 @@ async function start() {
       origin: config.server.frontendUrl,
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Tenant-Slug'],
     }));
     app.use(cookieParser());
     app.use(express.json());
@@ -45,6 +45,10 @@ async function start() {
 
     // Audit Logging
     app.use(apiAuditLogger);
+
+    // Tenant resolver: sets up request context with tenant info from header/params/query
+    const { tenantResolver } = await import('./middlewares/tenant.middleware');
+    app.use(tenantResolver);
 
     // Schedule Audit Cleanup (Daily at midnight)
     // Schedule Audit Cleanup (Daily at midnight)

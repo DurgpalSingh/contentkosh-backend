@@ -35,7 +35,11 @@ export class LoginRequest {
 
     @IsOptional()
     @IsString()
-    businessId?: string; // Optional if we support multi-tenant login
+    slug?: string;
+
+    @IsOptional()
+    @IsString()
+    businessSlug?: string;
 }
 
 export class RefreshTokenRequest {
@@ -49,6 +53,8 @@ export interface IUser {
     email: string;
     role: UserRole;
     businessId?: number | null;
+    businessSlug?: string | null;
+    tenantSchema?: string | null;
 }
 
 export interface AuthRequest extends Request {
