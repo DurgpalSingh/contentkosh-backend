@@ -520,10 +520,10 @@ model TestQuestion {
   examTestId     String? @map("exam_test_id")
 
   type                Int     @map("type") // 0..4
-  text                String  @map("text")
+  text                String  @map("text") @db.Text
   correctTextAnswer   String? @map("correct_text_answer")
   correctOptionIdsAnswers String[] @default([]) @map("correct_option_ids_answers")
-  explanation         String? @map("explanation")
+  explanation         String? @map("explanation") @db.Text
   mediaUrl            String? @map("media_url")
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -543,7 +543,7 @@ model TestQuestion {
 model TestOption {
   id         String  @id @default(cuid()) @map("id")
   questionId String  @map("question_id")
-  text       String  @map("text")
+  text       String  @map("text") @db.Text
   mediaUrl   String? @map("media_url")
 
   createdAt DateTime @default(now()) @map("created_at")

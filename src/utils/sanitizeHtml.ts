@@ -17,7 +17,7 @@ import {
   QUIll_SANITIZE_LINK_TARGET,
 } from '../config/quillSanitizeConfig';
 
-type RichTextField = 'questionText' | 'explanation';
+type RichTextField = 'questionText' | 'explanation' | string;
 
 /** Options passed to `sanitize-html` for rich-text content; built from `quillSanitizeConfig`. */
 function buildQuillSanitizeHtmlOptions(): Record<string, unknown> {
@@ -42,6 +42,17 @@ function buildQuillSanitizeHtmlOptions(): Record<string, unknown> {
     },
     disallowedTagsMode: QUIll_SANITIZE_DISALLOWED_TAGS_MODE,
     allowedClasses: QUIll_SANITIZE_ALLOWED_CLASSES,
+    allowedStyles: {
+      '*': {
+        // Allow alignment and sizing styles used by the editor
+        'text-align': [/^left$/, /^right$/, /^center$/, /^justify$/],
+        'float': [/^left$/, /^right$/, /^none$/],
+        'margin': [/^.*$/],
+        'display': [/^.*$/],
+        'width': [/^.*$/],
+        'height': [/^.*$/],
+      },
+    },
   };
 }
 
@@ -60,7 +71,20 @@ function getMeaningfulTextLength(html: string): number {
     .replace(/\s+/g, ' ')
     .trim();
   const combined = `${textFromTags} ${latexParts}`.replace(/\s+/g, ' ').trim();
-  return combined.length;
+  
+  // If there's no text, check if there are images or math blocks. 
+  // Each image counts as "meaningful" content.
+  const imageCount = (html.match(/<img/g) || []).length;
+  return combined.length + (imageCount * 10);
+}
+
+/**
+ * Returns the length of the HTML string after replacing large Base64 image data 
+ * with a placeholder to prevent "content too large" errors caused by image attachments.
+ */
+function getHtmlLengthExcludingImages(html: string): number {
+  // Replace base64 src data with a small 20-char placeholder for counting purposes
+  return html.replace(/src=["']data:image\/[^;]+;base64,[^"']+["']/g, 'src="data:image/placeholder"').length;
 }
 
 function sanitizeQuillHtmlInternal(
@@ -69,10 +93,11 @@ function sanitizeQuillHtmlInternal(
   isRequired: boolean,
   context?: Record<string, unknown>,
 ): string {
-  if (input.length > QUIll_HTML_MAX_INPUT_CHARS) {
+  const inputLengthForLimit = getHtmlLengthExcludingImages(input);
+  if (inputLengthForLimit > QUIll_HTML_MAX_INPUT_CHARS) {
     logger.warn('[test-module] Rich text HTML rejected: input too large', {
       fieldLabel,
-      inputChars: input.length,
+      inputCharsExcludingImages: inputLengthForLimit,
       ...(context ?? {}),
     });
     throw new BadRequestError(`${fieldLabel} is too large`);
@@ -80,10 +105,11 @@ function sanitizeQuillHtmlInternal(
 
   const sanitized = sanitizeHtml(input, quillSanitizeHtmlOptions as Parameters<typeof sanitizeHtml>[1]);
 
-  if (sanitized.length > QUIll_HTML_MAX_STORED_CHARS) {
+  const sanitizedLengthForLimit = getHtmlLengthExcludingImages(sanitized);
+  if (sanitizedLengthForLimit > QUIll_HTML_MAX_STORED_CHARS) {
     logger.warn('[test-module] Rich text HTML rejected: sanitized too large', {
       fieldLabel,
-      sanitizedChars: sanitized.length,
+      sanitizedCharsExcludingImages: sanitizedLengthForLimit,
       ...(context ?? {}),
     });
     throw new BadRequestError(`${fieldLabel} is too large`);
