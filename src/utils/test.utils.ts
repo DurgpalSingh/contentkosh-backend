@@ -80,6 +80,26 @@ export function sanitizeQuestionFieldsForCreate(
 }
 
 /**
+ * Sanitizes option HTML for create/update flows. Returns options with sanitized `text`.
+ */
+export function sanitizeOptionsHtml(
+  options: Array<{ id?: string; text: string; mediaUrl?: string | null }> | undefined | null,
+  context: Record<string, unknown>,
+): Array<{ id?: string; text: string; mediaUrl?: string | null }> | undefined {
+  if (!options || !options.length) return undefined;
+
+  return options.map((o, i) => ({
+    ...(o.id !== undefined ? { id: o.id } : {}),
+    text: sanitizeRequiredQuillHtml(
+      o.text ?? '',
+      `option[${i}].text` as any,
+      context,
+    ),
+    mediaUrl: o.mediaUrl ?? null,
+  }));
+}
+
+/**
  * Sanitizes Quill HTML for fields present on `UpdateQuestionDto`.
  */
 export type SanitizedQuestionFieldsUpdate = {

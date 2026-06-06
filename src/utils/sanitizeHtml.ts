@@ -30,6 +30,10 @@ function buildQuillSanitizeHtmlOptions(): Record<string, unknown> {
     allowedTags: [...QUIll_SANITIZE_ALLOWED_TAGS],
     allowedAttributes,
     allowedSchemes: [...QUIll_SANITIZE_ALLOWED_SCHEMES],
+    // allow data: URIs for embedded base64 images
+    allowedSchemesByTag: {
+      img: [...QUIll_SANITIZE_ALLOWED_SCHEMES],
+    },
     transformTags: {
       a: sanitizeHtml.simpleTransform('a', {
         target: QUIll_SANITIZE_LINK_TARGET,

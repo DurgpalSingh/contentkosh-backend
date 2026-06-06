@@ -13,6 +13,7 @@ import {
   assertCanModifyTestQuestions,
   sanitizeQuestionFieldsForCreate,
   sanitizeQuestionFieldsForUpdate,
+  sanitizeOptionsHtml,
 } from '../utils/test.utils';
 
 export class ExamTestService {
@@ -243,13 +244,15 @@ export class ExamTestService {
     const { questionText: sanitizedQuestionText } =
       sanitizeQuestionFieldsForCreate(dto, { businessId, examTestId, userId: user.id });
 
+    const sanitizedOptions = sanitizeOptionsHtml(dto.options, { businessId, examTestId, userId: user.id }) ?? [];
+
     const createdQuestion = await questionRepo.createExamTestQuestionResolvingCorrect(businessId, examTestId, {
       type: dto.type,
       text: sanitizedQuestionText,
       mediaUrl: dto.mediaUrl ?? null,
       correctTextAnswer: dto.correctTextAnswer ?? null,
       correctOptionRefs: dto.correctOptionIdsAnswers ?? [],
-      options: dto.options?.map((o) => ({ text: o.text, mediaUrl: o.mediaUrl ?? null })) ?? [],
+      options: sanitizedOptions,
     });
     if (!createdQuestion) throw new NotFoundError('Exam test not found');
     return createdQuestion;
@@ -266,13 +269,6 @@ export class ExamTestService {
     await assertCanModifyTestQuestions(businessId, examTestId, 'exam');
 
     const resolvedQuestionType = dto.type ?? existing.type;
-    const optionUpdates = dto.options !== undefined
-      ? dto.options.map((o) => ({
-          ...(o.id !== undefined ? { id: o.id } : {}),
-          text: o.text,
-          mediaUrl: o.mediaUrl ?? null,
-        }))
-      : undefined;
     const correctOptionIdsForValidation = dto.correctOptionIdsAnswers ?? existing.correctOptionIdsAnswers ?? [];
     const resolvedCorrectTextAnswer = dto.correctTextAnswer ?? existing.correctTextAnswer ?? null;
 
@@ -281,7 +277,7 @@ export class ExamTestService {
       correctTextAnswer: resolvedCorrectTextAnswer,
       correctOptionIdsAnswers: correctOptionIdsForValidation.map((v) => String(v)),
       options:
-        optionUpdates?.map((o) => ({ text: o.text, mediaUrl: o.mediaUrl ?? null })) ??
+        dto.options?.map((o) => ({ text: o.text, mediaUrl: o.mediaUrl ?? null })) ??
         existing.options?.map((o) => ({ text: o.text, mediaUrl: o.mediaUrl ?? null })) ??
         [],
     });
@@ -293,6 +289,8 @@ export class ExamTestService {
       userId: user.id,
     });
 
+    const sanitizedOptions = dto.options !== undefined ? sanitizeOptionsHtml(dto.options, { businessId, examTestId, questionId, userId: user.id }) : undefined;
+
     const updatedQuestion = await questionRepo.updateQuestionAndOptions(businessId, questionId, {
       ...(dto.type !== undefined ? { type: dto.type } : {}),
       ...(sanitizedQuestionText !== undefined ? { text: sanitizedQuestionText } : {}),
@@ -301,7 +299,7 @@ export class ExamTestService {
       ...(dto.correctOptionIdsAnswers !== undefined
         ? { correctOptionRefs: dto.correctOptionIdsAnswers }
         : {}),
-      ...(dto.options !== undefined ? { options: optionUpdates ?? [] } : {}),
+      ...(dto.options !== undefined ? { options: sanitizedOptions ?? [] } : {}),
     });
     if (!updatedQuestion) throw new NotFoundError('Question not found');
     return updatedQuestion;

@@ -13,6 +13,7 @@ import {
   assertCanModifyTestQuestions,
   sanitizeQuestionFieldsForCreate,
   sanitizeQuestionFieldsForUpdate,
+  sanitizeOptionsHtml,
 } from '../utils/test.utils';
 
 export class PracticeTestService {
@@ -218,6 +219,8 @@ export class PracticeTestService {
     const { questionText: sanitizedQuestionText, explanation: sanitizedExplanation } =
       sanitizeQuestionFieldsForCreate(dto, { businessId, practiceTestId, userId: user.id });
 
+    const sanitizedOptions = sanitizeOptionsHtml(dto.options, { businessId, practiceTestId, userId: user.id }) ?? [];
+
     const createdQuestion = await questionRepo.createPracticeTestQuestionResolvingCorrect(businessId, practiceTestId, {
       type: dto.type,
       text: sanitizedQuestionText,
@@ -225,7 +228,7 @@ export class PracticeTestService {
       explanation: sanitizedExplanation,
       correctTextAnswer: dto.correctTextAnswer ?? null,
       correctOptionRefs: dto.correctOptionIdsAnswers ?? [],
-      options: dto.options?.map((o) => ({ text: o.text, mediaUrl: o.mediaUrl ?? null })) ?? [],
+      options: sanitizedOptions,
     });
 
     if (!createdQuestion) throw new NotFoundError('Practice test not found');
@@ -270,6 +273,8 @@ export class PracticeTestService {
       userId: user.id,
     });
 
+    const sanitizedOptions = dto.options !== undefined ? sanitizeOptionsHtml(dto.options, { businessId, practiceTestId, questionId, userId: user.id }) : undefined;
+
     const updatedQuestion = await questionRepo.updateQuestionAndOptions(businessId, questionId, {
       ...(dto.type !== undefined ? { type: dto.type } : {}),
       ...(sanitizedQuestionText !== undefined ? { text: sanitizedQuestionText } : {}),
@@ -279,7 +284,7 @@ export class PracticeTestService {
       ...(dto.correctOptionIdsAnswers !== undefined
         ? { correctOptionRefs: dto.correctOptionIdsAnswers }
         : {}),
-      ...(dto.options !== undefined ? { options: optionUpdates ?? [] } : {}),
+      ...(dto.options !== undefined ? { options: sanitizedOptions ?? optionUpdates ?? [] } : {}),
     });
     if (!updatedQuestion) throw new NotFoundError('Question not found');
     return updatedQuestion;
