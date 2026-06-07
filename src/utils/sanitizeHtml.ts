@@ -58,13 +58,25 @@ function buildQuillSanitizeHtmlOptions(): Record<string, unknown> {
 
 const quillSanitizeHtmlOptions = buildQuillSanitizeHtmlOptions();
 
+/**
+ * Removes large Base64 data from HTML strings to prevent regex performance issues (ReDoS)
+ * and ensure character count logic is accurate for actual text content.
+ */
+function stripBase64Data(html: string): string {
+  // Efficiently remove the base64 content from src attributes to avoid scanning it with complex regex
+  return html.replace(/src=["']data:image\/[^;]+;base64,[^"']+["']/g, 'src="data:image/placeholder"');
+}
+
 function getMeaningfulTextLength(html: string): number {
-  const textFromTags = html
+  // Strip large image data first so the subsequent text-extraction regexes don't scan megabytes of base64
+  const safeHtml = stripBase64Data(html);
+
+  const textFromTags = safeHtml
     .replace(/<[^>]*>/g, '')
     .replace(/&nbsp;/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-  const latexParts = [...html.matchAll(/data-latex="([^"]*)"/g)]
+  const latexParts = [...safeHtml.matchAll(/data-latex="([^"]*)"/g)]
     .map((m) => m[1])
     .join(' ')
     .replace(/&nbsp;/g, ' ')
@@ -74,7 +86,13 @@ function getMeaningfulTextLength(html: string): number {
   
   // If there's no text, check if there are images or math blocks. 
   // Each image counts as "meaningful" content.
-  const imageCount = (html.match(/<img/g) || []).length;
+  // Using a simple index-of loop is faster than match(/.../g) on multi-megabyte strings.
+  let imageCount = 0;
+  let pos = safeHtml.indexOf('<img');
+  while (pos !== -1) {
+    imageCount++;
+    pos = safeHtml.indexOf('<img', pos + 1);
+  }
   return combined.length + (imageCount * 10);
 }
 
@@ -83,8 +101,7 @@ function getMeaningfulTextLength(html: string): number {
  * with a placeholder to prevent "content too large" errors caused by image attachments.
  */
 function getHtmlLengthExcludingImages(html: string): number {
-  // Replace base64 src data with a small 20-char placeholder for counting purposes
-  return html.replace(/src=["']data:image\/[^;]+;base64,[^"']+["']/g, 'src="data:image/placeholder"').length;
+  return stripBase64Data(html).length;
 }
 
 function sanitizeQuillHtmlInternal(
@@ -147,4 +164,3 @@ export function sanitizeOptionalQuillHtml(
   const sanitized = sanitizeQuillHtmlInternal(input, fieldLabel, false, context);
   return sanitized.length ? sanitized : null;
 }
-
