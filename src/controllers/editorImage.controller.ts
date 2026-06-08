@@ -1,27 +1,15 @@
 import { Response } from 'express';
 import * as fs from 'fs';
-import * as path from 'path';
-import sharp from 'sharp';
 import { AuthRequest } from '../dtos/auth.dto';
 import { ApiResponseHandler } from '../utils/apiResponse';
 import { BadRequestError } from '../errors/api.errors';
+import { editorImageService } from '../services/editorImage.service';
 import logger from '../utils/logger';
-
-const EDITOR_IMAGE_DIR = process.env.EDITOR_IMAGE_UPLOAD_DIR || 'uploads/editor';
-
-// Ensure the directory exists at startup
-try {
-  if (!fs.existsSync(EDITOR_IMAGE_DIR)) {
-    fs.mkdirSync(EDITOR_IMAGE_DIR, { recursive: true });
-  }
-} catch (err) {
-  logger.error('[editorImage] Failed to create upload directory', err);
-}
 
 /**
  * POST /api/editor/image
- * Accepts a raw image file via multer, converts it to WebP with sharp,
- * saves it to EDITOR_IMAGE_DIR, and returns the public URL path.
+ * Receives a file uploaded by multer, delegates conversion and storage
+ * to EditorImageService, and returns the public URL.
  */
 export const uploadEditorImage = async (req: AuthRequest, res: Response) => {
   try {
@@ -29,28 +17,10 @@ export const uploadEditorImage = async (req: AuthRequest, res: Response) => {
       throw new BadRequestError('No image file provided');
     }
 
-    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    const outputFilename = `editor-${uniqueSuffix}.webp`;
-    const outputPath = path.join(EDITOR_IMAGE_DIR, outputFilename).replace(/\\/g, '/');
-
-    // Convert to WebP using sharp (quality 80 — good balance of size and clarity)
-    await sharp(req.file.path)
-      .webp({ quality: 80 })
-      .toFile(outputPath);
-
-    // Remove the original multer-saved file; we only keep the WebP
-    try {
-      fs.unlinkSync(req.file.path);
-    } catch {
-      // Non-fatal — original will be cleaned up by OS eventually
-    }
-
-    const publicUrl = `/${outputPath}`;
-    logger.info(`[editorImage] Image uploaded and converted: ${publicUrl}`);
-
-    ApiResponseHandler.success(res, { url: publicUrl }, 'Image uploaded successfully', 201);
+    const url = await editorImageService.uploadImage(req.file.path);
+    ApiResponseHandler.success(res, { url }, 'Image uploaded successfully', 201);
   } catch (error: any) {
-    // Clean up the temp file on error
+    // Clean up the temp file on any failure
     if (req.file?.path) {
       try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
     }
@@ -65,30 +35,12 @@ export const uploadEditorImage = async (req: AuthRequest, res: Response) => {
 /**
  * DELETE /api/editor/image
  * Body: { url: "/uploads/editor/editor-xxx.webp" }
- * Deletes the file from disk. Only allows deletion of files under EDITOR_IMAGE_DIR.
+ * Delegates file deletion to EditorImageService.
  */
 export const deleteEditorImage = async (req: AuthRequest, res: Response) => {
   try {
     const { url } = req.body as { url?: string };
-    if (!url || typeof url !== 'string') {
-      throw new BadRequestError('url is required');
-    }
-
-    // Strip leading slash and resolve to an absolute path
-    const relative = url.replace(/^\/+/, '');
-    const resolved = path.resolve(relative);
-    const allowedDir = path.resolve(EDITOR_IMAGE_DIR);
-
-    // Security check — only allow deletion within the editor image directory
-    if (!resolved.startsWith(allowedDir + path.sep) && resolved !== allowedDir) {
-      throw new BadRequestError('Invalid file path');
-    }
-
-    if (fs.existsSync(resolved)) {
-      fs.unlinkSync(resolved);
-      logger.info(`[editorImage] Image deleted: ${resolved}`);
-    }
-
+    editorImageService.deleteImage(url ?? '');
     ApiResponseHandler.success(res, null, 'Image deleted successfully');
   } catch (error: any) {
     if (error instanceof BadRequestError) {
