@@ -16,6 +16,7 @@ import settingsProfileRoutes from './settingsProfile.routes';
 import { practiceTestRouter } from './practiceTest.routes';
 import { examTestRouter } from './examTest.routes';
 import { authenticate } from '../middlewares/auth.middleware';
+import editorImageRoutes from './editorImage.routes';
 
 const router = Router();
 
@@ -39,5 +40,6 @@ router.use('/api/teachers', authenticate, teacherRoutes);
 router.use('/api/students', authenticate, studentRoutes);
 router.use('/api', dashboardRoutes);
 router.use('/api', settingsProfileRoutes);
+router.use('/api', editorImageRoutes);
 
 export default router; 
