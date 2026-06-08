@@ -1,42 +1,7 @@
 import { Router } from 'express';
-import multer from 'multer';
-import * as path from 'path';
-import * as fs from 'fs';
 import { authenticate } from '../middlewares/auth.middleware';
+import { uploadEditorImageFile } from '../middlewares/upload.middleware';
 import { uploadEditorImage, deleteEditorImage } from '../controllers/editorImage.controller';
-import { BadRequestError } from '../errors/api.errors';
-
-const EDITOR_IMAGE_TEMP_DIR = 'uploads/editor/tmp';
-
-// Ensure temp dir exists
-try {
-  if (!fs.existsSync(EDITOR_IMAGE_TEMP_DIR)) {
-    fs.mkdirSync(EDITOR_IMAGE_TEMP_DIR, { recursive: true });
-  }
-} catch { /* ignore */ }
-
-const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-const MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB (pre-compression client size)
-
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, EDITOR_IMAGE_TEMP_DIR),
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
-    cb(null, `tmp-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
-  },
-});
-
-const upload = multer({
-  storage,
-  limits: { fileSize: MAX_SIZE_BYTES },
-  fileFilter: (_req, file, cb) => {
-    if (ALLOWED_MIME_TYPES.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new BadRequestError('Only JPEG, PNG, WebP and GIF images are allowed'));
-    }
-  },
-});
 
 const router = Router();
 
@@ -86,7 +51,7 @@ const router = Router();
  *       400:
  *         description: Validation error
  */
-router.post('/editor/image', authenticate, upload.single('image'), uploadEditorImage);
+router.post('/editor/image', authenticate, uploadEditorImageFile, uploadEditorImage);
 router.delete('/editor/image', authenticate, deleteEditorImage);
 
 export default router;

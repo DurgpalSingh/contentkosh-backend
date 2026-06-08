@@ -92,6 +92,10 @@ const getRejectedUploadMessage = (req: Request): string | undefined => {
   return (req as any).__uploadRejectedMessage as string | undefined;
 };
 
+const setRejectedUploadMessage = (req: Request, message: string): void => {
+  (req as any).__uploadRejectedMessage = message;
+};
+
 /**
  * Common utility to parse JSON from FormData body
  */
@@ -107,51 +111,17 @@ export const parseMultipartData = (req: Request) => {
   }
 };
 
-const setRejectedUploadMessage = (req: any, message: string): void => {
-  req.__uploadRejectedMessage = message;
-};
+// ─── General content upload ───────────────────────────────────────────────────
 
-// Ensure upload directory exists
 const uploadDir = process.env.UPLOAD_DIR || 'uploads/content';
-try {
-  if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-  }
-} catch (err) {
-  console.error('Error creating upload directory:', err);
-}
+ensureDirExists(uploadDir);
 
-// Ensure question upload directory exists
-const questionUploadDir = 'uploads/questions';
-try {
-  if (!fs.existsSync(questionUploadDir)) {
-    fs.mkdirSync(questionUploadDir, { recursive: true });
-  }
-} catch (err) {
-  console.error('Error creating questions directory:', err);
-}
-
-// Configure multer storage
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDir);
+  destination: (_req, _file, cb) => cb(null, uploadDir),
+  filename: (_req, file, cb) => {
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    cb(null, `${file.fieldname}-${uniqueSuffix}${path.extname(file.originalname)}`);
   },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
-    cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
-  }
-});
-
-const questionStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, questionUploadDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `question-${uniqueSuffix}${ext}`);
-  }
 });
 
 const fileFilter: multer.Options['fileFilter'] = (
@@ -208,226 +178,135 @@ const normalizeUploadError = (error: any, next: NextFunction) => {
 // Middleware to handle single file upload with explicit error bridging
 export const uploadSingleFile = (req: Request, res: Response, next: NextFunction) => {
   upload.single('file')(req, res, (error: any) => {
-    if (error) {
-      return normalizeUploadError(error, next);
-    }
-
-    const rejectedMessage = getRejectedUploadMessage(req);
-    if (rejectedMessage) {
-      return next(new BadRequestError(rejectedMessage));
-    }
-
+    if (error) return normalizeUploadError(error, next);
+    const msg = getRejectedUploadMessage(req);
+    if (msg) return next(new BadRequestError(msg));
     next();
   });
 };
 
-// Middleware to handle single image upload within existing POST/PUT routes
-export const uploadSingleImage = (req: Request, res: Response, next: NextFunction) => {
-  upload.single('image')(req, res, (error: any) => {
-    if (error) {
-      return normalizeUploadError(error, next);
-    }
-
-    const rejectedMessage = getRejectedUploadMessage(req);
-    if (rejectedMessage) {
-      return next(new BadRequestError(rejectedMessage));
-    }
-
-    next();
-  });
-};
-
-const QUESTION_IMAGE_ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-const QUESTION_IMAGE_MAX_SIZE = 5 * 1024 * 1024; // 5 MB
-
-/**
- * Multer instance for question/option image uploads.
- * Accepts the following fields:
- *   - questionImage  : the question-level image
- *   - option_0_image … option_N_image : per-option images (up to 10 options)
- */
-const questionMulter = multer({
-  storage: questionStorage,
-  fileFilter: (req, file, cb) => {
-    if (QUESTION_IMAGE_ALLOWED_TYPES.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new BadRequestError('Invalid file type. Only JPEG, PNG, GIF, and WebP images are allowed.'));
-    }
-  },
-  limits: { fileSize: QUESTION_IMAGE_MAX_SIZE },
-});
-
-/**
- * Multer middleware that accepts questionImage + up to 10 option images.
- * Use this on POST/PUT question routes instead of uploadQuestionImage.
- */
-export const uploadQuestionFiles = questionMulter.fields([
-  { name: 'questionImage', maxCount: 1 },
-  { name: 'option_0_image', maxCount: 1 },
-  { name: 'option_1_image', maxCount: 1 },
-  { name: 'option_2_image', maxCount: 1 },
-  { name: 'option_3_image', maxCount: 1 },
-  { name: 'option_4_image', maxCount: 1 },
-  { name: 'option_5_image', maxCount: 1 },
-  { name: 'option_6_image', maxCount: 1 },
-  { name: 'option_7_image', maxCount: 1 },
-  { name: 'option_8_image', maxCount: 1 },
-  { name: 'option_9_image', maxCount: 1 },
-]);
-
-/** @deprecated Use uploadQuestionFiles instead */
-export const uploadQuestionImage = questionMulter.single('questionImage');
-
-// Middleware to validate file size based on resolved content type
 export const validateFileSize = (req: Request, res: Response, next: NextFunction) => {
-  if (!req.file) {
-    return next(new BadRequestError('No file uploaded'));
-  }
+  if (!req.file) return next(new BadRequestError('No file uploaded'));
 
   const rule = getRuleByOriginalName(req.file.originalname);
-
   if (!rule) {
     removeUploadedFile(req.file.path);
-    return next(
-      new BadRequestError(
-        `File type is not accepted. Allowed types: ${acceptedExtensionsLabel}.`
-      )
-    );
+    return next(new BadRequestError(`File type is not accepted. Allowed types: ${acceptedExtensionsLabel}.`));
   }
-
   if (req.file.size > rule.maxSizeBytes) {
     removeUploadedFile(req.file.path);
-
     return next(
       new BadRequestError(
-        `File size cannot exceed ${formatSizeInMb(rule.maxSizeBytes)} for ${rule.contentType} files.`
-      )
+        `File size cannot exceed ${formatSizeInMb(rule.maxSizeBytes)} for ${rule.contentType} files.`,
+      ),
     );
   }
 
   req.body.type = rule.contentType;
   req.body.filePath = req.file.path;
   req.body.fileSize = req.file.size;
-
   next();
 };
+
+// ─── Editor image upload ──────────────────────────────────────────────────────
+
+const EDITOR_IMAGE_TEMP_DIR = process.env.EDITOR_IMAGE_TEMP_DIR || 'uploads/editor/tmp';
+const EDITOR_IMAGE_ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+const EDITOR_IMAGE_MAX_SIZE = 10 * BYTES_IN_MB; // 10 MB (pre-compression client size)
+
+ensureDirExists(EDITOR_IMAGE_TEMP_DIR);
+
+const editorImageStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, EDITOR_IMAGE_TEMP_DIR),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
+    cb(null, `tmp-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
+  },
+});
+
+const editorImageMulter = multer({
+  storage: editorImageStorage,
+  limits: { fileSize: EDITOR_IMAGE_MAX_SIZE },
+  fileFilter: (_req, file, cb) => {
+    if (EDITOR_IMAGE_ALLOWED_MIME.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new BadRequestError('Only JPEG, PNG, WebP and GIF images are allowed'));
+    }
+  },
+});
 
 /**
- * Processes question/option media after uploadQuestionFiles runs.
- *
- * Flow:
- *  1. Parse JSON payload from the `data` FormData field (if present) into req.body.
- *  2. If a `questionImage` was uploaded, set req.body.mediaUrl to the public URL.
- *     If the client sent removeQuestionImage=true (no new file), set req.body.mediaUrl = null.
- *  3. For each uploaded option_N_image, set req.body.options[N].mediaUrl to its public URL.
- *     If the client sent removeOption_N_Image=true (no new file), set that option's mediaUrl = null.
+ * Multer middleware for editor image uploads.
+ * Accepts a single `image` field, saves to a temp directory.
+ * The controller (editorImage.controller) converts it to WebP via sharp.
  */
-export const processQuestionMedia = (req: Request, res: Response, next: NextFunction) => {
-  // 1. Parse JSON payload from FormData `data` field
-  parseMultipartData(req);
-
-  const files = req.files as Record<string, Express.Multer.File[]> | undefined;
-
-  // 2. Question-level image
-  const questionImageFile = files?.['questionImage']?.[0];
-  if (questionImageFile) {
-    const mediaUrl = `/${questionImageFile.destination}/${questionImageFile.filename}`.replace(/\\/g, '/');
-    req.body.mediaUrl = mediaUrl;
-    logger.info(`[upload-middleware] Question image processed: ${mediaUrl}`);
-  } else if (req.body.removeQuestionImage === 'true' || req.body.removeQuestionImage === true) {
-    // Explicit removal requested
-    req.body.mediaUrl = null;
-    logger.info('[upload-middleware] Question image removal requested');
-  }
-
-  // 3. Option-level images
-  // req.body.options may be a JSON-parsed array (after parseMultipartData) or undefined
-  const options: Array<Record<string, unknown>> | undefined = Array.isArray(req.body.options)
-    ? req.body.options
-    : undefined;
-
-  for (let i = 0; i < 10; i++) {
-    const optFile = files?.[`option_${i}_image`]?.[0];
-    const optRow = options?.[i];
-    if (optFile) {
-      const mediaUrl = `/${optFile.destination}/${optFile.filename}`.replace(/\\/g, '/');
-      logger.info(`[upload-middleware] Option ${i} image processed: ${mediaUrl}`);
-      if (optRow) {
-        optRow.mediaUrl = mediaUrl;
-      }
-    } else if (
-      req.body[`removeOption_${i}_Image`] === 'true' ||
-      req.body[`removeOption_${i}_Image`] === true
-    ) {
-      if (optRow) {
-        optRow.mediaUrl = null;
-      }
-    }
-  }
-
-  next();
+export const uploadEditorImageFile = (req: Request, res: Response, next: NextFunction) => {
+  editorImageMulter.single('image')(req, res, (error: any) => {
+    if (error) return normalizeUploadError(error, next);
+    next();
+  });
 };
+
+// ─── Profile / business-logo upload ──────────────────────────────────────────
 
 const profileFieldConfigs = {
   [IMAGE_UPLOAD_CONFIG.profilePicture.fieldName]: IMAGE_UPLOAD_CONFIG.profilePicture,
   profilePhoto: IMAGE_UPLOAD_CONFIG.profilePicture,
-  [IMAGE_UPLOAD_CONFIG.businessLogo.fieldName]: IMAGE_UPLOAD_CONFIG.businessLogo
+  [IMAGE_UPLOAD_CONFIG.businessLogo.fieldName]: IMAGE_UPLOAD_CONFIG.businessLogo,
 } as const;
 
 type ProfileFieldName = keyof typeof profileFieldConfigs;
-const PROFILE_PICTURE_FIELD_ALIASES = [IMAGE_UPLOAD_CONFIG.profilePicture.fieldName, 'profilePhoto'] as const;
+const PROFILE_PICTURE_FIELD_ALIASES = [
+  IMAGE_UPLOAD_CONFIG.profilePicture.fieldName,
+  'profilePhoto',
+] as const;
 const BUSINESS_LOGO_FIELD_NAMES = [IMAGE_UPLOAD_CONFIG.businessLogo.fieldName] as const;
-
-const createImageFieldsUpload = () =>
-  multer({
-    storage: profileStorage,
-    fileFilter: (req, file, cb) => {
-      const authReq = req as AuthRequest;
-      if (file.fieldname === IMAGE_UPLOAD_CONFIG.businessLogo.fieldName && authReq.user?.role !== 'ADMIN') {
-        return cb(new BadRequestError('Only admin can upload business logo'));
-      }
-      const field = file.fieldname as ProfileFieldName;
-      const config = profileFieldConfigs[field];
-      if (!config) {
-        return cb(new BadRequestError('Unexpected image field'));
-      }
-      const ext = path.extname(file.originalname).toLowerCase();
-      if (!config.extensions.includes(ext)) {
-        return cb(new BadRequestError(`Invalid file type for ${file.fieldname}`));
-      }
-      if (!config.mimeTypes.includes(file.mimetype)) {
-        return cb(new BadRequestError(`Invalid mime type for ${file.fieldname}`));
-      }
-      cb(null, true);
-    },
-    limits: {
-      fileSize: Math.max(
-        IMAGE_UPLOAD_CONFIG.profilePicture.maxSizeBytes,
-        IMAGE_UPLOAD_CONFIG.businessLogo.maxSizeBytes
-      )
-    }
-  });
 
 for (const cfg of Object.values(profileFieldConfigs)) {
   ensureDirExists(cfg.uploadDir);
 }
 
 const profileStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const field = file.fieldname as ProfileFieldName;
-    const config = profileFieldConfigs[field];
+  destination: (_req, file, cb) => {
+    const config = profileFieldConfigs[file.fieldname as ProfileFieldName];
     if (!config) return cb(new BadRequestError('Unexpected image field'), '');
     cb(null, config.uploadDir);
   },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
-    cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
-  }
+  filename: (_req, file, cb) => {
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    cb(null, `${file.fieldname}-${uniqueSuffix}${path.extname(file.originalname)}`);
+  },
 });
 
-const profileUpload = createImageFieldsUpload();
+const profileUpload = multer({
+  storage: profileStorage,
+  fileFilter: (req, file, cb) => {
+    const authReq = req as AuthRequest;
+    if (
+      file.fieldname === IMAGE_UPLOAD_CONFIG.businessLogo.fieldName &&
+      authReq.user?.role !== 'ADMIN'
+    ) {
+      return cb(new BadRequestError('Only admin can upload business logo'));
+    }
+    const config = profileFieldConfigs[file.fieldname as ProfileFieldName];
+    if (!config) return cb(new BadRequestError('Unexpected image field'));
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (!config.extensions.includes(ext)) {
+      return cb(new BadRequestError(`Invalid file type for ${file.fieldname}`));
+    }
+    if (!config.mimeTypes.includes(file.mimetype as any)) {
+      return cb(new BadRequestError(`Invalid mime type for ${file.fieldname}`));
+    }
+    cb(null, true);
+  },
+  limits: {
+    fileSize: Math.max(
+      IMAGE_UPLOAD_CONFIG.profilePicture.maxSizeBytes,
+      IMAGE_UPLOAD_CONFIG.businessLogo.maxSizeBytes,
+    )
+  },
+});
 
 export const uploadProfileAssets = (req: Request, res: Response, next: NextFunction) => {
   profileUpload.fields([

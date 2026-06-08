@@ -13,7 +13,6 @@ import {
   UpdateQuestionDto,
 } from '../dtos/test.dto';
 import { examTestController } from '../controllers/examTest.controller';
-import { uploadQuestionFiles, processQuestionMedia } from '../middlewares/upload.middleware';
 
 export const examTestRouter = Router();
 
@@ -341,8 +340,6 @@ examTestRouter.put(
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('questionId'),
-  uploadQuestionFiles,
-  processQuestionMedia,
   examTestController.updateExamTestQuestion,
 );
 
@@ -718,8 +715,6 @@ examTestRouter.post(
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('examTestId'),
-  uploadQuestionFiles,
-  processQuestionMedia,
   examTestController.createExamTestQuestion,
 );
 
