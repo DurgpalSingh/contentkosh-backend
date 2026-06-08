@@ -1,3 +1,5 @@
+import * as fs from 'fs';
+import * as path from 'path';
 /**
  * test.utils.ts
  * Combined utility module for the test/LMS module.
@@ -57,6 +59,25 @@ export async function assertCanModifyTestQuestions(
       : await questionRepo.hasAttemptsForExamTest(businessId, testId);
   if (hasAttempts) {
     throw new BadRequestError('Cannot modify questions after attempts have started');
+  }
+}
+
+
+/**
+ * Deletes a question/option image file from disk.
+ * mediaUrl is expected to be a public path like /uploads/questions/filename.jpg
+ */
+export function deleteQuestionImageFile(mediaUrl: string | null | undefined): void {
+  if (!mediaUrl) return;
+  try {
+    const relative = mediaUrl.replace(/^\//, '');
+    const absolute = path.resolve(process.cwd(), relative);
+    if (fs.existsSync(absolute)) {
+      fs.unlinkSync(absolute);
+      logger.info(`[exam-test] Deleted old question image: ${absolute}`);
+    }
+  } catch (err) {
+    logger.warn(`[exam-test] Could not delete question image ${mediaUrl}:`, err);
   }
 }
 

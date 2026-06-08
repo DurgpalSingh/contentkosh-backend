@@ -5,6 +5,7 @@ import { TestStatus, ResultVisibilityExam } from '../constants/test-enums';
 import logger from '../utils/logger';
 import { CreateExamTestDto, CreateQuestionDto, UpdateExamTestDto, UpdateQuestionDto } from '../dtos/test.dto';
 import { UserRole } from '@prisma/client';
+import {deleteQuestionImageFile} from '../utils/test.utils';
 import {
   validateQuestionPayload,
   assertBatchBelongsToBusiness,
@@ -258,14 +259,18 @@ export class ExamTestService {
     return createdQuestion;
   }
 
-  async updateQuestion(businessId: number, questionId: string, dto: UpdateQuestionDto, user: { id: number; role: UserRole }) {
+  async updateQuestion(
+    businessId: number,
+    questionId: string,
+    dto: UpdateQuestionDto,
+    user: { id: number; role: UserRole },
+  ) {
     const existing = await questionRepo.findQuestionById(businessId, questionId);
     if (!existing) throw new NotFoundError('Question not found');
 
     const examTestId = existing.examTestId;
     if (!examTestId) throw new BadRequestError('Question does not belong to an exam test');
     await this.getWithAccess(businessId, examTestId, user);
-
     await assertCanModifyTestQuestions(businessId, examTestId, 'exam');
 
     const resolvedQuestionType = dto.type ?? existing.type;
@@ -289,7 +294,29 @@ export class ExamTestService {
       userId: user.id,
     });
 
-    const sanitizedOptions = dto.options !== undefined ? sanitizeOptionsHtml(dto.options, { businessId, examTestId, questionId, userId: user.id }) : undefined;
+    const sanitizedOptions =
+      dto.options !== undefined
+        ? sanitizeOptionsHtml(dto.options, { businessId, examTestId, questionId, userId: user.id })
+        : undefined;
+
+    // Clean up old question image if it is being replaced or removed
+    if (dto.mediaUrl !== undefined && dto.mediaUrl !== existing.mediaUrl) {
+      deleteQuestionImageFile(existing.mediaUrl);
+    }
+
+    // Clean up old option images if they are being replaced or removed
+    if (dto.options !== undefined && existing.options) {
+      for (const existingOpt of existing.options) {
+        const updatedOpt = dto.options.find((o) => o.id === existingOpt.id);
+        if (
+          updatedOpt &&
+          updatedOpt.mediaUrl !== undefined &&
+          updatedOpt.mediaUrl !== existingOpt.mediaUrl
+        ) {
+          deleteQuestionImageFile(existingOpt.mediaUrl);
+        }
+      }
+    }
 
     const updatedQuestion = await questionRepo.updateQuestionAndOptions(businessId, questionId, {
       ...(dto.type !== undefined ? { type: dto.type } : {}),
@@ -305,18 +332,19 @@ export class ExamTestService {
     return updatedQuestion;
   }
 
-  async deleteQuestion(businessId: number, questionId: string, user: { id: number; role: UserRole }) {
+  async deleteQuestion(
+    businessId: number,
+    questionId: string,
+    user: { id: number; role: UserRole },
+  ) {
     const existing = await questionRepo.findQuestionById(businessId, questionId);
     if (!existing) throw new NotFoundError('Question not found');
     const examTestId = existing.examTestId;
     if (!examTestId) throw new BadRequestError('Question does not belong to an exam test');
     await this.getWithAccess(businessId, examTestId, user);
-
     await assertCanModifyTestQuestions(businessId, examTestId, 'exam');
-
     await questionRepo.deleteQuestion(businessId, questionId);
   }
 }
-
 
 export const examTestService = new ExamTestService();

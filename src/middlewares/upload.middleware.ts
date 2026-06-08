@@ -5,6 +5,7 @@ import * as fs from 'fs';
 import { BadRequestError } from '../errors/api.errors';
 import { ContentType } from '@prisma/client';
 import { AuthRequest } from '../dtos/auth.dto';
+import logger from '../utils/logger';
 
 import { FILE_TYPE_CONFIG, IMAGE_UPLOAD_CONFIG } from '../config/file-type';
 
@@ -91,14 +92,43 @@ const getRejectedUploadMessage = (req: Request): string | undefined => {
   return (req as any).__uploadRejectedMessage as string | undefined;
 };
 
-const setRejectedUploadMessage = (req: Request, message: string): void => {
-  (req as any).__uploadRejectedMessage = message;
+/**
+ * Common utility to parse JSON from FormData body
+ */
+export const parseMultipartData = (req: Request) => {
+  if (req.is('multipart/form-data') && req.body.data) {
+    try {
+      const parsed = JSON.parse(req.body.data);
+      req.body = { ...req.body, ...parsed };
+    } catch (e) {
+      logger.error('[upload-middleware] Failed to parse JSON from FormData', e);
+      throw new BadRequestError('Invalid JSON data in multipart request');
+    }
+  }
+};
+
+const setRejectedUploadMessage = (req: any, message: string): void => {
+  req.__uploadRejectedMessage = message;
 };
 
 // Ensure upload directory exists
 const uploadDir = process.env.UPLOAD_DIR || 'uploads/content';
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
+try {
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+} catch (err) {
+  console.error('Error creating upload directory:', err);
+}
+
+// Ensure question upload directory exists
+const questionUploadDir = 'uploads/questions';
+try {
+  if (!fs.existsSync(questionUploadDir)) {
+    fs.mkdirSync(questionUploadDir, { recursive: true });
+  }
+} catch (err) {
+  console.error('Error creating questions directory:', err);
 }
 
 // Configure multer storage
@@ -110,6 +140,17 @@ const storage = multer.diskStorage({
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
     const ext = path.extname(file.originalname);
     cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
+  }
+});
+
+const questionStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, questionUploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `question-${uniqueSuffix}${ext}`);
   }
 });
 
@@ -180,6 +221,64 @@ export const uploadSingleFile = (req: Request, res: Response, next: NextFunction
   });
 };
 
+// Middleware to handle single image upload within existing POST/PUT routes
+export const uploadSingleImage = (req: Request, res: Response, next: NextFunction) => {
+  upload.single('image')(req, res, (error: any) => {
+    if (error) {
+      return normalizeUploadError(error, next);
+    }
+
+    const rejectedMessage = getRejectedUploadMessage(req);
+    if (rejectedMessage) {
+      return next(new BadRequestError(rejectedMessage));
+    }
+
+    next();
+  });
+};
+
+const QUESTION_IMAGE_ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+const QUESTION_IMAGE_MAX_SIZE = 5 * 1024 * 1024; // 5 MB
+
+/**
+ * Multer instance for question/option image uploads.
+ * Accepts the following fields:
+ *   - questionImage  : the question-level image
+ *   - option_0_image … option_N_image : per-option images (up to 10 options)
+ */
+const questionMulter = multer({
+  storage: questionStorage,
+  fileFilter: (req, file, cb) => {
+    if (QUESTION_IMAGE_ALLOWED_TYPES.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new BadRequestError('Invalid file type. Only JPEG, PNG, GIF, and WebP images are allowed.'));
+    }
+  },
+  limits: { fileSize: QUESTION_IMAGE_MAX_SIZE },
+});
+
+/**
+ * Multer middleware that accepts questionImage + up to 10 option images.
+ * Use this on POST/PUT question routes instead of uploadQuestionImage.
+ */
+export const uploadQuestionFiles = questionMulter.fields([
+  { name: 'questionImage', maxCount: 1 },
+  { name: 'option_0_image', maxCount: 1 },
+  { name: 'option_1_image', maxCount: 1 },
+  { name: 'option_2_image', maxCount: 1 },
+  { name: 'option_3_image', maxCount: 1 },
+  { name: 'option_4_image', maxCount: 1 },
+  { name: 'option_5_image', maxCount: 1 },
+  { name: 'option_6_image', maxCount: 1 },
+  { name: 'option_7_image', maxCount: 1 },
+  { name: 'option_8_image', maxCount: 1 },
+  { name: 'option_9_image', maxCount: 1 },
+]);
+
+/** @deprecated Use uploadQuestionFiles instead */
+export const uploadQuestionImage = questionMulter.single('questionImage');
+
 // Middleware to validate file size based on resolved content type
 export const validateFileSize = (req: Request, res: Response, next: NextFunction) => {
   if (!req.file) {
@@ -210,6 +309,62 @@ export const validateFileSize = (req: Request, res: Response, next: NextFunction
   req.body.type = rule.contentType;
   req.body.filePath = req.file.path;
   req.body.fileSize = req.file.size;
+
+  next();
+};
+
+/**
+ * Processes question/option media after uploadQuestionFiles runs.
+ *
+ * Flow:
+ *  1. Parse JSON payload from the `data` FormData field (if present) into req.body.
+ *  2. If a `questionImage` was uploaded, set req.body.mediaUrl to the public URL.
+ *     If the client sent removeQuestionImage=true (no new file), set req.body.mediaUrl = null.
+ *  3. For each uploaded option_N_image, set req.body.options[N].mediaUrl to its public URL.
+ *     If the client sent removeOption_N_Image=true (no new file), set that option's mediaUrl = null.
+ */
+export const processQuestionMedia = (req: Request, res: Response, next: NextFunction) => {
+  // 1. Parse JSON payload from FormData `data` field
+  parseMultipartData(req);
+
+  const files = req.files as Record<string, Express.Multer.File[]> | undefined;
+
+  // 2. Question-level image
+  const questionImageFile = files?.['questionImage']?.[0];
+  if (questionImageFile) {
+    const mediaUrl = `/${questionImageFile.destination}/${questionImageFile.filename}`.replace(/\\/g, '/');
+    req.body.mediaUrl = mediaUrl;
+    logger.info(`[upload-middleware] Question image processed: ${mediaUrl}`);
+  } else if (req.body.removeQuestionImage === 'true' || req.body.removeQuestionImage === true) {
+    // Explicit removal requested
+    req.body.mediaUrl = null;
+    logger.info('[upload-middleware] Question image removal requested');
+  }
+
+  // 3. Option-level images
+  // req.body.options may be a JSON-parsed array (after parseMultipartData) or undefined
+  const options: Array<Record<string, unknown>> | undefined = Array.isArray(req.body.options)
+    ? req.body.options
+    : undefined;
+
+  for (let i = 0; i < 10; i++) {
+    const optFile = files?.[`option_${i}_image`]?.[0];
+    const optRow = options?.[i];
+    if (optFile) {
+      const mediaUrl = `/${optFile.destination}/${optFile.filename}`.replace(/\\/g, '/');
+      logger.info(`[upload-middleware] Option ${i} image processed: ${mediaUrl}`);
+      if (optRow) {
+        optRow.mediaUrl = mediaUrl;
+      }
+    } else if (
+      req.body[`removeOption_${i}_Image`] === 'true' ||
+      req.body[`removeOption_${i}_Image`] === true
+    ) {
+      if (optRow) {
+        optRow.mediaUrl = null;
+      }
+    }
+  }
 
   next();
 };
