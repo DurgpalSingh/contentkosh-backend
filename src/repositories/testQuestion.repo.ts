@@ -413,28 +413,4 @@ export function hasAttemptsForExamTest(businessId: number, examTestId: string) {
   }).then((c) => c > 0);
 }
 
-export async function updateQuestionMediaUrl(businessId: number, questionId: string, mediaUrl: string | null) {
-  const existing = await findQuestionById(businessId, questionId);
-  if (!existing) return null;
 
-  return prisma.testQuestion.update({
-    where: { id: questionId },
-    data: { mediaUrl },
-    select: questionSelect,
-  });
-}
-
-export async function updateOptionMediaUrl(optionId: string, mediaUrl: string | null) {
-  return prisma.testOption.update({
-    where: { id: optionId },
-    data: { mediaUrl },
-    select: {
-      id: true,
-      questionId: true,
-      text: true,
-      mediaUrl: true,
-      createdAt: true,
-      updatedAt: true,
-    },
-  });
-}

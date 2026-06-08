@@ -341,6 +341,7 @@ practiceTestRouter.put(
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('questionId'),
+  validateDto(UpdateQuestionDto, true),
   practiceTestController.updatePracticeTestQuestion,
 );
 
@@ -716,6 +717,7 @@ practiceTestRouter.post(
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('practiceTestId'),
+  validateDto(CreateQuestionDto),
   practiceTestController.createPracticeTestQuestion,
 );
 

@@ -340,6 +340,7 @@ examTestRouter.put(
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('questionId'),
+  validateDto(UpdateQuestionDto, true),
   examTestController.updateExamTestQuestion,
 );
 
@@ -715,6 +716,7 @@ examTestRouter.post(
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('examTestId'),
+  validateDto(CreateQuestionDto),
   examTestController.createExamTestQuestion,
 );
 
