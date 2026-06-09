@@ -30,7 +30,6 @@ function buildQuillSanitizeHtmlOptions(): Record<string, unknown> {
     allowedTags: [...QUIll_SANITIZE_ALLOWED_TAGS],
     allowedAttributes,
     allowedSchemes: [...QUIll_SANITIZE_ALLOWED_SCHEMES],
-    // allow data: URIs for embedded base64 images
     allowedSchemesByTag: {
       img: [...QUIll_SANITIZE_ALLOWED_SCHEMES],
     },
@@ -58,25 +57,13 @@ function buildQuillSanitizeHtmlOptions(): Record<string, unknown> {
 
 const quillSanitizeHtmlOptions = buildQuillSanitizeHtmlOptions();
 
-/**
- * Removes large Base64 data from HTML strings to prevent regex performance issues (ReDoS)
- * and ensure character count logic is accurate for actual text content.
- */
-function stripBase64Data(html: string): string {
-  // Efficiently remove the base64 content from src attributes to avoid scanning it with complex regex
-  return html.replace(/src=["']data:image\/[^;]+;base64,[^"']+["']/g, 'src="data:image/placeholder"');
-}
-
 function getMeaningfulTextLength(html: string): number {
-  // Strip large image data first so the subsequent text-extraction regexes don't scan megabytes of base64
-  const safeHtml = stripBase64Data(html);
-
-  const textFromTags = safeHtml
+  const textFromTags = html
     .replace(/<[^>]*>/g, '')
     .replace(/&nbsp;/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-  const latexParts = [...safeHtml.matchAll(/data-latex="([^"]*)"/g)]
+  const latexParts = [...html.matchAll(/data-latex="([^"]*)"/g)]
     .map((m) => m[1])
     .join(' ')
     .replace(/&nbsp;/g, ' ')
@@ -84,24 +71,7 @@ function getMeaningfulTextLength(html: string): number {
     .trim();
   const combined = `${textFromTags} ${latexParts}`.replace(/\s+/g, ' ').trim();
   
-  // If there's no text, check if there are images or math blocks. 
-  // Each image counts as "meaningful" content.
-  // Using a simple index-of loop is faster than match(/.../g) on multi-megabyte strings.
-  let imageCount = 0;
-  let pos = safeHtml.indexOf('<img');
-  while (pos !== -1) {
-    imageCount++;
-    pos = safeHtml.indexOf('<img', pos + 1);
-  }
-  return combined.length + (imageCount * 10);
-}
-
-/**
- * Returns the length of the HTML string after replacing large Base64 image data 
- * with a placeholder to prevent "content too large" errors caused by image attachments.
- */
-function getHtmlLengthExcludingImages(html: string): number {
-  return stripBase64Data(html).length;
+  return combined.length;
 }
 
 function sanitizeQuillHtmlInternal(
@@ -110,11 +80,10 @@ function sanitizeQuillHtmlInternal(
   isRequired: boolean,
   context?: Record<string, unknown>,
 ): string {
-  const inputLengthForLimit = getHtmlLengthExcludingImages(input);
-  if (inputLengthForLimit > QUIll_HTML_MAX_INPUT_CHARS) {
+  if (input.length > QUIll_HTML_MAX_INPUT_CHARS) {
     logger.warn('[test-module] Rich text HTML rejected: input too large', {
       fieldLabel,
-      inputCharsExcludingImages: inputLengthForLimit,
+      inputChars: input.length,
       ...(context ?? {}),
     });
     throw new BadRequestError(`${fieldLabel} is too large`);
@@ -122,11 +91,10 @@ function sanitizeQuillHtmlInternal(
 
   const sanitized = sanitizeHtml(input, quillSanitizeHtmlOptions as Parameters<typeof sanitizeHtml>[1]);
 
-  const sanitizedLengthForLimit = getHtmlLengthExcludingImages(sanitized);
-  if (sanitizedLengthForLimit > QUIll_HTML_MAX_STORED_CHARS) {
+  if (sanitized.length > QUIll_HTML_MAX_STORED_CHARS) {
     logger.warn('[test-module] Rich text HTML rejected: sanitized too large', {
       fieldLabel,
-      sanitizedCharsExcludingImages: sanitizedLengthForLimit,
+      sanitizedChars: sanitized.length,
       ...(context ?? {}),
     });
     throw new BadRequestError(`${fieldLabel} is too large`);
