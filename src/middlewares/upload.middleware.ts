@@ -5,6 +5,7 @@ import * as fs from 'fs';
 import { BadRequestError } from '../errors/api.errors';
 import { ContentType } from '@prisma/client';
 import { AuthRequest } from '../dtos/auth.dto';
+import logger from '../utils/logger';
 
 import { FILE_TYPE_CONFIG, IMAGE_UPLOAD_CONFIG } from '../config/file-type';
 
@@ -95,22 +96,32 @@ const setRejectedUploadMessage = (req: Request, message: string): void => {
   (req as any).__uploadRejectedMessage = message;
 };
 
-// Ensure upload directory exists
-const uploadDir = process.env.UPLOAD_DIR || 'uploads/content';
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-// Configure multer storage
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
-    cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
+/**
+ * Common utility to parse JSON from FormData body
+ */
+export const parseMultipartData = (req: Request) => {
+  if (req.is('multipart/form-data') && req.body.data) {
+    try {
+      const parsed = JSON.parse(req.body.data);
+      req.body = { ...req.body, ...parsed };
+    } catch (e) {
+      logger.error('[upload-middleware] Failed to parse JSON from FormData', e);
+      throw new BadRequestError('Invalid JSON data in multipart request');
+    }
   }
+};
+
+// ─── General content upload ───────────────────────────────────────────────────
+
+const uploadDir = process.env.UPLOAD_DIR || 'uploads/content';
+ensureDirExists(uploadDir);
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, uploadDir),
+  filename: (_req, file, cb) => {
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    cb(null, `${file.fieldname}-${uniqueSuffix}${path.extname(file.originalname)}`);
+  },
 });
 
 const fileFilter: multer.Options['fileFilter'] = (
@@ -167,112 +178,135 @@ const normalizeUploadError = (error: any, next: NextFunction) => {
 // Middleware to handle single file upload with explicit error bridging
 export const uploadSingleFile = (req: Request, res: Response, next: NextFunction) => {
   upload.single('file')(req, res, (error: any) => {
-    if (error) {
-      return normalizeUploadError(error, next);
-    }
-
-    const rejectedMessage = getRejectedUploadMessage(req);
-    if (rejectedMessage) {
-      return next(new BadRequestError(rejectedMessage));
-    }
-
+    if (error) return normalizeUploadError(error, next);
+    const msg = getRejectedUploadMessage(req);
+    if (msg) return next(new BadRequestError(msg));
     next();
   });
 };
 
-// Middleware to validate file size based on resolved content type
 export const validateFileSize = (req: Request, res: Response, next: NextFunction) => {
-  if (!req.file) {
-    return next(new BadRequestError('No file uploaded'));
-  }
+  if (!req.file) return next(new BadRequestError('No file uploaded'));
 
   const rule = getRuleByOriginalName(req.file.originalname);
-
   if (!rule) {
     removeUploadedFile(req.file.path);
-    return next(
-      new BadRequestError(
-        `File type is not accepted. Allowed types: ${acceptedExtensionsLabel}.`
-      )
-    );
+    return next(new BadRequestError(`File type is not accepted. Allowed types: ${acceptedExtensionsLabel}.`));
   }
-
   if (req.file.size > rule.maxSizeBytes) {
     removeUploadedFile(req.file.path);
-
     return next(
       new BadRequestError(
-        `File size cannot exceed ${formatSizeInMb(rule.maxSizeBytes)} for ${rule.contentType} files.`
-      )
+        `File size cannot exceed ${formatSizeInMb(rule.maxSizeBytes)} for ${rule.contentType} files.`,
+      ),
     );
   }
 
   req.body.type = rule.contentType;
   req.body.filePath = req.file.path;
   req.body.fileSize = req.file.size;
-
   next();
 };
+
+// ─── Editor image upload ──────────────────────────────────────────────────────
+
+const EDITOR_IMAGE_TEMP_DIR = process.env.EDITOR_IMAGE_TEMP_DIR || 'uploads/editor/tmp';
+const EDITOR_IMAGE_ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+const EDITOR_IMAGE_MAX_SIZE = 10 * BYTES_IN_MB; // 10 MB (pre-compression client size)
+
+ensureDirExists(EDITOR_IMAGE_TEMP_DIR);
+
+const editorImageStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, EDITOR_IMAGE_TEMP_DIR),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
+    cb(null, `tmp-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
+  },
+});
+
+const editorImageMulter = multer({
+  storage: editorImageStorage,
+  limits: { fileSize: EDITOR_IMAGE_MAX_SIZE },
+  fileFilter: (_req, file, cb) => {
+    if (EDITOR_IMAGE_ALLOWED_MIME.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new BadRequestError('Only JPEG, PNG, WebP and GIF images are allowed'));
+    }
+  },
+});
+
+/**
+ * Multer middleware for editor image uploads.
+ * Accepts a single `image` field, saves to a temp directory.
+ * The controller (editorImage.controller) converts it to WebP via sharp.
+ */
+export const uploadEditorImageFile = (req: Request, res: Response, next: NextFunction) => {
+  editorImageMulter.single('image')(req, res, (error: any) => {
+    if (error) return normalizeUploadError(error, next);
+    next();
+  });
+};
+
+// ─── Profile / business-logo upload ──────────────────────────────────────────
 
 const profileFieldConfigs = {
   [IMAGE_UPLOAD_CONFIG.profilePicture.fieldName]: IMAGE_UPLOAD_CONFIG.profilePicture,
   profilePhoto: IMAGE_UPLOAD_CONFIG.profilePicture,
-  [IMAGE_UPLOAD_CONFIG.businessLogo.fieldName]: IMAGE_UPLOAD_CONFIG.businessLogo
+  [IMAGE_UPLOAD_CONFIG.businessLogo.fieldName]: IMAGE_UPLOAD_CONFIG.businessLogo,
 } as const;
 
 type ProfileFieldName = keyof typeof profileFieldConfigs;
-const PROFILE_PICTURE_FIELD_ALIASES = [IMAGE_UPLOAD_CONFIG.profilePicture.fieldName, 'profilePhoto'] as const;
+const PROFILE_PICTURE_FIELD_ALIASES = [
+  IMAGE_UPLOAD_CONFIG.profilePicture.fieldName,
+  'profilePhoto',
+] as const;
 const BUSINESS_LOGO_FIELD_NAMES = [IMAGE_UPLOAD_CONFIG.businessLogo.fieldName] as const;
-
-const createImageFieldsUpload = () =>
-  multer({
-    storage: profileStorage,
-    fileFilter: (req, file, cb) => {
-      const authReq = req as AuthRequest;
-      if (file.fieldname === IMAGE_UPLOAD_CONFIG.businessLogo.fieldName && authReq.user?.role !== 'ADMIN') {
-        return cb(new BadRequestError('Only admin can upload business logo'));
-      }
-      const field = file.fieldname as ProfileFieldName;
-      const config = profileFieldConfigs[field];
-      if (!config) {
-        return cb(new BadRequestError('Unexpected image field'));
-      }
-      const ext = path.extname(file.originalname).toLowerCase();
-      if (!config.extensions.includes(ext)) {
-        return cb(new BadRequestError(`Invalid file type for ${file.fieldname}`));
-      }
-      if (!config.mimeTypes.includes(file.mimetype)) {
-        return cb(new BadRequestError(`Invalid mime type for ${file.fieldname}`));
-      }
-      cb(null, true);
-    },
-    limits: {
-      fileSize: Math.max(
-        IMAGE_UPLOAD_CONFIG.profilePicture.maxSizeBytes,
-        IMAGE_UPLOAD_CONFIG.businessLogo.maxSizeBytes
-      )
-    }
-  });
 
 for (const cfg of Object.values(profileFieldConfigs)) {
   ensureDirExists(cfg.uploadDir);
 }
 
 const profileStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const field = file.fieldname as ProfileFieldName;
-    const config = profileFieldConfigs[field];
+  destination: (_req, file, cb) => {
+    const config = profileFieldConfigs[file.fieldname as ProfileFieldName];
     if (!config) return cb(new BadRequestError('Unexpected image field'), '');
     cb(null, config.uploadDir);
   },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
-    cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
-  }
+  filename: (_req, file, cb) => {
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    cb(null, `${file.fieldname}-${uniqueSuffix}${path.extname(file.originalname)}`);
+  },
 });
 
-const profileUpload = createImageFieldsUpload();
+const profileUpload = multer({
+  storage: profileStorage,
+  fileFilter: (req, file, cb) => {
+    const authReq = req as AuthRequest;
+    if (
+      file.fieldname === IMAGE_UPLOAD_CONFIG.businessLogo.fieldName &&
+      authReq.user?.role !== 'ADMIN'
+    ) {
+      return cb(new BadRequestError('Only admin can upload business logo'));
+    }
+    const config = profileFieldConfigs[file.fieldname as ProfileFieldName];
+    if (!config) return cb(new BadRequestError('Unexpected image field'));
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (!config.extensions.includes(ext)) {
+      return cb(new BadRequestError(`Invalid file type for ${file.fieldname}`));
+    }
+    if (!config.mimeTypes.includes(file.mimetype as any)) {
+      return cb(new BadRequestError(`Invalid mime type for ${file.fieldname}`));
+    }
+    cb(null, true);
+  },
+  limits: {
+    fileSize: Math.max(
+      IMAGE_UPLOAD_CONFIG.profilePicture.maxSizeBytes,
+      IMAGE_UPLOAD_CONFIG.businessLogo.maxSizeBytes,
+    )
+  },
+});
 
 export const uploadProfileAssets = (req: Request, res: Response, next: NextFunction) => {
   profileUpload.fields([

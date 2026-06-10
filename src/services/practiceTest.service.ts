@@ -5,6 +5,7 @@ import { TestStatus } from '../constants/test-enums';
 import logger from '../utils/logger';
 import { CreatePracticeTestDto, CreateQuestionDto, UpdatePracticeTestDto, UpdateQuestionDto } from '../dtos/test.dto';
 import { UserRole } from '@prisma/client';
+import { deleteQuestionImageFile } from '../utils/test.utils';
 import {
   validateQuestionPayload,
   assertBatchBelongsToBusiness,
@@ -13,6 +14,7 @@ import {
   assertCanModifyTestQuestions,
   sanitizeQuestionFieldsForCreate,
   sanitizeQuestionFieldsForUpdate,
+  sanitizeOptionsHtml,
 } from '../utils/test.utils';
 
 export class PracticeTestService {
@@ -146,6 +148,7 @@ export class PracticeTestService {
         userId: user.id,
       });
     }
+
     const updatedPracticeTest = await practiceRepo.updatePracticeTest(businessId, practiceTestId, {
       ...(dto.batchId !== undefined ? { batchId: dto.batchId } : {}),
       ...(dto.subjectId !== undefined ? { subjectId: dto.subjectId } : {}),
@@ -218,40 +221,54 @@ export class PracticeTestService {
     const { questionText: sanitizedQuestionText, explanation: sanitizedExplanation } =
       sanitizeQuestionFieldsForCreate(dto, { businessId, practiceTestId, userId: user.id });
 
-    const createdQuestion = await questionRepo.createPracticeTestQuestionResolvingCorrect(businessId, practiceTestId, {
-      type: dto.type,
-      text: sanitizedQuestionText,
-      mediaUrl: dto.mediaUrl ?? null,
-      explanation: sanitizedExplanation,
-      correctTextAnswer: dto.correctTextAnswer ?? null,
-      correctOptionRefs: dto.correctOptionIdsAnswers ?? [],
-      options: dto.options?.map((o) => ({ text: o.text, mediaUrl: o.mediaUrl ?? null })) ?? [],
-    });
+    const sanitizedOptions =
+      sanitizeOptionsHtml(dto.options, { businessId, practiceTestId, userId: user.id }) ?? [];
+
+    const createdQuestion = await questionRepo.createPracticeTestQuestionResolvingCorrect(
+      businessId,
+      practiceTestId,
+      {
+        type: dto.type,
+        text: sanitizedQuestionText,
+        mediaUrl: dto.mediaUrl ?? null,
+        explanation: sanitizedExplanation,
+        correctTextAnswer: dto.correctTextAnswer ?? null,
+        correctOptionRefs: dto.correctOptionIdsAnswers ?? [],
+        options: sanitizedOptions,
+      },
+    );
 
     if (!createdQuestion) throw new NotFoundError('Practice test not found');
     return createdQuestion;
   }
 
-  async updateQuestion(businessId: number, questionId: string, dto: UpdateQuestionDto, user: { id: number; role: UserRole }) {
+  async updateQuestion(
+    businessId: number,
+    questionId: string,
+    dto: UpdateQuestionDto,
+    user: { id: number; role: UserRole },
+  ) {
     const existing = await questionRepo.findQuestionById(businessId, questionId);
     if (!existing) throw new NotFoundError('Question not found');
 
     const practiceTestId = existing.practiceTestId;
     if (!practiceTestId) throw new BadRequestError('Question does not belong to a practice test');
     await this.getWithAccess(businessId, practiceTestId, user);
-
     await assertCanModifyTestQuestions(businessId, practiceTestId, 'practice');
 
     const resolvedQuestionType = dto.type ?? existing.type;
-    const optionUpdates = dto.options !== undefined
-      ? dto.options.map((o) => ({
-          ...(o.id !== undefined ? { id: o.id } : {}),
-          text: o.text,
-          mediaUrl: o.mediaUrl ?? null,
-        }))
-      : undefined;
-    const correctOptionIdsForValidation = dto.correctOptionIdsAnswers ?? existing.correctOptionIdsAnswers ?? [];
-    const resolvedCorrectTextAnswer = dto.correctTextAnswer ?? existing.correctTextAnswer ?? null;
+    const optionUpdates =
+      dto.options !== undefined
+        ? dto.options.map((o) => ({
+            ...(o.id !== undefined ? { id: o.id } : {}),
+            text: o.text,
+            mediaUrl: o.mediaUrl ?? null,
+          }))
+        : undefined;
+    const correctOptionIdsForValidation =
+      dto.correctOptionIdsAnswers ?? existing.correctOptionIdsAnswers ?? [];
+    const resolvedCorrectTextAnswer =
+      dto.correctTextAnswer ?? existing.correctTextAnswer ?? null;
 
     validateQuestionPayload({
       type: resolvedQuestionType,
@@ -263,12 +280,42 @@ export class PracticeTestService {
         [],
     });
 
-    const { questionText: sanitizedQuestionText, explanation: sanitizedExplanation } = sanitizeQuestionFieldsForUpdate(dto, {
-      businessId,
-      practiceTestId,
-      questionId,
-      userId: user.id,
-    });
+    const { questionText: sanitizedQuestionText, explanation: sanitizedExplanation } =
+      sanitizeQuestionFieldsForUpdate(dto, {
+        businessId,
+        practiceTestId,
+        questionId,
+        userId: user.id,
+      });
+
+    const sanitizedOptions =
+      dto.options !== undefined
+        ? sanitizeOptionsHtml(dto.options, {
+            businessId,
+            practiceTestId,
+            questionId,
+            userId: user.id,
+          })
+        : undefined;
+
+    // Clean up old question image if it is being replaced or removed
+    if (dto.mediaUrl !== undefined && dto.mediaUrl !== existing.mediaUrl) {
+      deleteQuestionImageFile(existing.mediaUrl);
+    }
+
+    // Clean up old option images if they are being replaced or removed
+    if (dto.options !== undefined && existing.options) {
+      for (const existingOpt of existing.options) {
+        const updatedOpt = dto.options.find((o) => o.id === existingOpt.id);
+        if (
+          updatedOpt &&
+          updatedOpt.mediaUrl !== undefined &&
+          updatedOpt.mediaUrl !== existingOpt.mediaUrl
+        ) {
+          deleteQuestionImageFile(existingOpt.mediaUrl);
+        }
+      }
+    }
 
     const updatedQuestion = await questionRepo.updateQuestionAndOptions(businessId, questionId, {
       ...(dto.type !== undefined ? { type: dto.type } : {}),
@@ -279,24 +326,25 @@ export class PracticeTestService {
       ...(dto.correctOptionIdsAnswers !== undefined
         ? { correctOptionRefs: dto.correctOptionIdsAnswers }
         : {}),
-      ...(dto.options !== undefined ? { options: optionUpdates ?? [] } : {}),
+      ...(dto.options !== undefined ? { options: sanitizedOptions ?? optionUpdates ?? [] } : {}),
     });
     if (!updatedQuestion) throw new NotFoundError('Question not found');
     return updatedQuestion;
   }
 
-  async deleteQuestion(businessId: number, questionId: string, user: { id: number; role: UserRole }) {
+  async deleteQuestion(
+    businessId: number,
+    questionId: string,
+    user: { id: number; role: UserRole },
+  ) {
     const existing = await questionRepo.findQuestionById(businessId, questionId);
     if (!existing) throw new NotFoundError('Question not found');
     const practiceTestId = existing.practiceTestId;
     if (!practiceTestId) throw new BadRequestError('Question does not belong to a practice test');
     await this.getWithAccess(businessId, practiceTestId, user);
-
     await assertCanModifyTestQuestions(businessId, practiceTestId, 'practice');
-
     await questionRepo.deleteQuestion(businessId, questionId);
   }
 }
-
 
 export const practiceTestService = new PracticeTestService();

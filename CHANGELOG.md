@@ -1,5 +1,11 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.21] - editor image upload api 
+**P.R Raised by** : shubh404-SE on **Date** : 2026-06-09
+
+### Changed
+  - made 2 new api endpoints to upload or remove editor image.
+---
 ## Version [1.2.20] - profile setting permission 
 **P.R Raised by** : shubh404-SE on **Date** : 2026-06-02
 

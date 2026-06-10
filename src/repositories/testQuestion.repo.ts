@@ -413,3 +413,4 @@ export function hasAttemptsForExamTest(businessId: number, examTestId: string) {
   }).then((c) => c > 0);
 }
 
+

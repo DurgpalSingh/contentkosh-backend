@@ -1,3 +1,5 @@
+import * as fs from 'fs';
+import * as path from 'path';
 /**
  * test.utils.ts
  * Combined utility module for the test/LMS module.
@@ -60,6 +62,25 @@ export async function assertCanModifyTestQuestions(
   }
 }
 
+
+/**
+ * Deletes a question/option image file from disk.
+ * mediaUrl is expected to be a public path like /uploads/questions/filename.jpg
+ */
+export function deleteQuestionImageFile(mediaUrl: string | null | undefined): void {
+  if (!mediaUrl) return;
+  try {
+    const relative = mediaUrl.replace(/^\//, '');
+    const absolute = path.resolve(process.cwd(), relative);
+    if (fs.existsSync(absolute)) {
+      fs.unlinkSync(absolute);
+      logger.info(`[exam-test] Deleted old question image: ${absolute}`);
+    }
+  } catch (err) {
+    logger.warn(`[exam-test] Could not delete question image ${mediaUrl}:`, err);
+  }
+}
+
 /**
  * Sanitizes Quill HTML for question text and explanation on create.
  * Use from practice and exam question flows to keep behavior aligned.
@@ -77,6 +98,26 @@ export function sanitizeQuestionFieldsForCreate(
     questionText: sanitizeRequiredQuillHtml(dto.questionText, 'questionText', context),
     explanation: sanitizeOptionalQuillHtml(dto.explanation ?? null, 'explanation', context),
   };
+}
+
+/**
+ * Sanitizes option HTML for create/update flows. Returns options with sanitized `text`.
+ */
+export function sanitizeOptionsHtml(
+  options: Array<{ id?: string; text: string; mediaUrl?: string | null }> | undefined | null,
+  context: Record<string, unknown>,
+): Array<{ id?: string; text: string; mediaUrl?: string | null }> | undefined {
+  if (!options || !options.length) return undefined;
+
+  return options.map((o, i) => ({
+    ...(o.id !== undefined ? { id: o.id } : {}),
+    text: sanitizeRequiredQuillHtml(
+      o.text ?? '',
+      `option[${i}].text` as any,
+      context,
+    ),
+    mediaUrl: o.mediaUrl ?? null,
+  }));
 }
 
 /**

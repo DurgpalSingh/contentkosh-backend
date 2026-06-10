@@ -34,6 +34,7 @@ export const QUIll_SANITIZE_ALLOWED_TAGS = [
   'caption',
   'colgroup',
   'col',
+  'img',
 ] as const;
 
 /** Per-tag allowed attributes (keys must match tags present in content). */
@@ -52,9 +53,10 @@ export const QUIll_SANITIZE_ALLOWED_ATTRIBUTES: Readonly<Record<string, readonly
   caption: ['class'],
   colgroup: ['class', 'span', 'width'],
   col: ['class', 'span', 'width'],
+  img: ['src', 'alt', 'width', 'height', 'style'],
 } as const;
 
-export const QUIll_SANITIZE_ALLOWED_SCHEMES = ['http', 'https'] as const;
+export const QUIll_SANITIZE_ALLOWED_SCHEMES = ['http', 'https', 'data'] as const;
 
 export const QUIll_SANITIZE_DISALLOWED_TAGS_MODE = 'discard' as const;
 
