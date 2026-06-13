@@ -1,6 +1,8 @@
 import { OfficeParser, OfficeContentNode } from 'officeparser';
 import { ParsedQuestion } from '../dtos/bulkUpload.dto';
 import logger from '../utils/logger';
+import { textWithMath } from '../utils/parserHtml.utils';
+import { createParsedQuestion, normaliseParserKey, normaliseQuestionType } from '../utils/parserQuestion.utils';
 
 // ---------------------------------------------------------------------------
 // AST → HTML conversion
@@ -95,42 +97,6 @@ function applyFormatting(text: string, node: OfficeContentNode): string {
   return result;
 }
 
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-/**
- * Detects inline LaTeX patterns in text and wraps them in TipTap math nodes.
- * Supports: $...$ for inline math, $$...$$ for block math.
- * Falls back to escaped plain text for non-math content.
- */
-function textWithMath(text: string): string {
-  if (!text) return '';
-
-  // Block math: $$...$$
-  const blockMathPattern = /\$\$(.+?)\$\$/gs;
-  // Inline math: $...$
-  const inlineMathPattern = /\$(.+?)\$/g;
-
-  let result = escapeHtml(text);
-
-  // Replace $$...$$ with block math nodes
-  result = result.replace(blockMathPattern, (_match, latex: string) => {
-    return `<span data-type="block-math" data-latex="${escapeHtml(latex.trim())}"></span>`;
-  });
-
-  // Replace $...$ with inline math nodes
-  result = result.replace(inlineMathPattern, (_match, latex: string) => {
-    return `<span data-type="inline-math" data-latex="${escapeHtml(latex.trim())}"></span>`;
-  });
-
-  return result;
-}
-
 /**
  * Converts a cell's content nodes to HTML.
  * Includes ALL content — paragraphs, nested tables, lists, etc.
@@ -219,37 +185,6 @@ function parseOptions(raw: string): string[] {
   return options;
 }
 
-function resolveAnswerLabels(answerRaw: string, options: string[]): string {
-  const answerClean = answerRaw.trim();
-
-  if (/^[A-D](,\s*[A-D])*$/i.test(answerClean)) {
-    return answerClean.toUpperCase();
-  }
-
-  const answerParts = answerClean.split(',').map(p => p.trim().toLowerCase());
-  const matchedLabels: string[] = [];
-
-  for (const part of answerParts) {
-    for (const opt of options) {
-      const match = opt.match(/^([A-D])\.\s*(.+)$/i);
-      if (match) {
-        const label = (match[1] ?? '').toUpperCase();
-        const text = (match[2] ?? '').trim().toLowerCase();
-        if (text === part || text.startsWith(part) || part.startsWith(text)) {
-          matchedLabels.push(label);
-          break;
-        }
-      }
-    }
-  }
-
-  return matchedLabels.length > 0 ? matchedLabels.join(', ') : answerClean;
-}
-
-function normaliseField(raw: string): string {
-  return raw.toLowerCase().replace(/\s+/g, ' ').trim();
-}
-
 // ---------------------------------------------------------------------------
 // DocParserService
 // ---------------------------------------------------------------------------
@@ -274,7 +209,7 @@ export class DocParserService {
       // Build field → cell map (skip header rows)
       const fieldCellMap: Record<string, OfficeContentNode> = {};
       for (const { field, valueCell } of rows) {
-        const norm = normaliseField(field);
+        const norm = normaliseParserKey(field);
         if (norm === 'field' || norm === 'value' || norm === '') continue;
         if (!(norm in fieldCellMap)) {
           fieldCellMap[norm] = valueCell;
@@ -302,24 +237,19 @@ export class DocParserService {
       const optionsCell = fieldCellMap['options'];
       const answerCell = fieldCellMap['answer'];
 
-      const type = typeCell ? cellToPlainText(typeCell).trim().toUpperCase() : '';
+      const type = normaliseQuestionType(typeCell ? cellToPlainText(typeCell) : '');
       const optionsRaw = optionsCell ? cellToPlainText(optionsCell) : '';
       const answerRaw = answerCell ? cellToPlainText(answerCell) : '';
 
       const options = optionsRaw ? parseOptions(optionsRaw) : [];
 
-      let answer = answerRaw;
-      if ((type === 'SINGLE_CHOICE' || type === 'MULTIPLE_CHOICE') && options.length > 0) {
-        answer = resolveAnswerLabels(answerRaw, options);
-      }
-
-      questions.push({
+      questions.push(createParsedQuestion({
         questionText: questionHtml,
         type,
         options,
-        answer,
+        answerRaw,
         solution: solutionHtml,
-      });
+      }));
     }
 
     logger.info(`DocParserService: Extracted ${questions.length} question(s)`);
