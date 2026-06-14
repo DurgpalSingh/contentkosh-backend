@@ -4,6 +4,7 @@ import {
   IsEmail,
   IsEnum,
   IsInt,
+  Matches,
   IsObject,
   IsOptional,
   IsString,
@@ -30,6 +31,7 @@ export class SettingsUserDetailsDto {
 
   @IsOptional()
   @IsString()
+  @Matches(/^\d{10}$/, { message: 'Mobile number must be a valid 10-digit number' })
   mobile?: string;
 
   @IsOptional()
@@ -117,6 +119,7 @@ export class BusinessDetailsDto {
 
   @IsOptional()
   @IsString()
+  @Matches(/^\d{10}$/, { message: 'Contact number must be a valid 10-digit number' })
   contactNumber?: string;
 
   @IsOptional()

@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, IsOptional, IsEmail, MinLength, IsEnum } from 'class-validator';
+import { IsNotEmpty, IsString, IsOptional, IsEmail, MinLength, IsEnum, Matches } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { Prisma, UserRole, UserStatus } from '@prisma/client';
 
@@ -22,6 +22,7 @@ export class CreateUserDto {
 
     @IsOptional()
     @IsString()
+    @Matches(/^\d{10}$/, { message: 'Mobile number must be a valid 10-digit number' })
     mobile?: string;
 
     @IsNotEmpty({ message: 'Password is required' })
@@ -43,6 +44,7 @@ export class UpdateUserDto {
 
     @IsOptional()
     @IsString()
+    @Matches(/^\d{10}$/, { message: 'Mobile number must be a valid 10-digit number' })
     mobile?: string;
 
     @IsOptional()

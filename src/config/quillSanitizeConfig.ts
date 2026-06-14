@@ -42,6 +42,7 @@ export const QUIll_SANITIZE_ALLOWED_ATTRIBUTES: Readonly<Record<string, readonly
   a: ['href', 'target', 'rel'],
   span: ['class', 'data-type', 'data-latex'],
   p: ['class'],
+  ol: ['start', 'type'],
   div: ['class', 'data-type', 'data-latex'],
   table: ['class', 'style', 'width'],
   thead: ['class'],

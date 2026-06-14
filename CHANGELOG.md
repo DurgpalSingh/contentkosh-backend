@@ -1,5 +1,11 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.22] - 10 digit number validation
+**P.R Raised by** : shubh404-SE on **Date** : 2026-06-13
+
+### Changed
+  - Validation added in for mobile numbers.
+  - added `ol` html tag in sanitize config to support roman list 
 ## Version [1.2.21] - editor image upload api 
 **P.R Raised by** : shubh404-SE on **Date** : 2026-06-09
 
