@@ -1969,6 +1969,20 @@ export const swaggerSchemas = {
           }
         },
         description: 'Recently added content available to student'
+      },
+      recentExams: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', description: 'Exam test ID' },
+            name: { type: 'string', description: 'Exam test name' },
+            batchName: { type: 'string', description: 'Batch display name' },
+            startAt: { type: 'string', format: 'date-time', description: 'Exam start time' },
+            deadlineAt: { type: 'string', format: 'date-time', description: 'Exam deadline time' }
+          }
+        },
+        description: 'Recent live or upcoming exam tests for the student dashboard'
       }
     }
   },

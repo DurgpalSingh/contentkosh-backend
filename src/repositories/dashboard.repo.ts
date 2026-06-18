@@ -1,6 +1,7 @@
 import { prisma } from '../config/database';
 import { ContentStatus, ExamStatus, Prisma, UserRole, UserStatus } from '@prisma/client';
 import { activeBatchWhereForBusiness } from '../constants/hierarchyFilters';
+import { TestStatus } from '../constants/test-enums';
 
 const DASHBOARD_PREVIEW_LIMIT = 5;
 
@@ -113,6 +114,47 @@ const countTeacherUniqueStudents = async (batchWhere: Prisma.BatchWhereInput) =>
     });
 
     return result.length;
+};
+
+const findRecentStudentExams = (businessId: number, userId: number) => {
+    const now = new Date();
+
+    return prisma.examTest.findMany({
+        where: {
+            businessId,
+            status: TestStatus.PUBLISHED,
+            deadlineAt: { gte: now },
+            batch: {
+                ...activeBatchWhereForBusiness(businessId),
+                batchUsers: {
+                    some: {
+                        userId,
+                        isActive: true,
+                        user: {
+                            role: UserRole.STUDENT,
+                            status: UserStatus.ACTIVE
+                        }
+                    }
+                }
+            }
+        },
+        select: {
+            id: true,
+            name: true,
+            startAt: true,
+            deadlineAt: true,
+            batch: {
+                select: {
+                    displayName: true
+                }
+            }
+        },
+        orderBy: [
+            { startAt: 'asc' },
+            { deadlineAt: 'asc' }
+        ],
+        take: DASHBOARD_PREVIEW_LIMIT
+    });
 };
 
 // Admin Dashboard Queries
@@ -296,32 +338,18 @@ export async function getStudentDashboardData(businessId: number, userId: number
     const batchWhere = getStudentBatchWhere(businessId, userId);
     const contentWhere: Prisma.ContentWhereInput = { batch: batchWhere, status: ContentStatus.ACTIVE };
 
-    const enrolledBatches = await prisma.batchUser.count({
-        where: {
-            userId,
-            isActive: true,
-            batch: { isActive: true, course: { exam: { businessId, status: ExamStatus.ACTIVE } } },
-            user: {
-                role: UserRole.STUDENT,
-                status: UserStatus.ACTIVE
+    const [enrolledBatches, totalContent, activeAnnouncements, batches, recentAnnouncements, recentContent, recentExams] = await prisma.$transaction([
+        prisma.batchUser.count({
+            where: {
+                userId,
+                isActive: true,
+                batch: { isActive: true, course: { exam: { businessId, status: ExamStatus.ACTIVE } } },
+                user: {
+                    role: UserRole.STUDENT,
+                    status: UserStatus.ACTIVE
+                }
             }
-        }
-    });
-
-    if (enrolledBatches === 0) {
-        return {
-            stats: {
-                enrolledBatches: 0,
-                totalContent: 0,
-                activeAnnouncements: 0
-            },
-            myBatches: [],
-            recentAnnouncements: [],
-            recentContent: []
-        };
-    }
-
-    const [totalContent, activeAnnouncements, batches, recentAnnouncements, recentContent] = await prisma.$transaction([
+        }),
         countContent(contentWhere),
         countActiveAnnouncements(businessId, 'students'),
         findBatches(batchWhere, {
@@ -349,8 +377,23 @@ export async function getStudentDashboardData(businessId: number, userId: number
             batch: {
                 select: { displayName: true }
             }
-        })
+        }),
+        findRecentStudentExams(businessId, userId)
     ]);
+
+    if (enrolledBatches === 0) {
+        return {
+            stats: {
+                enrolledBatches: 0,
+                totalContent: 0,
+                activeAnnouncements
+            },
+            myBatches: [],
+            recentAnnouncements,
+            recentContent: [],
+            recentExams: []
+        };
+    }
 
     return {
         stats: {
@@ -361,5 +404,12 @@ export async function getStudentDashboardData(businessId: number, userId: number
         myBatches: batches,
         recentAnnouncements,
         recentContent: recentContent,
+        recentExams: recentExams.map((exam) => ({
+            id: exam.id,
+            name: exam.name,
+            batchName: exam.batch?.displayName ?? '',
+            startAt: exam.startAt,
+            deadlineAt: exam.deadlineAt
+        })),
     };
 }
