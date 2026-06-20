@@ -5,6 +5,7 @@ import {
   Prisma,
 } from '@prisma/client';
 import { prisma } from '../config/database';
+import { publicPrisma } from '../config/database';
 import {
   VISIBILITY_FIELD_ADMINS,
   VISIBILITY_FIELD_TEACHERS,
@@ -23,30 +24,67 @@ const creatorSelect = {
 
 export const announcementListInclude = {
   targets: true,
-  createdByUser: { select: creatorSelect },
 } as const;
 
 export type AnnouncementWithRelations = Prisma.AnnouncementGetPayload<{
   include: typeof announcementListInclude;
 }>;
 
+async function attachAnnouncementUsers<T extends { createdBy?: number | null; updatedBy?: number | null }>(
+  rows: T[],
+): Promise<Array<T & { createdByUser: { id: number; name: string; email: string } | null; updatedByUser: { id: number; name: string; email: string } | null }>> {
+  const userIds = [
+    ...new Set(
+      rows
+        .flatMap((row) => [row.createdBy, row.updatedBy])
+        .filter((id): id is number => id !== null && id !== undefined),
+    ),
+  ];
+
+  if (userIds.length === 0) {
+    return rows.map((row) => ({ ...row, createdByUser: null, updatedByUser: null }));
+  }
+
+  const users = await publicPrisma.user.findMany({
+    where: { id: { in: userIds } },
+    select: creatorSelect,
+  });
+  const byId = new Map(users.map((user) => [user.id, user]));
+
+  return rows.map((row) => ({
+    ...row,
+    createdByUser: row.createdBy ? byId.get(row.createdBy) ?? null : null,
+    updatedByUser: row.updatedBy ? byId.get(row.updatedBy) ?? null : null,
+  }));
+}
+
+async function attachAnnouncementUser<T extends { createdBy?: number | null; updatedBy?: number | null }>(
+  row: T | null,
+): Promise<(T & { createdByUser: { id: number; name: string; email: string } | null; updatedByUser: { id: number; name: string; email: string } | null }) | null> {
+  if (!row) return null;
+  const rows = await attachAnnouncementUsers([row]);
+  return rows[0] ?? null;
+}
+
 export async function findAnnouncementByIdWithTargets(
   id: number,
   businessId: number,
 ): Promise<AnnouncementWithRelations | null> {
-  return prisma.announcement.findFirst({
+  const row = await prisma.announcement.findFirst({
     where: { id, businessId },
     include: announcementListInclude,
   });
+  return attachAnnouncementUser(row) as Promise<AnnouncementWithRelations | null>;
 }
 
 export async function findAnnouncementByIdWithTargetsAnyBusiness(
   id: number,
 ): Promise<AnnouncementWithRelations | null> {
-  return prisma.announcement.findUnique({
+  const row = await prisma.announcement.findUnique({
     where: { id },
     include: announcementListInclude,
   });
+  return attachAnnouncementUser(row) as Promise<AnnouncementWithRelations | null>;
 }
 
 export async function findVisibleAnnouncementByIdForUser(
@@ -65,13 +103,14 @@ export async function findVisibleAnnouncementByIdForUser(
   const { batchIds, courseIds } = await findUserBatchAndCourseMembership(businessId, userId);
   const targetOr = buildTargetOrForTeacherOrStudent(batchIds, courseIds);
 
-  return prisma.announcement.findFirst({
+  const row = await prisma.announcement.findFirst({
     where: {
       ...base,
       OR: targetOr,
     },
     include: announcementListInclude,
   });
+  return attachAnnouncementUser(row) as Promise<AnnouncementWithRelations | null>;
 }
 
 function activeDateWhere(): Prisma.AnnouncementWhereInput {
@@ -124,17 +163,18 @@ export async function findMyAnnouncements(
   };
 
   if (visibilityField === VISIBILITY_FIELD_ADMINS) {
-    return prisma.announcement.findMany({
+    const rows = await prisma.announcement.findMany({
       where: base,
       include: announcementListInclude,
       orderBy: { createdAt: 'desc' },
     });
+    return attachAnnouncementUsers(rows) as Promise<AnnouncementWithRelations[]>;
   }
 
   const { batchIds, courseIds } = await findUserBatchAndCourseMembership(businessId, userId);
   const targetOr = buildTargetOrForTeacherOrStudent(batchIds, courseIds);
 
-  return prisma.announcement.findMany({
+  const rows = await prisma.announcement.findMany({
     where: {
       ...base,
       OR: targetOr,
@@ -142,27 +182,30 @@ export async function findMyAnnouncements(
     include: announcementListInclude,
     orderBy: { createdAt: 'desc' },
   });
+  return attachAnnouncementUsers(rows) as Promise<AnnouncementWithRelations[]>;
 }
 
 export async function findAllForBusinessAdmin(
   businessId: number,
 ): Promise<AnnouncementWithRelations[]> {
-  return prisma.announcement.findMany({
+  const rows = await prisma.announcement.findMany({
     where: { businessId },
     include: announcementListInclude,
     orderBy: { createdAt: 'desc' },
   });
+  return attachAnnouncementUsers(rows) as Promise<AnnouncementWithRelations[]>;
 }
 
 export async function findCreatedByUser(
   businessId: number,
   userId: number,
 ): Promise<AnnouncementWithRelations[]> {
-  return prisma.announcement.findMany({
+  const rows = await prisma.announcement.findMany({
     where: { businessId, createdBy: userId },
     include: announcementListInclude,
     orderBy: { createdAt: 'desc' },
   });
+  return attachAnnouncementUsers(rows) as Promise<AnnouncementWithRelations[]>;
 }
 
 function buildReceivedWhereForNonAdmin(
@@ -251,7 +294,7 @@ export async function findUserAnnouncementBundle(
       include: announcementListInclude,
       orderBy,
     });
-    return { received, managed: [] };
+    return { received: await attachAnnouncementUsers(received) as AnnouncementWithRelations[], managed: [] };
   }
 
   const managedWhere = managedWhereFn(businessId, userId);
@@ -261,7 +304,10 @@ export async function findUserAnnouncementBundle(
     prisma.announcement.findMany({ where: managedWhere, include: announcementListInclude, orderBy }),
   ]);
 
-  return { received, managed };
+  return {
+    received: await attachAnnouncementUsers(received) as AnnouncementWithRelations[],
+    managed: await attachAnnouncementUsers(managed) as AnnouncementWithRelations[],
+  };
 }
 
 export interface AnnouncementCreateRepoInput {
@@ -294,17 +340,15 @@ export async function createWithTargets(
         startDate: rest.startDate,
         endDate: rest.endDate,
         isActive: rest.isActive,
-        business: { connect: { id: rest.businessId } },
+        businessId: rest.businessId,
         visibleToAdmins: rest.visibleToAdmins,
         visibleToTeachers: rest.visibleToTeachers,
         visibleToStudents: rest.visibleToStudents,
         scope: rest.scope,
         targetAllCourses: rest.targetAllCourses,
         targetAllBatches: rest.targetAllBatches,
-        createdByUser: { connect: { id: rest.createdBy } },
-        ...(rest.updatedBy !== null && rest.updatedBy !== undefined
-          ? { updatedByUser: { connect: { id: rest.updatedBy } } }
-          : {}),
+        createdBy: rest.createdBy,
+        updatedBy: rest.updatedBy,
         targets: {
           create: targets.map((t) => ({
             courseId: t.courseId ?? null,
@@ -314,7 +358,7 @@ export async function createWithTargets(
       },
       include: announcementListInclude,
     });
-    return created;
+    return attachAnnouncementUser(created) as Promise<AnnouncementWithRelations>;
   });
 }
 
@@ -359,9 +403,7 @@ export async function updateWithTargets(
       scope: patch.scope,
       targetAllCourses: patch.targetAllCourses,
       targetAllBatches: patch.targetAllBatches,
-      ...(patch.updatedBy !== null
-        ? { updatedByUser: { connect: { id: patch.updatedBy } } }
-        : {}),
+      ...(patch.updatedBy !== null ? { updatedBy: patch.updatedBy } : {}),
     };
 
     if (patch.targets !== undefined) {
@@ -374,11 +416,12 @@ export async function updateWithTargets(
       };
     }
 
-    return tx.announcement.update({
+    const updated = await tx.announcement.update({
       where: { id },
       data,
       include: announcementListInclude,
     });
+    return attachAnnouncementUser(updated) as Promise<AnnouncementWithRelations>;
   });
 }
 

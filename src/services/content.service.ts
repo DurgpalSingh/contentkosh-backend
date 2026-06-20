@@ -50,7 +50,7 @@ export class ContentService {
             }
           : {})
       };
-      const content = await contentRepo.createContent(createData);
+      const content = await contentRepo.createContent(createData, user.businessId!);
       logger.info('ContentService: Content created', {
         contentId: content.id,
         batchId,
