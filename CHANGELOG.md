@@ -1,5 +1,11 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.23] - added exam in responce of student dashboard api
+**P.R Raised by** : shubh404-SE on **Date** : 2026-06-19
+
+### Changes
+  - added exam details in responce of student dashboard api, now student can see their upcoming exam details in dashboard.
+---
 ## Version [1.2.22] - 10 digit number validation
 **P.R Raised by** : shubh404-SE on **Date** : 2026-06-13
 
