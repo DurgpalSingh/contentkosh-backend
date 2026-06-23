@@ -3,6 +3,12 @@ import { ParsedQuestion } from '../dtos/bulkUpload.dto';
 import logger from '../utils/logger';
 import { textWithMath } from '../utils/parserHtml.utils';
 import { createParsedQuestion, normaliseParserKey, normaliseQuestionType } from '../utils/parserQuestion.utils';
+import {
+  BULK_UPLOAD_FIELD_NAMES,
+  BULK_UPLOAD_HTML,
+  BULK_UPLOAD_REGEX,
+  OFFICE_NODE_TYPES,
+} from '../constants/bulkUpload.constants';
 
 // ---------------------------------------------------------------------------
 // AST → HTML conversion
@@ -15,46 +21,48 @@ import { createParsedQuestion, normaliseParserKey, normaliseQuestionType } from 
  */
 function nodeToHtml(node: OfficeContentNode, isTopLevel = false): string {
   switch (node.type) {
-    case 'paragraph':
-    case 'text': {
+    case OFFICE_NODE_TYPES.PARAGRAPH:
+    case OFFICE_NODE_TYPES.TEXT: {
       const inner = childrenToHtml(node);
-      if (!inner.trim()) return isTopLevel ? '' : '<p></p>';
-      return `<p>${inner}</p>`;
+      if (!inner.trim()) return isTopLevel ? '' : BULK_UPLOAD_HTML.EMPTY_PARAGRAPH;
+      return `<${BULK_UPLOAD_HTML.PARAGRAPH}>${inner}</${BULK_UPLOAD_HTML.PARAGRAPH}>`;
     }
 
-    case 'heading': {
+    case OFFICE_NODE_TYPES.HEADING: {
       const meta = node.metadata as { level?: number } | undefined;
       const level = meta?.level ?? 2;
       const safeLevel = Math.min(Math.max(level, 1), 3);
       const inner = childrenToHtml(node);
-      return `<h${safeLevel}>${inner}</h${safeLevel}>`;
+      return `<${BULK_UPLOAD_HTML.HEADING}${safeLevel}>${inner}</${BULK_UPLOAD_HTML.HEADING}${safeLevel}>`;
     }
 
-    case 'list': {
+    case OFFICE_NODE_TYPES.LIST: {
       const meta = node.metadata as { listType?: string } | undefined;
-      const tag = meta?.listType === 'ordered' ? 'ol' : 'ul';
+      const tag = meta?.listType === OFFICE_NODE_TYPES.ORDERED_LIST
+        ? BULK_UPLOAD_HTML.ORDERED_LIST
+        : BULK_UPLOAD_HTML.UNORDERED_LIST;
       const inner = childrenToHtml(node);
       return `<${tag}>${inner}</${tag}>`;
     }
 
-    case 'table': {
-      const rows = (node.children ?? []).filter(n => n.type === 'row');
+    case OFFICE_NODE_TYPES.TABLE: {
+      const rows = (node.children ?? []).filter(n => n.type === OFFICE_NODE_TYPES.ROW);
       if (rows.length === 0) return '';
       const rowsHtml = rows.map((row, rowIdx) => {
-        const cells = (row.children ?? []).filter(n => n.type === 'cell');
+        const cells = (row.children ?? []).filter(n => n.type === OFFICE_NODE_TYPES.CELL);
         // First row uses <th> if it looks like a header (first row of table)
         const isHeaderRow = rowIdx === 0;
         const cellsHtml = cells.map(cell => {
-          const tag = isHeaderRow ? 'th' : 'td';
+          const tag = isHeaderRow ? BULK_UPLOAD_HTML.TABLE_HEADER_CELL : BULK_UPLOAD_HTML.TABLE_CELL;
           const cellInner = (cell.children ?? [])
             .map(child => nodeToHtml(child))
             .filter(h => h.length > 0)
-            .join('') || '<p></p>';
+            .join('') || BULK_UPLOAD_HTML.EMPTY_PARAGRAPH;
           return `<${tag}>${cellInner}</${tag}>`;
         }).join('');
-        return `<tr>${cellsHtml}</tr>`;
+        return `<${BULK_UPLOAD_HTML.TABLE_ROW}>${cellsHtml}</${BULK_UPLOAD_HTML.TABLE_ROW}>`;
       }).join('');
-      return `<table><tbody>${rowsHtml}</tbody></table>`;
+      return `<${BULK_UPLOAD_HTML.TABLE}><${BULK_UPLOAD_HTML.TABLE_BODY}>${rowsHtml}</${BULK_UPLOAD_HTML.TABLE_BODY}></${BULK_UPLOAD_HTML.TABLE}>`;
     }
 
     default: {
@@ -73,7 +81,7 @@ function childrenToHtml(node: OfficeContentNode): string {
     return applyFormatting(node.text ?? '', node);
   }
   return node.children.map(child => {
-    if (child.type === 'text') {
+    if (child.type === OFFICE_NODE_TYPES.TEXT) {
       return applyFormatting(child.text ?? '', child);
     }
     // Nested block nodes inside inline context — recurse
@@ -90,10 +98,10 @@ function applyFormatting(text: string, node: OfficeContentNode): string {
   if (!fmt) return textWithMath(text);
 
   let result = textWithMath(text);
-  if (fmt.bold) result = `<strong>${result}</strong>`;
-  if (fmt.italic) result = `<em>${result}</em>`;
-  if (fmt.underline) result = `<u>${result}</u>`;
-  if (fmt.strikethrough) result = `<s>${result}</s>`;
+  if (fmt.bold) result = `<${BULK_UPLOAD_HTML.STRONG}>${result}</${BULK_UPLOAD_HTML.STRONG}>`;
+  if (fmt.italic) result = `<${BULK_UPLOAD_HTML.EMPHASIS}>${result}</${BULK_UPLOAD_HTML.EMPHASIS}>`;
+  if (fmt.underline) result = `<${BULK_UPLOAD_HTML.UNDERLINE}>${result}</${BULK_UPLOAD_HTML.UNDERLINE}>`;
+  if (fmt.strikethrough) result = `<${BULK_UPLOAD_HTML.STRIKE}>${result}</${BULK_UPLOAD_HTML.STRIKE}>`;
   return result;
 }
 
@@ -132,7 +140,7 @@ function cellToPlainText(cell: OfficeContentNode, skipNestedTables = false): str
   const parts: string[] = [];
 
   for (const child of children) {
-    if (skipNestedTables && child.type === 'table') continue;
+    if (skipNestedTables && child.type === OFFICE_NODE_TYPES.TABLE) continue;
     parts.push(extractPlainText(child));
   }
 
@@ -155,10 +163,10 @@ function extractPlainText(node: OfficeContentNode): string {
 
 function tableToRows(table: OfficeContentNode): Array<{ field: string; valueCell: OfficeContentNode }> {
   const rows: Array<{ field: string; valueCell: OfficeContentNode }> = [];
-  const rowNodes = (table.children ?? []).filter(n => n.type === 'row');
+  const rowNodes = (table.children ?? []).filter(n => n.type === OFFICE_NODE_TYPES.ROW);
 
   for (const row of rowNodes) {
-    const cells = (row.children ?? []).filter(n => n.type === 'cell');
+    const cells = (row.children ?? []).filter(n => n.type === OFFICE_NODE_TYPES.CELL);
     if (cells.length >= 2) {
       const field = cellToPlainText(cells[0] as OfficeContentNode).toLowerCase().trim();
       rows.push({ field, valueCell: cells[1] as OfficeContentNode });
@@ -173,10 +181,10 @@ function parseOptions(raw: string): string[] {
   const lines = raw.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
   for (const line of lines) {
-    const parts = line.split(/(?=[A-D]\.\s)/);
+    const parts = line.split(BULK_UPLOAD_REGEX.OPTION_SPLIT);
     for (const part of parts) {
       const trimmed = part.trim();
-      if (/^[A-D]\.\s/.test(trimmed)) {
+      if (BULK_UPLOAD_REGEX.OPTION_PREFIX.test(trimmed)) {
         options.push(trimmed);
       }
     }
@@ -210,14 +218,14 @@ export class DocParserService {
       const fieldCellMap: Record<string, OfficeContentNode> = {};
       for (const { field, valueCell } of rows) {
         const norm = normaliseParserKey(field);
-        if (norm === 'field' || norm === 'value' || norm === '') continue;
+        if (norm === BULK_UPLOAD_FIELD_NAMES.FIELD || norm === BULK_UPLOAD_FIELD_NAMES.VALUE || norm === '') continue;
         if (!(norm in fieldCellMap)) {
           fieldCellMap[norm] = valueCell;
         }
       }
 
       // Must have a question field
-      const questionCell = fieldCellMap['question'];
+      const questionCell = fieldCellMap[BULK_UPLOAD_FIELD_NAMES.QUESTION];
       if (!questionCell) continue;
 
       // Debug: log the question cell structure
@@ -229,13 +237,13 @@ export class DocParserService {
       logger.info(`DocParserService: questionHtml="${questionHtml.slice(0, 200)}"`);
       if (!questionHtml.trim()) continue;
 
-      const solutionCell = fieldCellMap['solution'];
+      const solutionCell = fieldCellMap[BULK_UPLOAD_FIELD_NAMES.SOLUTION];
       const solutionHtml = solutionCell ? cellToHtml(solutionCell) : null;
 
       // Type, Options, Answer → plain text
-      const typeCell = fieldCellMap['type'];
-      const optionsCell = fieldCellMap['options'];
-      const answerCell = fieldCellMap['answer'];
+      const typeCell = fieldCellMap[BULK_UPLOAD_FIELD_NAMES.TYPE];
+      const optionsCell = fieldCellMap[BULK_UPLOAD_FIELD_NAMES.OPTIONS];
+      const answerCell = fieldCellMap[BULK_UPLOAD_FIELD_NAMES.ANSWER];
 
       const type = normaliseQuestionType(typeCell ? cellToPlainText(typeCell) : '');
       const optionsRaw = optionsCell ? cellToPlainText(optionsCell) : '';
@@ -260,7 +268,7 @@ export class DocParserService {
   private collectTables(nodes: OfficeContentNode[]): OfficeContentNode[] {
     const tables: OfficeContentNode[] = [];
     for (const node of nodes) {
-      if (node.type === 'table') {
+      if (node.type === OFFICE_NODE_TYPES.TABLE) {
         tables.push(node);
         // Do NOT recurse into table children — nested tables are metadata, not questions
       } else if (node.children && node.children.length > 0) {

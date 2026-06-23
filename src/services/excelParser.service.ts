@@ -3,21 +3,27 @@ import { ParsedQuestion } from '../dtos/bulkUpload.dto';
 import logger from '../utils/logger';
 import { inlineMarkupToHtml } from '../utils/parserHtml.utils';
 import { createParsedQuestion, normaliseParserKey, normaliseQuestionType } from '../utils/parserQuestion.utils';
+import {
+  BULK_UPLOAD_FIELD_NAMES,
+  BULK_UPLOAD_HTML,
+  BULK_UPLOAD_OPTION_LABELS,
+  BULK_UPLOAD_REGEX,
+} from '../constants/bulkUpload.constants';
 
 // ---------------------------------------------------------------------------
 // Text to TipTap-compatible HTML
 // ---------------------------------------------------------------------------
 
 function pipeTableToHtml(lines: string[]): string {
-  const dataRows = lines.filter(l => !/^\s*\|[-:| ]+\|\s*$/.test(l));
+  const dataRows = lines.filter(l => !BULK_UPLOAD_REGEX.MARKDOWN_TABLE_DIVIDER.test(l));
   if (!dataRows.length) return '';
-  const parseRow = (line: string) => line.replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+  const parseRow = (line: string) => line.replace(BULK_UPLOAD_REGEX.PIPE_BOUNDARY, '').split('|').map(c => c.trim());
   const [headerRow, ...bodyRows] = dataRows;
-  const thead = `<thead><tr>${parseRow(headerRow ?? '').map(h => `<th><p>${inlineMarkupToHtml(h)}</p></th>`).join('')}</tr></thead>`;
+  const thead = `<${BULK_UPLOAD_HTML.TABLE_HEAD}><${BULK_UPLOAD_HTML.TABLE_ROW}>${parseRow(headerRow ?? '').map(h => `<${BULK_UPLOAD_HTML.TABLE_HEADER_CELL}><${BULK_UPLOAD_HTML.PARAGRAPH}>${inlineMarkupToHtml(h)}</${BULK_UPLOAD_HTML.PARAGRAPH}></${BULK_UPLOAD_HTML.TABLE_HEADER_CELL}>`).join('')}</${BULK_UPLOAD_HTML.TABLE_ROW}></${BULK_UPLOAD_HTML.TABLE_HEAD}>`;
   const tbody = bodyRows.length
-    ? `<tbody>${bodyRows.map(r => `<tr>${parseRow(r).map(c => `<td><p>${inlineMarkupToHtml(c)}</p></td>`).join('')}</tr>`).join('')}</tbody>`
+    ? `<${BULK_UPLOAD_HTML.TABLE_BODY}>${bodyRows.map(r => `<${BULK_UPLOAD_HTML.TABLE_ROW}>${parseRow(r).map(c => `<${BULK_UPLOAD_HTML.TABLE_CELL}><${BULK_UPLOAD_HTML.PARAGRAPH}>${inlineMarkupToHtml(c)}</${BULK_UPLOAD_HTML.PARAGRAPH}></${BULK_UPLOAD_HTML.TABLE_CELL}>`).join('')}</${BULK_UPLOAD_HTML.TABLE_ROW}>`).join('')}</${BULK_UPLOAD_HTML.TABLE_BODY}>`
     : '';
-  return `<table>${thead}${tbody}</table>`;
+  return `<${BULK_UPLOAD_HTML.TABLE}>${thead}${tbody}</${BULK_UPLOAD_HTML.TABLE}>`;
 }
 
 function cellToHtml(raw: string | null | undefined): string {
@@ -37,18 +43,18 @@ function cellToHtml(raw: string | null | undefined): string {
       if (h) parts.push(h);
       continue;
     }
-    if (/^[-*]\s/.test(trimmed)) {
+    if (BULK_UPLOAD_REGEX.BULLET_LIST_ITEM.test(trimmed)) {
       const items: string[] = [];
-      while (i < lines.length && /^[-*]\s/.test((lines[i] ?? '').trim()))
-        items.push(`<li><p>${inlineMarkupToHtml((lines[i++] ?? '').trim().replace(/^[-*]\s/, ''))}</p></li>`);
-      parts.push(`<ul>${items.join('')}</ul>`);
+      while (i < lines.length && BULK_UPLOAD_REGEX.BULLET_LIST_ITEM.test((lines[i] ?? '').trim()))
+        items.push(`<${BULK_UPLOAD_HTML.LIST_ITEM}><${BULK_UPLOAD_HTML.PARAGRAPH}>${inlineMarkupToHtml((lines[i++] ?? '').trim().replace(BULK_UPLOAD_REGEX.BULLET_LIST_ITEM, ''))}</${BULK_UPLOAD_HTML.PARAGRAPH}></${BULK_UPLOAD_HTML.LIST_ITEM}>`);
+      parts.push(`<${BULK_UPLOAD_HTML.UNORDERED_LIST}>${items.join('')}</${BULK_UPLOAD_HTML.UNORDERED_LIST}>`);
       continue;
     }
-    if (/^\d+[.)]\s/.test(trimmed)) {
+    if (BULK_UPLOAD_REGEX.NUMBERED_LIST_ITEM.test(trimmed)) {
       const items: string[] = [];
-      while (i < lines.length && /^\d+[.)]\s/.test((lines[i] ?? '').trim()))
-        items.push(`<li><p>${inlineMarkupToHtml((lines[i++] ?? '').trim().replace(/^\d+[.)]\s/, ''))}</p></li>`);
-      parts.push(`<ol>${items.join('')}</ol>`);
+      while (i < lines.length && BULK_UPLOAD_REGEX.NUMBERED_LIST_ITEM.test((lines[i] ?? '').trim()))
+        items.push(`<${BULK_UPLOAD_HTML.LIST_ITEM}><${BULK_UPLOAD_HTML.PARAGRAPH}>${inlineMarkupToHtml((lines[i++] ?? '').trim().replace(BULK_UPLOAD_REGEX.NUMBERED_LIST_ITEM, ''))}</${BULK_UPLOAD_HTML.PARAGRAPH}></${BULK_UPLOAD_HTML.LIST_ITEM}>`);
+      parts.push(`<${BULK_UPLOAD_HTML.ORDERED_LIST}>${items.join('')}</${BULK_UPLOAD_HTML.ORDERED_LIST}>`);
       continue;
     }
     if (!trimmed) { i++; continue; }
@@ -56,11 +62,11 @@ function cellToHtml(raw: string | null | undefined): string {
     while (
       i < lines.length &&
       (lines[i] ?? '').trim() &&
-      !/^[-*]\s/.test((lines[i] ?? '').trim()) &&
-      !/^\d+[.)]\s/.test((lines[i] ?? '').trim()) &&
+      !BULK_UPLOAD_REGEX.BULLET_LIST_ITEM.test((lines[i] ?? '').trim()) &&
+      !BULK_UPLOAD_REGEX.NUMBERED_LIST_ITEM.test((lines[i] ?? '').trim()) &&
       !((lines[i] ?? '').trim().startsWith('|') && (lines[i] ?? '').trim().endsWith('|'))
     ) para.push(lines[i++] ?? '');
-    if (para.length) parts.push(`<p>${para.map(l => inlineMarkupToHtml(l.trim())).join('<br/>')}</p>`);
+    if (para.length) parts.push(`<${BULK_UPLOAD_HTML.PARAGRAPH}>${para.map(l => inlineMarkupToHtml(l.trim())).join(BULK_UPLOAD_HTML.BR)}</${BULK_UPLOAD_HTML.PARAGRAPH}>`);
   }
   return parts.join('');
 }
@@ -75,11 +81,16 @@ function cellToHtml(raw: string | null | undefined): string {
 // ---------------------------------------------------------------------------
 
 const PRIMARY_HEADERS: Record<string, string> = {
-  question: 'question', 'question text': 'question',
-  type: 'type', 'question type': 'type',
-  options: 'options_group', option: 'options_group',
-  answer: 'answer', 'correct answer': 'answer',
-  solution: 'solution', explanation: 'solution',
+  [BULK_UPLOAD_FIELD_NAMES.QUESTION]: BULK_UPLOAD_FIELD_NAMES.QUESTION,
+  [BULK_UPLOAD_FIELD_NAMES.QUESTION_TEXT]: BULK_UPLOAD_FIELD_NAMES.QUESTION,
+  [BULK_UPLOAD_FIELD_NAMES.TYPE]: BULK_UPLOAD_FIELD_NAMES.TYPE,
+  [BULK_UPLOAD_FIELD_NAMES.QUESTION_TYPE]: BULK_UPLOAD_FIELD_NAMES.TYPE,
+  [BULK_UPLOAD_FIELD_NAMES.OPTIONS]: BULK_UPLOAD_FIELD_NAMES.OPTIONS_GROUP,
+  [BULK_UPLOAD_FIELD_NAMES.OPTION]: BULK_UPLOAD_FIELD_NAMES.OPTIONS_GROUP,
+  [BULK_UPLOAD_FIELD_NAMES.ANSWER]: BULK_UPLOAD_FIELD_NAMES.ANSWER,
+  [BULK_UPLOAD_FIELD_NAMES.CORRECT_ANSWER]: BULK_UPLOAD_FIELD_NAMES.ANSWER,
+  [BULK_UPLOAD_FIELD_NAMES.SOLUTION]: BULK_UPLOAD_FIELD_NAMES.SOLUTION,
+  [BULK_UPLOAD_FIELD_NAMES.EXPLANATION]: BULK_UPLOAD_FIELD_NAMES.SOLUTION,
 };
 
 interface ColLayout {
@@ -107,13 +118,20 @@ function detectLayout(rows: unknown[][]): ColLayout | null {
     const mapped = PRIMARY_HEADERS[key];
     if (!mapped) return;
     switch (mapped) {
-      case 'question':      questionCol = idx; break;
-      case 'type':          typeCol = idx; break;
-      case 'options_group': if (optionsGroupStart < 0) optionsGroupStart = idx; break;
-      case 'answer':        answerCol = idx; break;
-      case 'solution':      solutionCol = idx; break;
+      case BULK_UPLOAD_FIELD_NAMES.QUESTION:      questionCol = idx; break;
+      case BULK_UPLOAD_FIELD_NAMES.TYPE:          typeCol = idx; break;
+      case BULK_UPLOAD_FIELD_NAMES.OPTIONS_GROUP: if (optionsGroupStart < 0) optionsGroupStart = idx; break;
+      case BULK_UPLOAD_FIELD_NAMES.ANSWER:        answerCol = idx; break;
+      case BULK_UPLOAD_FIELD_NAMES.SOLUTION:      solutionCol = idx; break;
     }
-    if ((key.startsWith('option') && key !== 'options' && key !== 'option') || /^[a-f]$/.test(key)) {
+    if (
+      (
+        key.startsWith(BULK_UPLOAD_FIELD_NAMES.OPTION) &&
+        key !== BULK_UPLOAD_FIELD_NAMES.OPTIONS &&
+        key !== BULK_UPLOAD_FIELD_NAMES.OPTION
+      ) ||
+      BULK_UPLOAD_REGEX.OPTION_COLUMN_KEY.test(key)
+    ) {
       singleOptionCols.push(idx);
     }
   });
@@ -198,7 +216,7 @@ export class ExcelParserService {
       const options = optionCols
         .map(c => String(row[c] ?? '').trim())
         .filter(v => v.length > 0)
-        .map((v, idx) => `${String.fromCharCode(65 + idx)}. ${v}`);
+        .map((v, idx) => `${BULK_UPLOAD_OPTION_LABELS[idx] ?? String.fromCharCode(65 + idx)}. ${v}`);
 
       questions.push(createParsedQuestion({
         questionText: cellToHtml(qText),

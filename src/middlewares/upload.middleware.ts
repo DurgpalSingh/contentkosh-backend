@@ -3,11 +3,11 @@ import multer from 'multer';
 import * as path from 'path';
 import * as fs from 'fs';
 import { BadRequestError } from '../errors/api.errors';
-import { ContentType } from '@prisma/client';
+import { ContentType, UserRole } from '@prisma/client';
 import { AuthRequest } from '../dtos/auth.dto';
 import logger from '../utils/logger';
 
-import { FILE_TYPE_CONFIG, IMAGE_UPLOAD_CONFIG } from '../config/file-type';
+import { EDITOR_IMAGE_UPLOAD_CONFIG, FILE_TYPE_CONFIG, IMAGE_UPLOAD_CONFIG } from '../config/file-type';
 
 const BYTES_IN_MB = 1024 * 1024;
 
@@ -210,25 +210,21 @@ export const validateFileSize = (req: Request, res: Response, next: NextFunction
 
 // ─── Editor image upload ──────────────────────────────────────────────────────
 
-const EDITOR_IMAGE_TEMP_DIR = process.env.EDITOR_IMAGE_TEMP_DIR || 'uploads/editor/tmp';
-const EDITOR_IMAGE_ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-const EDITOR_IMAGE_MAX_SIZE = 10 * BYTES_IN_MB; // 10 MB (pre-compression client size)
-
-ensureDirExists(EDITOR_IMAGE_TEMP_DIR);
+ensureDirExists(EDITOR_IMAGE_UPLOAD_CONFIG.tempDir);
 
 const editorImageStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, EDITOR_IMAGE_TEMP_DIR),
+  destination: (_req, _file, cb) => cb(null, EDITOR_IMAGE_UPLOAD_CONFIG.tempDir),
   filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
+    const ext = path.extname(file.originalname).toLowerCase() || EDITOR_IMAGE_UPLOAD_CONFIG.defaultExtension;
     cb(null, `tmp-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
   },
 });
 
 const editorImageMulter = multer({
   storage: editorImageStorage,
-  limits: { fileSize: EDITOR_IMAGE_MAX_SIZE },
+  limits: { fileSize: EDITOR_IMAGE_UPLOAD_CONFIG.maxSizeBytes },
   fileFilter: (_req, file, cb) => {
-    if (EDITOR_IMAGE_ALLOWED_MIME.includes(file.mimetype)) {
+    if (EDITOR_IMAGE_UPLOAD_CONFIG.allowedMimeTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
       cb(new BadRequestError('Only JPEG, PNG, WebP and GIF images are allowed'));
@@ -285,7 +281,7 @@ const profileUpload = multer({
     const authReq = req as AuthRequest;
     if (
       file.fieldname === IMAGE_UPLOAD_CONFIG.businessLogo.fieldName &&
-      authReq.user?.role !== 'ADMIN'
+      authReq.user?.role !== UserRole.ADMIN
     ) {
       return cb(new BadRequestError('Only admin can upload business logo'));
     }

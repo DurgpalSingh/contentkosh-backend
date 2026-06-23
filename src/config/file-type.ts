@@ -8,8 +8,8 @@ import {
 
 const BYTES_IN_MB = 1024 * 1024;
 const DEFAULT_MAX_IMAGE_SIZE_BYTES = Number(process.env.MAX_IMAGE_SIZE_MB || 5) * BYTES_IN_MB;
-const IMAGE_MIME_TYPES = [MIME_TYPES.JPEG, MIME_TYPES.PNG, 'image/webp'] as const;
-const IMAGE_ALLOWED_EXTENSIONS = IMAGE_EXTENSIONS.concat(['.webp']);
+const IMAGE_MIME_TYPES = [MIME_TYPES.JPEG, MIME_TYPES.PNG, MIME_TYPES.WEBP] as const;
+const IMAGE_ALLOWED_EXTENSIONS = IMAGE_EXTENSIONS.concat([FILE_EXTENSIONS.WEBP]);
 
 const ALLOWED_FILE_TYPES =
     (process.env.ALLOWED_FILE_TYPES?.split(',') || Object.values(FILE_FORMATS))
@@ -83,6 +83,18 @@ export const IMAGE_UPLOAD_CONFIG = {
         extensions: IMAGE_UPLOAD_POLICY.extensions,
         mimeTypes: IMAGE_UPLOAD_POLICY.mimeTypes
     }
+} as const;
+
+export const EDITOR_IMAGE_UPLOAD_CONFIG = {
+    tempDir: process.env.EDITOR_IMAGE_TEMP_DIR || 'uploads/editor/tmp',
+    allowedMimeTypes: [
+        MIME_TYPES.JPEG,
+        MIME_TYPES.PNG,
+        MIME_TYPES.WEBP,
+        MIME_TYPES.GIF
+    ],
+    maxSizeBytes: 10 * BYTES_IN_MB,
+    defaultExtension: FILE_EXTENSIONS.JPG
 } as const;
 // ---------------------------------------------------------------------------
 // Bulk Question Upload config

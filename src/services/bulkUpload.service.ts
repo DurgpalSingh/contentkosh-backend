@@ -2,24 +2,24 @@ import crypto from 'crypto';
 import { prisma } from '../config/database';
 import { ParsedQuestion, PreviewResponse } from '../dtos/bulkUpload.dto';
 import { ApiError, NotFoundError } from '../errors/api.errors';
-import { QuestionType } from '../constants/test-enums';
 import { DocParserService } from './docParser.service';
 import { ExcelParserService } from './excelParser.service';
 import { QuestionValidatorService } from './questionValidator.service';
 import { bulkUploadSessionStore } from '../utils/bulkUploadSession.store';
 import { sanitizeRequiredQuillHtml, sanitizeOptionalQuillHtml } from '../utils/sanitizeHtml';
 import logger from '../utils/logger';
-
-const CHOICE_TYPES = ['SINGLE_CHOICE', 'MULTIPLE_CHOICE'];
-const OPTION_LABELS = ['A', 'B', 'C', 'D', 'E', 'F'];
-
-const TYPE_MAP: Record<string, number> = {
-  SINGLE_CHOICE: QuestionType.SINGLE_CHOICE,
-  MULTIPLE_CHOICE: QuestionType.MULTIPLE_CHOICE,
-  TRUE_FALSE: QuestionType.TRUE_FALSE,
-  NUMERICAL: QuestionType.NUMERICAL,
-  FILL_IN_THE_BLANK: QuestionType.FILL_IN_THE_BLANK,
-};
+import {
+  BULK_UPLOAD_ANSWER_SEPARATOR,
+  BULK_UPLOAD_CHOICE_TYPES,
+  BULK_UPLOAD_DEFAULT_QUESTION_TYPE,
+  BULK_UPLOAD_MIME_HINTS,
+  BULK_UPLOAD_OPTION_LABELS,
+  BULK_UPLOAD_QUESTION_TYPE_MAP,
+  BULK_UPLOAD_REGEX,
+  BULK_UPLOAD_TEST_TYPES,
+  BulkUploadTestType,
+} from '../constants/bulkUpload.constants';
+import { FILE_EXTENSIONS } from '../constants/file.constants';
 
 export class BulkUploadService {
   private docParser = new DocParserService();
@@ -31,7 +31,7 @@ export class BulkUploadService {
     fileMime: string | undefined,
     originalName: string | undefined,
     testId: string,
-    testType: 'practice' | 'exam',
+    testType: BulkUploadTestType,
   ): Promise<PreviewResponse> {
     logger.info(`BulkUploadService.parseAndPreview: testId=${testId}, testType=${testType}`);
 
@@ -40,7 +40,12 @@ export class BulkUploadService {
     const name = (originalName || '').toLowerCase();
     let questions: ParsedQuestion[] = [];
 
-    if (mime.includes('spreadsheet') || mime.includes('excel') || name.endsWith('.xls') || name.endsWith('.xlsx')) {
+    if (
+      mime.includes(BULK_UPLOAD_MIME_HINTS.SPREADSHEET) ||
+      mime.includes(BULK_UPLOAD_MIME_HINTS.EXCEL) ||
+      name.endsWith(FILE_EXTENSIONS.XLS) ||
+      name.endsWith(FILE_EXTENSIONS.XLSX)
+    ) {
       questions = await this.excelParser.parse(fileBuffer);
     } else {
       questions = await this.docParser.parse(fileBuffer);
@@ -65,7 +70,7 @@ export class BulkUploadService {
   async confirm(
     sessionToken: string,
     testId: string,
-    testType: 'practice' | 'exam',
+    testType: BulkUploadTestType,
   ): Promise<{ savedCount: number }> {
     logger.info(`BulkUploadService.confirm: testId=${testId}, testType=${testType}`);
 
@@ -78,7 +83,7 @@ export class BulkUploadService {
     }
 
     // Verify the test exists in DB
-    if (testType === 'practice') {
+    if (testType === BULK_UPLOAD_TEST_TYPES.PRACTICE) {
       const test = await prisma.practiceTest.findUnique({ where: { id: testId } });
       if (!test) throw new NotFoundError('Practice test');
     } else {
@@ -91,15 +96,15 @@ export class BulkUploadService {
     await prisma.$transaction(async (tx) => {
       for (const q of validQuestions) {
         const typeKey = q.type.trim().toUpperCase();
-        const typeInt = TYPE_MAP[typeKey] ?? QuestionType.SINGLE_CHOICE;
-        const isChoice = CHOICE_TYPES.includes(typeKey);
+        const typeInt = BULK_UPLOAD_QUESTION_TYPE_MAP[typeKey] ?? BULK_UPLOAD_DEFAULT_QUESTION_TYPE;
+        const isChoice = (BULK_UPLOAD_CHOICE_TYPES as readonly string[]).includes(typeKey);
 
         const question = await tx.testQuestion.create({
           data: {
             text: sanitizeRequiredQuillHtml(q.questionText, 'questionText', { testId, testType }),
             type: typeInt,
             explanation: sanitizeOptionalQuillHtml(q.solution ?? null, 'explanation', { testId, testType }),
-            ...(testType === 'practice'
+            ...(testType === BULK_UPLOAD_TEST_TYPES.PRACTICE
               ? { practiceTestId: testId }
               : { examTestId: testId }),
           },
@@ -110,7 +115,7 @@ export class BulkUploadService {
           const createdOptions = await Promise.all(
             q.options.map((optText) => {
               // Strip the "A. " prefix — e.g. "A. Mumbai" → "Mumbai"
-              const text = optText.replace(/^[A-Z]\.\s*/i, '').trim();
+              const text = optText.replace(BULK_UPLOAD_REGEX.OPTION_TEXT_PREFIX, '').trim();
               return tx.testOption.create({
                 data: { questionId: question.id, text },
               });
@@ -119,13 +124,13 @@ export class BulkUploadService {
 
           // Answer labels like "B" or "A, C"
           const answerLabels = q.answer
-            .split(',')
+            .split(BULK_UPLOAD_ANSWER_SEPARATOR)
             .map((l) => l.trim().toUpperCase())
             .filter((l) => l.length > 0);
 
           const correctOptionIds = answerLabels
             .map((label) => {
-              const idx = OPTION_LABELS.indexOf(label);
+              const idx = (BULK_UPLOAD_OPTION_LABELS as readonly string[]).indexOf(label);
               return idx >= 0 && idx < createdOptions.length ? (createdOptions[idx]?.id ?? null) : null;
             })
             .filter((id): id is string => id !== null);

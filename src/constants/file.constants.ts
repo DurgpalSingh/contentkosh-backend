@@ -7,7 +7,9 @@ export const FILE_EXTENSIONS = {
 
   JPG: '.jpg',
   JPEG: '.jpeg',
-  PNG: '.png'
+  PNG: '.png',
+  WEBP: '.webp',
+  GIF: '.gif'
 };
 
 export const IMAGE_EXTENSIONS = [
@@ -25,7 +27,9 @@ export const FILE_FORMATS = {
 
   JPG: 'jpg',
   JPEG: 'jpeg',
-  PNG: 'png'
+  PNG: 'png',
+  WEBP: 'webp',
+  GIF: 'gif'
 };
 
 export const MIME_TYPES = {
@@ -37,6 +41,8 @@ export const MIME_TYPES = {
 
   JPEG: 'image/jpeg',
   PNG: 'image/png',
+  WEBP: 'image/webp',
+  GIF: 'image/gif',
 
   DEFAULT: 'application/octet-stream'
 };
