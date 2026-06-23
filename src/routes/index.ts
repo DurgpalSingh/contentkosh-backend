@@ -15,6 +15,7 @@ import dashboardRoutes from './dashboard.routes';
 import settingsProfileRoutes from './settingsProfile.routes';
 import { practiceTestRouter } from './practiceTest.routes';
 import { examTestRouter } from './examTest.routes';
+import { bulkUploadRouter } from './bulkUpload.routes';
 import { authenticate } from '../middlewares/auth.middleware';
 import editorImageRoutes from './editorImage.routes';
 
@@ -31,6 +32,7 @@ router.use('/api', userRoutes);
 router.use('/api/business', authenticate, businessRoutes);
 router.use('/api/business', authenticate, practiceTestRouter);
 router.use('/api/business', authenticate, examTestRouter);
+router.use('/api/business', authenticate, bulkUploadRouter);
 router.use('/api/exams', authenticate, examRoutes);
 router.use('/api/announcements', authenticate, announcementRoutes);
 router.use('/api/batches', authenticate, batchRoutes);

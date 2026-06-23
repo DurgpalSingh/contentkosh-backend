@@ -1,11 +1,19 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.24] - Bulk import questions with doc/excel
+**P.R Raised by** : shubh404-SE on **Date** : 2026-04-23
+
+### Added
+  - Implimented apis to import questions directly from doc and excel.
+  - used `officeparser` to parse doc and excel files and extract all required fields for a question. 
+  - providing a preview api to see parsed questions before adding.
+---
 ## Version [1.2.23] - added exam in responce of student dashboard api
 **P.R Raised by** : shubh404-SE on **Date** : 2026-06-19
 
 ### Changes
   - added exam details in responce of student dashboard api, now student can see their upcoming exam details in dashboard.
----
+
 ## Version [1.2.22] - 10 digit number validation
 **P.R Raised by** : shubh404-SE on **Date** : 2026-06-13
 
@@ -88,6 +96,8 @@ All notable changes to this project will be documented in this file.
 ### Changed
   - add uat config file.
 ---------------------------------------------------------------
+
+---
 ## Version [1.2.9] - Profile picture filed added in responce
 **P.R Raised by** : shubh404-SE on **Date** : 2026-05-05
 ### Changed
