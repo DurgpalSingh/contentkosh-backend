@@ -1,5 +1,11 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.26] - course thumbnail feature
+**P.R Raised by** : shubh404-SE on **Date** : 2026-6-27
+
+### Change
+  - added a new field in course to add thumbnail picture
+---
 ## Version [1.2.25] - Refresh token expiry time updated + exam test update rule
 **P.R Raised by** : shubh404-SE on **Date** : 2026-6-26
 
