@@ -1,5 +1,12 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.25] - Refresh token expiry time updated + exam test update rule
+**P.R Raised by** : shubh404-SE on **Date** : 2026-6-26
+
+### Changed 
+  - Refresh token time upddated to 1 hour,
+  - exam test won't updated once exam start.
+---
 ## Version [1.2.24] - Bulk import questions with doc/excel
 **P.R Raised by** : shubh404-SE on **Date** : 2026-04-23
 
