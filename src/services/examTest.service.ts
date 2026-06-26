@@ -12,6 +12,7 @@ import {
   assertTestBatchAccess,
   assertSubjectForBatch,
   assertCanModifyTestQuestions,
+  assertExamQuestionsMutableBeforeStart,
   sanitizeQuestionFieldsForCreate,
   sanitizeQuestionFieldsForUpdate,
   sanitizeOptionsHtml,
@@ -232,7 +233,8 @@ export class ExamTestService {
     logger.info(
       `[exam-test] createQuestion businessId=${businessId} examTestId=${examTestId} type=${dto?.type} userId=${user.id}`,
     );
-    await this.getWithAccess(businessId, examTestId, user);
+    const existing = await this.getWithAccess(businessId, examTestId, user);
+    assertExamQuestionsMutableBeforeStart(existing);
     await assertCanModifyTestQuestions(businessId, examTestId, 'exam');
 
     validateQuestionPayload({
@@ -270,7 +272,8 @@ export class ExamTestService {
 
     const examTestId = existing.examTestId;
     if (!examTestId) throw new BadRequestError('Question does not belong to an exam test');
-    await this.getWithAccess(businessId, examTestId, user);
+    const examTest = await this.getWithAccess(businessId, examTestId, user);
+    assertExamQuestionsMutableBeforeStart(examTest);
     await assertCanModifyTestQuestions(businessId, examTestId, 'exam');
 
     const resolvedQuestionType = dto.type ?? existing.type;
@@ -341,7 +344,8 @@ export class ExamTestService {
     if (!existing) throw new NotFoundError('Question not found');
     const examTestId = existing.examTestId;
     if (!examTestId) throw new BadRequestError('Question does not belong to an exam test');
-    await this.getWithAccess(businessId, examTestId, user);
+    const examTest = await this.getWithAccess(businessId, examTestId, user);
+    assertExamQuestionsMutableBeforeStart(examTest);
     await assertCanModifyTestQuestions(businessId, examTestId, 'exam');
     await questionRepo.deleteQuestion(businessId, questionId);
   }
