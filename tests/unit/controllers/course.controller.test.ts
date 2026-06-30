@@ -99,6 +99,22 @@ describe('Course Controller', () => {
 
             expect(ApiResponseHandler.notFound).toHaveBeenCalledWith(res, 'Exam not found');
         });
+
+        it('should pass thumbnail path to the service', async () => {
+            req.body = { ...validCourseData, thumbnail: '/uploads/courses/thumbnail.png' };
+            req.params = { examId: '1' };
+            const createdCourse = { id: 1, ...req.body };
+
+            getExamSpy.mockResolvedValue({ id: 1, name: 'Test Exam' });
+            createCourseSpy.mockResolvedValue(createdCourse as any);
+
+            await CourseController.createCourse(req as Request, res as Response);
+
+            expect(createCourseSpy).toHaveBeenCalledWith(expect.objectContaining({
+                thumbnail: '/uploads/courses/thumbnail.png'
+            }));
+            expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, createdCourse, 'Course created successfully', 201);
+        });
     });
 
     describe('getCourse', () => {
@@ -218,6 +234,18 @@ describe('Course Controller', () => {
             await CourseController.updateCourse(req as Request, res as Response);
 
             expect(ApiResponseHandler.badRequest).toHaveBeenCalledWith(res, 'Invalid data');
+        });
+
+        it('should pass removeThumbnail to the service', async () => {
+            req.params = { courseId: '1', examId: '1' };
+            req.body = { removeThumbnail: true };
+
+            getCourseSpy.mockResolvedValue({ id: 1, examId: 1 });
+            updateCourseSpy.mockResolvedValue({ id: 1, examId: 1, thumbnail: null } as any);
+
+            await CourseController.updateCourse(req as Request, res as Response);
+
+            expect(updateCourseSpy).toHaveBeenCalledWith(1, expect.objectContaining({ removeThumbnail: true }));
         });
     });
 
