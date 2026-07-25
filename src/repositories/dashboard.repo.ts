@@ -322,20 +322,6 @@ export async function getStudentDashboardData(businessId: number, userId: number
     const batchWhere = getStudentBatchWhere(businessId, userId);
     const contentWhere: Prisma.ContentWhereInput = { batch: batchWhere, status: ContentStatus.ACTIVE };
 
-<<<<<<< HEAD
-    const [enrolledBatches, totalContent, activeAnnouncements, batches, recentAnnouncements, recentContent, recentExams] = await prisma.$transaction([
-        prisma.batchUser.count({
-            where: {
-                userId,
-                isActive: true,
-                batch: { isActive: true, course: { exam: { businessId, status: ExamStatus.ACTIVE } } },
-                user: {
-                    role: UserRole.STUDENT,
-                    status: UserStatus.ACTIVE
-                }
-            }
-        }),
-=======
     const enrolledBatches = await prisma.batchUser.count({
         where: {
             userId,
@@ -353,12 +339,12 @@ export async function getStudentDashboardData(businessId: number, userId: number
             },
             myBatches: [],
             recentAnnouncements: [],
-            recentContent: []
+            recentContent: [],
+            recentExams: []
         };
     }
 
-    const [totalContent, activeAnnouncements, batches, recentAnnouncements, recentContent] = await prisma.$transaction([
->>>>>>> 6078160 (seprate schema)
+    const [totalContent, activeAnnouncements, batches, recentAnnouncements, recentContent, recentExams] = await prisma.$transaction([
         countContent(contentWhere),
         countActiveAnnouncements(businessId, 'students'),
         findBatches(batchWhere, {
@@ -410,9 +396,22 @@ export async function getStudentDashboardData(businessId: number, userId: number
             totalContent,
             activeAnnouncements
         },
-        myBatches: batches,
+        myBatches: batches.map((batch) => ({
+            id: batch.id,
+            displayName: batch.displayName,
+            courseName: batch.course?.name ?? '',
+            startDate: batch.startDate,
+            endDate: batch.endDate,
+            isActive: batch.isActive
+        })),
         recentAnnouncements,
-        recentContent: recentContent,
+        recentContent: recentContent.map((content) => ({
+            id: content.id,
+            title: content.title,
+            batchName: content.batch?.displayName ?? '',
+            type: content.type,
+            createdAt: content.createdAt
+        })),
         recentExams: recentExams.map((exam) => ({
             id: exam.id,
             name: exam.name,
