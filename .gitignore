@@ -66,3 +66,4 @@ Thumbs.db
 /src/generated/prisma
 
 prisma/migrations/
+/uploads/courses/
