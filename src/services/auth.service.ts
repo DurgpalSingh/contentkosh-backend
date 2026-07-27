@@ -60,8 +60,8 @@ export class AuthService {
       // Generate a random token
       const token = crypto.randomBytes(64).toString('hex');
 
-      const expiresIn = config.jwt.refreshTokenExpiresIn; // in ms
-      const expiresAt = new Date(Date.now() + (typeof expiresIn === 'number' ? expiresIn : 604800000));
+      const expiresIn = config.jwt.refreshTokenExpiresIn;
+      const expiresAt = new Date(Date.now() + expiresIn);
       // Store in database
       await refreshTokenRepo.createRefreshToken(userId, token, expiresAt);
 

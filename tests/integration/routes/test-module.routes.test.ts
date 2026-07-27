@@ -124,6 +124,12 @@ const EXAM_TEST_ROW = {
   _count: { questions: 2 },
 };
 
+const UPCOMING_EXAM_TEST_ROW = {
+  ...EXAM_TEST_ROW,
+  startAt: new Date(Date.now() + 25 * 3_600_000),
+  deadlineAt: new Date(Date.now() + 26 * 3_600_000),
+};
+
 const MCQ_QUESTION_ROW = {
   id: 'q-1',
   practiceTestId: 'pt-1',
@@ -960,7 +966,7 @@ describe('Exam Test Routes', () => {
 
   describe('POST /api/business/1/exam-tests/et-1/questions', () => {
     it('creates an MCQ question', async () => {
-      (examRepo.findExamTestById as jest.Mock).mockResolvedValue(EXAM_TEST_ROW);
+      (examRepo.findExamTestById as jest.Mock).mockResolvedValue(UPCOMING_EXAM_TEST_ROW);
       (questionRepo.hasAttemptsForExamTest as jest.Mock).mockResolvedValue(false);
       (questionRepo.createExamTestQuestionResolvingCorrect as jest.Mock).mockResolvedValue({
         ...MCQ_QUESTION_ROW,
@@ -982,7 +988,7 @@ describe('Exam Test Routes', () => {
     });
 
     it('creates a TRUE_FALSE question', async () => {
-      (examRepo.findExamTestById as jest.Mock).mockResolvedValue(EXAM_TEST_ROW);
+      (examRepo.findExamTestById as jest.Mock).mockResolvedValue(UPCOMING_EXAM_TEST_ROW);
       (questionRepo.hasAttemptsForExamTest as jest.Mock).mockResolvedValue(false);
       (questionRepo.createExamTestQuestionResolvingCorrect as jest.Mock).mockResolvedValue({
         ...TF_QUESTION_ROW,
@@ -1002,8 +1008,24 @@ describe('Exam Test Routes', () => {
       expect(res.body.data.correctTextAnswer).toBe('true');
     });
 
-    it('returns 400 when exam already has attempts', async () => {
+    it('returns 400 when published exam start time has passed', async () => {
       (examRepo.findExamTestById as jest.Mock).mockResolvedValue(EXAM_TEST_ROW);
+      (questionRepo.hasAttemptsForExamTest as jest.Mock).mockResolvedValue(false);
+
+      const res = await request(app)
+        .post('/api/business/1/exam-tests/et-1/questions')
+        .send({
+          type: QuestionType.TRUE_FALSE,
+          questionText: 'Q?',
+          correctTextAnswer: 'true',
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe('Cannot modify questions after exam start time');
+    });
+
+    it('returns 400 when exam already has attempts', async () => {
+      (examRepo.findExamTestById as jest.Mock).mockResolvedValue(UPCOMING_EXAM_TEST_ROW);
       (questionRepo.hasAttemptsForExamTest as jest.Mock).mockResolvedValue(true);
 
       const res = await request(app)
@@ -1031,7 +1053,7 @@ describe('Exam Test Routes', () => {
   describe('PUT /api/business/1/exam-tests/questions/q-1', () => {
     it('updates a question', async () => {
       (questionRepo.findQuestionById as jest.Mock).mockResolvedValue({ ...MCQ_QUESTION_ROW, examTestId: 'et-1', practiceTestId: null });
-      (examRepo.findExamTestById as jest.Mock).mockResolvedValue(EXAM_TEST_ROW);
+      (examRepo.findExamTestById as jest.Mock).mockResolvedValue(UPCOMING_EXAM_TEST_ROW);
       (questionRepo.hasAttemptsForExamTest as jest.Mock).mockResolvedValue(false);
       (questionRepo.updateQuestionAndOptions as jest.Mock).mockResolvedValue({ ...MCQ_QUESTION_ROW, text: 'Updated?' });
 
@@ -1040,6 +1062,19 @@ describe('Exam Test Routes', () => {
         .send({ questionText: 'Updated?' });
 
       expect(res.status).toBe(200);
+    });
+
+    it('returns 400 when published exam start time has passed', async () => {
+      (questionRepo.findQuestionById as jest.Mock).mockResolvedValue({ ...MCQ_QUESTION_ROW, examTestId: 'et-1', practiceTestId: null });
+      (examRepo.findExamTestById as jest.Mock).mockResolvedValue(EXAM_TEST_ROW);
+      (questionRepo.hasAttemptsForExamTest as jest.Mock).mockResolvedValue(false);
+
+      const res = await request(app)
+        .put('/api/business/1/exam-tests/questions/q-1')
+        .send({ questionText: 'Updated?' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe('Cannot modify questions after exam start time');
     });
 
     it('returns 404 when question not found', async () => {
@@ -1066,7 +1101,7 @@ describe('Exam Test Routes', () => {
   describe('DELETE /api/business/1/exam-tests/questions/q-1', () => {
     it('deletes a question', async () => {
       (questionRepo.findQuestionById as jest.Mock).mockResolvedValue({ ...MCQ_QUESTION_ROW, examTestId: 'et-1', practiceTestId: null });
-      (examRepo.findExamTestById as jest.Mock).mockResolvedValue(EXAM_TEST_ROW);
+      (examRepo.findExamTestById as jest.Mock).mockResolvedValue(UPCOMING_EXAM_TEST_ROW);
       (questionRepo.hasAttemptsForExamTest as jest.Mock).mockResolvedValue(false);
       (questionRepo.deleteQuestion as jest.Mock).mockResolvedValue(undefined);
 
@@ -1075,9 +1110,20 @@ describe('Exam Test Routes', () => {
       expect(res.status).toBe(200);
     });
 
-    it('returns 400 when exam has attempts', async () => {
+    it('returns 400 when published exam start time has passed', async () => {
       (questionRepo.findQuestionById as jest.Mock).mockResolvedValue({ ...MCQ_QUESTION_ROW, examTestId: 'et-1', practiceTestId: null });
       (examRepo.findExamTestById as jest.Mock).mockResolvedValue(EXAM_TEST_ROW);
+      (questionRepo.hasAttemptsForExamTest as jest.Mock).mockResolvedValue(false);
+
+      const res = await request(app).delete('/api/business/1/exam-tests/questions/q-1');
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe('Cannot modify questions after exam start time');
+    });
+
+    it('returns 400 when exam has attempts', async () => {
+      (questionRepo.findQuestionById as jest.Mock).mockResolvedValue({ ...MCQ_QUESTION_ROW, examTestId: 'et-1', practiceTestId: null });
+      (examRepo.findExamTestById as jest.Mock).mockResolvedValue(UPCOMING_EXAM_TEST_ROW);
       (questionRepo.hasAttemptsForExamTest as jest.Mock).mockResolvedValue(true);
 
       const res = await request(app).delete('/api/business/1/exam-tests/questions/q-1');
@@ -1116,13 +1162,16 @@ describe('Exam Test Attempt Routes', () => {
 
   describe('GET /api/business/1/exam-tests/available', () => {
     it('returns available exam tests for student', async () => {
-      (examRepo.findPublishedExamTestsForStudent as jest.Mock).mockResolvedValue([EXAM_TEST_ROW]);
+      (examRepo.findPublishedExamTestsForStudent as jest.Mock).mockResolvedValue([
+        { ...EXAM_TEST_ROW, description: 'Read the instructions before starting.' },
+      ]);
       (attemptRepo.getExamAttemptStatsByUserForTests as jest.Mock).mockResolvedValue(new Map());
 
       const res = await request(app).get('/api/business/1/exam-tests/available');
 
       expect(res.status).toBe(200);
       expect(Array.isArray(res.body.data)).toBe(true);
+      expect(res.body.data[0].description).toBe('Read the instructions before starting.');
     });
 
     it('returns 403 for admin', async () => {

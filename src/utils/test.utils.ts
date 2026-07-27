@@ -8,7 +8,7 @@ import * as path from 'path';
 
 import { TestOption, TestQuestion, TestAttemptAnswer, UserRole, SubjectStatus } from '@prisma/client';
 import { BadRequestError, ForbiddenError, NotFoundError } from '../errors/api.errors';
-import { QuestionType } from '../constants/test-enums';
+import { QuestionType, TestStatus } from '../constants/test-enums';
 import * as batchRepo from '../repositories/batch.repo';
 import * as subjectRepo from '../repositories/subject.repo';
 import * as questionRepo from '../repositories/testQuestion.repo';
@@ -59,6 +59,15 @@ export async function assertCanModifyTestQuestions(
       : await questionRepo.hasAttemptsForExamTest(businessId, testId);
   if (hasAttempts) {
     throw new BadRequestError('Cannot modify questions after attempts have started');
+  }
+}
+
+export function assertExamQuestionsMutableBeforeStart(
+  examTest: { status: number; startAt: Date | string },
+  now: Date = new Date(),
+): void {
+  if (examTest.status === TestStatus.PUBLISHED && now.getTime() >= new Date(examTest.startAt).getTime()) {
+    throw new BadRequestError('Cannot modify questions after exam start time');
   }
 }
 

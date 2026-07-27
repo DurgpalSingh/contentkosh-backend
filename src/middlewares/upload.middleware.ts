@@ -166,7 +166,7 @@ const normalizeUploadError = (error: any, next: NextFunction) => {
     }
 
     if (error.code === 'LIMIT_UNEXPECTED_FILE') {
-      return next(new BadRequestError('Unexpected file field. Use field name "file".'));
+      return next(new BadRequestError('Unexpected file field.'));
     }
 
     return next(new BadRequestError(`Upload error: ${error.message}`));
@@ -364,6 +364,68 @@ export const mapProfileUploadToSettingsPayload = (req: Request, res: Response, n
   req.body.userDetails = Object.keys(userDetails).length > 0 ? userDetails : undefined;
   req.body.profileDetails = Object.keys(profileDetails).length > 0 ? profileDetails : undefined;
   req.body.businessDetails = Object.keys(businessDetails).length > 0 ? businessDetails : undefined;
+
+  next();
+};
+
+// ---------------------------------------------------------------------------
+// Course thumbnail upload
+// ---------------------------------------------------------------------------
+
+const courseThumbnailConfig = IMAGE_UPLOAD_CONFIG.courseThumbnail;
+ensureDirExists(courseThumbnailConfig.uploadDir);
+
+const courseThumbnailStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, courseThumbnailConfig.uploadDir),
+  filename: (_req, file, cb) => {
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    cb(null, `${courseThumbnailConfig.fieldName}-${uniqueSuffix}${path.extname(file.originalname)}`);
+  },
+});
+
+const courseThumbnailUpload = multer({
+  storage: courseThumbnailStorage,
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (!(courseThumbnailConfig.extensions as readonly string[]).includes(ext)) {
+      return cb(new BadRequestError('Invalid file type for course thumbnail'));
+    }
+    if (!(courseThumbnailConfig.mimeTypes as readonly string[]).includes(file.mimetype)) {
+      return cb(new BadRequestError('Invalid mime type for course thumbnail'));
+    }
+    cb(null, true);
+  },
+  limits: {
+    fileSize: courseThumbnailConfig.maxSizeBytes,
+  },
+});
+
+export const uploadCourseThumbnail = (req: Request, res: Response, next: NextFunction) => {
+  courseThumbnailUpload.single(courseThumbnailConfig.fieldName)(req, res, (error: any) => {
+    if (error) return normalizeUploadError(error, next);
+    next();
+  });
+};
+
+export const mapCourseThumbnailToPayload = (req: Request, res: Response, next: NextFunction) => {
+  try {
+    parseMultipartData(req);
+  } catch (error) {
+    return next(error);
+  }
+
+  if (req.file) {
+    if (req.file.size > courseThumbnailConfig.maxSizeBytes) {
+      removeUploadedFile(req.file.path);
+      return next(new BadRequestError(`File size cannot exceed ${formatSizeInMb(courseThumbnailConfig.maxSizeBytes)} for course thumbnail`));
+    }
+
+    req.body.thumbnail = toPublicAssetPath(req.file.path);
+  }
+
+  if (req.body.removeThumbnail === 'true') {
+    req.body.removeThumbnail = true;
+  }
 
   next();
 };

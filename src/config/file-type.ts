@@ -82,6 +82,13 @@ export const IMAGE_UPLOAD_CONFIG = {
         maxSizeBytes: IMAGE_UPLOAD_POLICY.maxSizeBytes,
         extensions: IMAGE_UPLOAD_POLICY.extensions,
         mimeTypes: IMAGE_UPLOAD_POLICY.mimeTypes
+    },
+    courseThumbnail: {
+        fieldName: 'thumbnail',
+        uploadDir: process.env.COURSE_THUMBNAIL_UPLOAD_DIR || 'uploads/courses',
+        maxSizeBytes: IMAGE_UPLOAD_POLICY.maxSizeBytes,
+        extensions: IMAGE_UPLOAD_POLICY.extensions,
+        mimeTypes: IMAGE_UPLOAD_POLICY.mimeTypes
     }
 } as const;
 

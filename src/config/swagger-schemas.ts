@@ -650,6 +650,11 @@ export const swaggerSchemas = {
         type: 'string',
         description: 'Description of the course'
       },
+      thumbnail: {
+        type: 'string',
+        nullable: true,
+        description: 'Course thumbnail URL or file path'
+      },
       duration: {
         type: 'string',
         description: 'Duration of the course (e.g., 6 months, 1 year)'
@@ -695,6 +700,11 @@ export const swaggerSchemas = {
         type: 'string',
         description: 'Description of the course'
       },
+      thumbnail: {
+        type: 'string',
+        nullable: true,
+        description: 'Course thumbnail URL or file path'
+      },
       duration: {
         type: 'string',
         description: 'Duration of the course (e.g., 6 months, 1 year)'
@@ -723,6 +733,15 @@ export const swaggerSchemas = {
         type: 'string',
         description: 'Description of the course'
       },
+      thumbnail: {
+        type: 'string',
+        nullable: true,
+        description: 'Course thumbnail URL or file path'
+      },
+      removeThumbnail: {
+        type: 'boolean',
+        description: 'Clear the existing course thumbnail'
+      },
       duration: {
         type: 'string',
         description: 'Duration of the course (e.g., 6 months, 1 year)'
@@ -748,6 +767,11 @@ export const swaggerSchemas = {
       description: {
         type: 'string',
         description: 'Description of the course'
+      },
+      thumbnail: {
+        type: 'string',
+        nullable: true,
+        description: 'Course thumbnail URL or file path'
       },
       duration: {
         type: 'string',
