@@ -1,9 +1,8 @@
-import fs from 'fs';
-import path from 'path';
 import { Client as PgClient } from 'pg';
 import { getTenantPrisma } from '../config/database';
 import logger from '../utils/logger';
 import { PERMISSIONS } from '../constants/permission.constants';
+import { provisionTenantSchema } from '../scripts/provision-tenant-schema';
 
 const RESERVED_SCHEMA_PREFIXES = new Set(['public', 'pg_catalog', 'information_schema']);
 
@@ -390,25 +389,14 @@ async function executeTenantMigrationSql(schemaName: string, sql: string): Promi
 
 export async function migrateTenantSchema(schemaName: string): Promise<void> {
   assertValidTenantSchemaName(schemaName);
-  const migrationsDir = path.resolve(process.cwd(), 'prisma', 'migrations');
-  if (!fs.existsSync(migrationsDir)) {
-    logger.warn('No migrations directory found — skipping tenant migration', { schemaName });
-    return;
-  }
-
-  const migrationFolders = fs
-    .readdirSync(migrationsDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .sort(); // chronological order
-
-  for (const folder of migrationFolders) {
-    const migrationSqlPath = path.join(migrationsDir, folder, 'migration.sql');
-    if (!fs.existsSync(migrationSqlPath)) continue;
-
-    const sql = fs.readFileSync(migrationSqlPath, 'utf8');
-    logger.debug(`Applying migration "${folder}" to tenant schema "${schemaName}"`);
-    await executeTenantMigrationSql(schemaName, sql);
+  const client = await openRawClient();
+  try {
+    await provisionTenantSchema(client, schemaName);
+  } catch (error) {
+    logger.error(`Tenant schema "${schemaName}" provisioning failed`, { schemaName, error });
+    throw error;
+  } finally {
+    await client.end();
   }
 
   logger.info(`Tenant schema "${schemaName}" migrated successfully`);
