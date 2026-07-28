@@ -7,6 +7,7 @@ import { AuthRequest, IUser } from '../dtos/auth.dto';
 import { UserRole } from '@prisma/client';
 import { ApiError } from '../errors/api.errors';
 import { getAccessTokenFromRequest } from '../utils/authCookies';
+import * as businessRepo from '../repositories/business.repo';
 
 export const authenticate = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
@@ -26,7 +27,29 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
             ...iuser,
         };
 
-        requestContext.run({ user: userContext }, () => {
+        const tenantBusinessId = userContext.businessId ?? null;
+        let tenant = undefined;
+
+        if (tenantBusinessId != null) {
+            const business = await businessRepo.findBusinessById(tenantBusinessId);
+            if (business?.schemaName) {
+                    tenant = {
+                        businessId: business.id,
+                        ...(business.slug ? { slug: business.slug } : {}),
+                        schemaName: business.schemaName,
+                    };
+                userContext.businessSlug = business.slug ?? null;
+                userContext.tenantSchema = business.schemaName;
+            }
+        } else if (userContext.tenantSchema) {
+            tenant = {
+                ...(userContext.businessId ? { businessId: userContext.businessId } : {}),
+                ...(userContext.businessSlug ? { slug: userContext.businessSlug } : {}),
+                schemaName: userContext.tenantSchema,
+            };
+        }
+
+        requestContext.run({ user: userContext, tenant }, () => {
             req.user = userContext;
             next();
         });

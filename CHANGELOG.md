@@ -1,5 +1,10 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.27] - seprate schema for new signup business
+**P.R Raised by** : shubh404-SE on **Date** : 2026-06-17
+
+### Added
+  - added new DB schema flow for business signup, now we have separate schema for businesses and public
 ## Version [1.2.26] - course thumbnail feature
 **P.R Raised by** : shubh404-SE on **Date** : 2026-6-27
 
