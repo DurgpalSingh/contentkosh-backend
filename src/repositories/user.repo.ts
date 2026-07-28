@@ -1,8 +1,9 @@
 import { Prisma, UserRole, UserStatus } from '@prisma/client';
-import { prisma } from '../config/database';
+import { prisma, publicPrisma } from '../config/database';
 import { AlreadyExistsError } from '../errors/api.errors';
 
 export async function createUser(data: {
+  id?: number;
   email: string;
   password?: string | undefined;
   name: string;
@@ -12,8 +13,9 @@ export async function createUser(data: {
   status?: UserStatus | undefined;
 }) {
   try {
-    return await prisma.user.create({
+    return await publicPrisma.user.create({
       data: {
+        ...(data.id !== undefined && { id: data.id }),
         email: data.email.toLowerCase().trim(),
         password: data.password!,
 
@@ -37,11 +39,12 @@ export async function createUser(data: {
 export function findByEmail(email: string) {
   // Email is unique per business. without businessId, this is ambiguous.
   // We return the first one found.
-  return prisma.user.findFirst({ where: { email: email.toLowerCase().trim() } });
+  // Always use publicPrisma: users live exclusively in the public schema.
+  return publicPrisma.user.findFirst({ where: { email: email.toLowerCase().trim() } });
 }
 
 export function findByBusinessAndEmail(businessId: number, email: string) {
-  return prisma.user.findUnique({
+  return publicPrisma.user.findUnique({
     where: {
       businessId_email: {
         businessId,
@@ -52,17 +55,20 @@ export function findByBusinessAndEmail(businessId: number, email: string) {
 }
 
 export function findByMobile(mobile: string) {
-  return prisma.user.findFirst({ where: { mobile } });
+  return publicPrisma.user.findFirst({ where: { mobile } });
 }
 
 export async function exists(id: number): Promise<boolean> {
   if (!id) return false;
-  const user = await prisma.user.findUnique({ where: { id }, select: { id: true } });
+  const user = await publicPrisma.user.findUnique({ where: { id }, select: { id: true } });
   return user !== null;
 }
 
 export function findPublicById(id: number) {
-  return prisma.user.findUnique({
+  // Always use publicPrisma: this function includes the `business` relation which only
+  // exists in the public schema. The smart proxy would route `prisma.user` to the
+  // tenant schema when a tenant context is active, causing a missing-table error.
+  return publicPrisma.user.findUnique({
     where: { id },
     select: {
       id: true,
@@ -72,16 +78,17 @@ export function findPublicById(id: number) {
       mobile: true,
       profilePicture: true,
       role: true,
+      status: true,
       businessId: true,
       createdAt: true,
       updatedAt: true,
-      business: { select: { id: true, instituteName: true, slug: true, logo: true } }
+      business: { select: { id: true, instituteName: true, slug: true, logo: true, schemaName: true } }
     }
   });
 }
 
 export async function findByBusinessId(businessId: number, role?: UserRole) {
-  const users = await prisma.user.findMany({
+  const users = await publicPrisma.user.findMany({
     where: {
       businessId,
       status: UserStatus.ACTIVE,
@@ -115,7 +122,7 @@ export async function findByBusinessId(businessId: number, role?: UserRole) {
 }
 
 export function updateUser(id: number, data: { name?: string; mobile?: string; role?: UserRole; status?: UserStatus; password?: string; businessId?: number; profilePicture?: string | null }) {
-  return prisma.user.update({
+  return publicPrisma.user.update({
     where: { id },
     data,
     select: { id: true, name: true, email: true, mobile: true, role: true, businessId: true, status: true, updatedAt: true }
@@ -123,14 +130,15 @@ export function updateUser(id: number, data: { name?: string; mobile?: string; r
 }
 
 export function softDeleteUser(id: number) {
-  return prisma.user.update({
+  return publicPrisma.user.update({
     where: { id },
     data: { status: UserStatus.INACTIVE }
   });
 }
 
 export function findByEmailWithBusinesses(email: string) {
-  return prisma.user.findFirst({
+  // Always use publicPrisma: includes the `business` relation which lives in public schema only.
+  return publicPrisma.user.findFirst({
     where: { email: email.toLowerCase().trim() },
     select: {
       id: true,
@@ -142,13 +150,15 @@ export function findByEmailWithBusinesses(email: string) {
       businessId: true,
       createdAt: true,
       updatedAt: true,
-      business: { select: { id: true, instituteName: true, slug: true } }
+      business: { select: { id: true, instituteName: true, slug: true, schemaName: true } }
     }
   });
 }
 
 export function findSettingsProfileByUserId(userId: number) {
-  return prisma.user.findUnique({
+  // Always use publicPrisma: includes business relation.
+  // Business is in the public schema; using the smart proxy would cause tenant routing errors.
+  return publicPrisma.user.findUnique({
     where: { id: userId },
     select: {
       id: true,
@@ -166,6 +176,7 @@ export function findSettingsProfileByUserId(userId: number) {
           id: true,
           instituteName: true,
           slug: true,
+          schemaName: true,
           logo: true,
           tagline: true,
           contactNumber: true,
@@ -176,9 +187,7 @@ export function findSettingsProfileByUserId(userId: number) {
           linkedinUrl: true,
           facebookUrl: true
         }
-      },
-      teacher: true,
-      student: true
+      }
     } as any
   });
 }

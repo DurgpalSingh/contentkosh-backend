@@ -1,5 +1,7 @@
 // src/repositories/refreshToken.repo.ts
-import { prisma } from '../config/database';
+// Always use publicPrisma: refresh_tokens live in the public schema and must never
+// be routed to a tenant schema regardless of the active request context.
+import { publicPrisma as prisma } from '../config/database';
 
 export async function createRefreshToken(userId: number, token: string, expiresAt: Date) {
     return prisma.refreshToken.create({
@@ -23,6 +25,12 @@ export async function findByToken(token: string) {
                     role: true,
                     businessId: true,
                     status: true,
+                    business: {
+                        select: {
+                            slug: true,
+                            schemaName: true,
+                        },
+                    },
                 },
             },
         },

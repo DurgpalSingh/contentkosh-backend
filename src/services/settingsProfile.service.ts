@@ -17,6 +17,16 @@ export class SettingsProfileService {
     logger.info('Settings profile fetch requested', { userId: currentUser.id, role: currentUser.role });
     const profile = await userRepo.findSettingsProfileByUserId(currentUser.id);
     if (!profile) throw new NotFoundError('User profile not found');
+    
+    // Load teacher/student from tenant schemas based on role
+    if (currentUser.role === UserRole.TEACHER) {
+      const teacher = await teacherRepo.findTeacherByUserId(currentUser.id);
+      (profile as any).teacher = teacher;
+    } else if (currentUser.role === UserRole.STUDENT) {
+      const student = await studentRepo.findStudentByUserId(currentUser.id);
+      (profile as any).student = student;
+    }
+    
     logger.info('Settings profile fetch success', { userId: currentUser.id });
     return profile;
   }

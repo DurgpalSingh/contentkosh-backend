@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
-import { prisma } from '../config/database';
+import { prisma, publicPrisma } from '../config/database';
 import logger from '../utils/logger';
+import { getActiveTenantSchemaName, quoteIdentifier } from './crossSchema.repo';
 
 const attemptSelect = {
   id: true,
@@ -316,24 +317,7 @@ export async function getPracticeTestAnalyticsAttempts(
   attemptStatuses: number[],
 ) {
   if (!attemptStatuses.length) return [];
-  return prisma.testAttempt.findMany({
-    where: {
-      practiceTestId,
-      status: { in: attemptStatuses },
-    },
-    orderBy: { startedAt: 'desc' },
-    select: {
-      id: true,
-      userId: true,
-      status: true,
-      startedAt: true,
-      submittedAt: true,
-      score: true,
-      totalScore: true,
-      percentage: true,
-      user: { select: { name: true, email: true } },
-    },
-  });
+  return getAnalyticsAttempts('practice_test_id', practiceTestId, attemptStatuses);
 }
 
 export async function getExamTestAnalyticsAttempts(
@@ -341,24 +325,7 @@ export async function getExamTestAnalyticsAttempts(
   attemptStatuses: number[],
 ) {
   if (!attemptStatuses.length) return [];
-  return prisma.testAttempt.findMany({
-    where: {
-      examTestId,
-      status: { in: attemptStatuses },
-    },
-    orderBy: { startedAt: 'desc' },
-    select: {
-      id: true,
-      userId: true,
-      status: true,
-      startedAt: true,
-      submittedAt: true,
-      score: true,
-      totalScore: true,
-      percentage: true,
-      user: { select: { name: true, email: true } },
-    },
-  });
+  return getAnalyticsAttempts('exam_test_id', examTestId, attemptStatuses);
 }
 
 export async function getPracticeTestQuestionIds(practiceTestId: string) {
@@ -438,24 +405,7 @@ export async function getPracticeTestAnalyticsAttemptsForExport(
   attemptStatuses: number[],
 ) {
   if (!attemptStatuses.length) return [];
-  return prisma.testAttempt.findMany({
-    where: {
-      practiceTestId,
-      status: { in: attemptStatuses },
-    },
-    orderBy: { startedAt: 'desc' },
-    select: {
-      id: true,
-      userId: true,
-      status: true,
-      startedAt: true,
-      submittedAt: true,
-      score: true,
-      totalScore: true,
-      percentage: true,
-      user: { select: { name: true, email: true } },
-    },
-  });
+  return getAnalyticsAttempts('practice_test_id', practiceTestId, attemptStatuses);
 }
 
 export async function getExamTestAnalyticsAttemptsForExport(
@@ -463,23 +413,51 @@ export async function getExamTestAnalyticsAttemptsForExport(
   attemptStatuses: number[],
 ) {
   if (!attemptStatuses.length) return [];
-  return prisma.testAttempt.findMany({
-    where: {
-      examTestId,
-      status: { in: attemptStatuses },
+  return getAnalyticsAttempts('exam_test_id', examTestId, attemptStatuses);
+}
+
+async function getAnalyticsAttempts(
+  testColumn: 'practice_test_id' | 'exam_test_id',
+  testId: string,
+  attemptStatuses: number[],
+) {
+  const schema = quoteIdentifier(await getActiveTenantSchemaName());
+  const rows = await publicPrisma.$queryRawUnsafe<any[]>(
+    `
+      SELECT
+        ta.id,
+        ta.user_id,
+        ta.status,
+        ta.started_at,
+        ta.submitted_at,
+        ta.score,
+        ta.total_score,
+        ta.percentage,
+        u.name AS user_name,
+        u.email AS user_email
+      FROM ${schema}.test_attempts ta
+      JOIN public.users u ON u.id = ta.user_id
+      WHERE ta.${testColumn} = $1
+        AND ta.status = ANY($2::int[])
+      ORDER BY ta.started_at DESC
+    `,
+    testId,
+    attemptStatuses,
+  );
+
+  return rows.map((row) => ({
+    id: row.id,
+    userId: row.user_id,
+    status: row.status,
+    startedAt: row.started_at,
+    submittedAt: row.submitted_at,
+    score: row.score,
+    totalScore: row.total_score,
+    percentage: row.percentage,
+    user: {
+      name: row.user_name,
+      email: row.user_email,
     },
-    orderBy: { startedAt: 'desc' },
-    select: {
-      id: true,
-      userId: true,
-      status: true,
-      startedAt: true,
-      submittedAt: true,
-      score: true,
-      totalScore: true,
-      percentage: true,
-      user: { select: { name: true, email: true } },
-    },
-  });
+  }));
 }
 

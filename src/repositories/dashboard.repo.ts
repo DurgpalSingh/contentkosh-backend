@@ -1,4 +1,4 @@
-import { prisma } from '../config/database';
+import { prisma, publicPrisma } from '../config/database';
 import { ContentStatus, ExamStatus, Prisma, UserRole, UserStatus } from '@prisma/client';
 import { activeBatchWhereForBusiness } from '../constants/hierarchyFilters';
 import { TestStatus } from '../constants/test-enums';
@@ -33,11 +33,7 @@ const getTeacherBatchWhere = (businessId: number, userId: number): Prisma.BatchW
     batchUsers: {
         some: {
             userId,
-            isActive: true,
-            user: {
-                role: UserRole.TEACHER,
-                status: UserStatus.ACTIVE
-            }
+            isActive: true
         }
     }
 });
@@ -47,11 +43,7 @@ const getStudentBatchWhere = (businessId: number, userId: number): Prisma.BatchW
     batchUsers: {
         some: {
             userId,
-            isActive: true,
-            user: {
-                role: UserRole.STUDENT,
-                status: UserStatus.ACTIVE
-            }
+            isActive: true
         }
     }
 });
@@ -103,11 +95,7 @@ const countTeacherUniqueStudents = async (batchWhere: Prisma.BatchWhereInput) =>
     const result = await prisma.batchUser.findMany({
         where: {
             isActive: true,
-            batch: batchWhere,
-            user: {
-                role: UserRole.STUDENT,
-                status: UserStatus.ACTIVE
-            }
+            batch: batchWhere
         },
         select: { userId: true },
         distinct: ['userId']
@@ -159,7 +147,7 @@ const findRecentStudentExams = (businessId: number, userId: number) => {
 
 // Admin Dashboard Queries
 export async function getAdminStats(businessId: number) {
-    const activeUsersByRolePromise = prisma.user.groupBy({
+    const activeUsersByRolePromise = publicPrisma.user.groupBy({
         by: ['role'],
         where: { businessId, status: UserStatus.ACTIVE },
         _count: { _all: true }
@@ -172,7 +160,7 @@ export async function getAdminStats(businessId: number) {
         totalBatches,
         totalContent,
         activeAnnouncements
-    ] = await prisma.$transaction([
+    ] = await Promise.all([
         activeUsersByRolePromise,
         prisma.exam.count({
             where: { businessId, status: ExamStatus.ACTIVE }
@@ -211,7 +199,7 @@ export async function getAdminStats(businessId: number) {
 }
 
 const getAdminRecentUsers = (businessId: number) =>
-    prisma.user.findMany({
+    publicPrisma.user.findMany({
         where: { businessId, status: UserStatus.ACTIVE },
         select: {
             id: true,
@@ -284,11 +272,7 @@ export async function getTeacherDashboardData(businessId: number, userId: number
                         select: {
                             batchUsers: {
                                 where: {
-                                    isActive: true,
-                                    user: {
-                                        role: UserRole.STUDENT,
-                                        status: UserStatus.ACTIVE
-                                    }
+                                    isActive: true
                                 }
                             }
                         }
@@ -338,18 +322,29 @@ export async function getStudentDashboardData(businessId: number, userId: number
     const batchWhere = getStudentBatchWhere(businessId, userId);
     const contentWhere: Prisma.ContentWhereInput = { batch: batchWhere, status: ContentStatus.ACTIVE };
 
-    const [enrolledBatches, totalContent, activeAnnouncements, batches, recentAnnouncements, recentContent, recentExams] = await prisma.$transaction([
-        prisma.batchUser.count({
-            where: {
-                userId,
-                isActive: true,
-                batch: { isActive: true, course: { exam: { businessId, status: ExamStatus.ACTIVE } } },
-                user: {
-                    role: UserRole.STUDENT,
-                    status: UserStatus.ACTIVE
-                }
-            }
-        }),
+    const enrolledBatches = await prisma.batchUser.count({
+        where: {
+            userId,
+            isActive: true,
+            batch: { isActive: true, course: { exam: { businessId, status: ExamStatus.ACTIVE } } }
+        }
+    });
+
+    if (enrolledBatches === 0) {
+        return {
+            stats: {
+                enrolledBatches: 0,
+                totalContent: 0,
+                activeAnnouncements: 0
+            },
+            myBatches: [],
+            recentAnnouncements: [],
+            recentContent: [],
+            recentExams: []
+        };
+    }
+
+    const [totalContent, activeAnnouncements, batches, recentAnnouncements, recentContent, recentExams] = await prisma.$transaction([
         countContent(contentWhere),
         countActiveAnnouncements(businessId, 'students'),
         findBatches(batchWhere, {
@@ -401,9 +396,22 @@ export async function getStudentDashboardData(businessId: number, userId: number
             totalContent,
             activeAnnouncements
         },
-        myBatches: batches,
+        myBatches: batches.map((batch) => ({
+            id: batch.id,
+            displayName: batch.displayName,
+            courseName: batch.course?.name ?? '',
+            startDate: batch.startDate,
+            endDate: batch.endDate,
+            isActive: batch.isActive
+        })),
         recentAnnouncements,
-        recentContent: recentContent,
+        recentContent: recentContent.map((content) => ({
+            id: content.id,
+            title: content.title,
+            batchName: content.batch?.displayName ?? '',
+            type: content.type,
+            createdAt: content.createdAt
+        })),
         recentExams: recentExams.map((exam) => ({
             id: exam.id,
             name: exam.name,
