@@ -1,5 +1,11 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.28] - migration script for new tenant
+**P.R Raised by** : shubh404-SE on **Date** : 2026-07-29
+
+### Added
+  - added a new migration script to create new tenant in DB, this script will create new schema for new tenant and also add default data in that schema.
+---
 ## Version [1.2.27] - seprate schema for new signup business
 **P.R Raised by** : shubh404-SE on **Date** : 2026-06-17
 
