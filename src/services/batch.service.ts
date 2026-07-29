@@ -31,7 +31,7 @@ export class BatchService {
                 select: {
                     batchUsers: {
                         where: {
-                            user: { role: UserRole.STUDENT }
+                            isActive: true
                         }
                     }
                 }

@@ -117,11 +117,7 @@ const findRecentStudentExams = (businessId: number, userId: number) => {
                 batchUsers: {
                     some: {
                         userId,
-                        isActive: true,
-                        user: {
-                            role: UserRole.STUDENT,
-                            status: UserStatus.ACTIVE
-                        }
+                        isActive: true
                     }
                 }
             }
