@@ -395,9 +395,6 @@ export async function migrateTenantSchema(schemaName: string): Promise<void> {
     await client.query(
       `ALTER TABLE "${schemaName}"."courses" ADD COLUMN IF NOT EXISTS "price" INTEGER NOT NULL DEFAULT 0`,
     );
-    await client.query(`UPDATE "${schemaName}"."courses" SET "price" = 0 WHERE "price" IS NULL`);
-    await client.query(`ALTER TABLE "${schemaName}"."courses" ALTER COLUMN "price" SET DEFAULT 0`);
-    await client.query(`ALTER TABLE "${schemaName}"."courses" ALTER COLUMN "price" SET NOT NULL`);
   } catch (error) {
     logger.error(`Tenant schema "${schemaName}" provisioning failed`, { schemaName, error });
     throw error;
