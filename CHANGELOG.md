@@ -1,5 +1,11 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.29] - Price tag for course
+**P.R Raised by** : shubh404-SE on **Date** : 2026-08-01
+
+### Added
+  - added a new field in course to add price tag for course.
+---
 ## Version [1.2.28] - migration script for new tenant
 **P.R Raised by** : shubh404-SE on **Date** : 2026-07-29
 
