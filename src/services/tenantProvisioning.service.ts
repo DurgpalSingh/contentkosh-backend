@@ -32,6 +32,44 @@ const PUBLIC_ONLY_TABLES = new Set([
   'api_audit_logs',
 ]);
 
+type MissingTenantColumn = {
+  table_name: string;
+  column_name: string;
+  data_type: string;
+  column_default: string | null;
+  is_not_null: boolean;
+};
+
+const FIND_MISSING_TENANT_COLUMNS_SQL = `
+  SELECT
+    source_rel.relname AS table_name,
+    source_attr.attname AS column_name,
+    format_type(source_attr.atttypid, source_attr.atttypmod) AS data_type,
+    pg_get_expr(source_def.adbin, source_def.adrelid) AS column_default,
+    source_attr.attnotnull AS is_not_null
+  FROM pg_attribute source_attr
+  JOIN pg_class source_rel ON source_rel.oid = source_attr.attrelid
+  JOIN pg_namespace source_ns ON source_ns.oid = source_rel.relnamespace
+  JOIN pg_class tenant_rel ON tenant_rel.relname = source_rel.relname
+  JOIN pg_namespace tenant_ns ON tenant_ns.oid = tenant_rel.relnamespace AND tenant_ns.nspname = $1
+  LEFT JOIN pg_attribute tenant_attr
+    ON tenant_attr.attrelid = tenant_rel.oid
+   AND tenant_attr.attname = source_attr.attname
+   AND tenant_attr.attnum > 0
+   AND NOT tenant_attr.attisdropped
+  LEFT JOIN pg_attrdef source_def
+    ON source_def.adrelid = source_attr.attrelid
+   AND source_def.adnum = source_attr.attnum
+  WHERE source_ns.nspname = $2
+    AND source_rel.relkind = 'r'
+    AND tenant_rel.relkind = 'r'
+    AND source_attr.attnum > 0
+    AND NOT source_attr.attisdropped
+    AND source_rel.relname <> ALL($3::text[])
+    AND tenant_attr.attname IS NULL
+  ORDER BY source_rel.relname, source_attr.attnum
+`;
+
 export function normalizeTenantSchemaName(slug: string): string {
   const normalized = slug.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-');
   return `tenant_${normalized}`.replace(/-+/g, '-');
@@ -90,312 +128,99 @@ export async function dropTenantSchema(schemaName: string): Promise<void> {
   }
 }
 
-function splitSqlStatements(sql: string): string[] {
-  const statements: string[] = [];
-  let buffer = '';
-  let inSingleQuote = false;
-  let inDoubleQuote = false;
-  // Track named dollar-quoting tags like $$ or $body$ etc.
-  let dollarTag: string | null = null;
-
-  for (let i = 0; i < sql.length; i += 1) {
-    const char = sql[i];
-
-    // Dollar-quoting: capture $tag$ ... $tag$ blocks (including plain $$)
-    if (!inSingleQuote && !inDoubleQuote && char === '$') {
-      // Try to read a dollar-quote tag starting at position i
-      const tagEnd = sql.indexOf('$', i + 1);
-      if (tagEnd !== -1) {
-        const tag = sql.slice(i, tagEnd + 1); // e.g. '$$' or '$body$'
-        if (/^\$[a-zA-Z0-9_]*\$$/.test(tag)) {
-          if (dollarTag === null) {
-            // Opening tag
-            dollarTag = tag;
-            buffer += tag;
-            i = tagEnd;
-            continue;
-          } else if (tag === dollarTag) {
-            // Closing tag
-            dollarTag = null;
-            buffer += tag;
-            i = tagEnd;
-            continue;
-          }
-        }
-      }
-    }
-
-    if (!dollarTag && char === "'" && !inDoubleQuote) {
-      inSingleQuote = !inSingleQuote;
-    } else if (!dollarTag && char === '"' && !inSingleQuote) {
-      inDoubleQuote = !inDoubleQuote;
-    }
-
-    if (char === ';' && !inSingleQuote && !inDoubleQuote && !dollarTag) {
-      const trimmed = buffer.trim();
-      if (trimmed) statements.push(trimmed);
-      buffer = '';
-      continue;
-    }
-
-    buffer += char;
-  }
-
-  const trimmed = buffer.trim();
-  if (trimmed) statements.push(trimmed);
-  return statements;
+function quoteIdentifier(identifier: string): string {
+  return `"${identifier.replace(/"/g, '""')}"`;
 }
 
-/**
- * Preprocesses a migration SQL file to make it safe for statement-by-statement execution:
- *
- * 1. Strips `--` single-line comments entirely. These are documentation-only in Prisma
- *    migrations and can contain semicolons (e.g. `-- store batch_id; eligible batch...`)
- *    or non-ASCII Unicode characters (e.g. ∩ U+2229) that confuse the statement splitter
- *    or the pg driver parser.
- *
- * 2. Preserves dollar-quoted blocks (`$$ ... $$`) untouched — comments inside them are
- *    part of the SQL syntax and must not be stripped.
- *
- * Block comments (`/* ... *\/`) are left for the pg driver to handle natively.
- */
-function preprocessSql(sql: string): string {
-  const lines = sql.split('\n');
-  const result: string[] = [];
-  let inDollarQuote = false;
-
-  for (const line of lines) {
-    // Track dollar-quoting so we don't strip comments inside $$ blocks
-    if (line.includes('$$')) {
-      const count = (line.match(/\$\$/g) || []).length;
-      // Odd count of $$ on this line toggles the state
-      if (count % 2 !== 0) {
-        inDollarQuote = !inDollarQuote;
-      }
-    }
-
-    if (inDollarQuote) {
-      // Inside a dollar-quoted block — preserve everything as-is
-      result.push(line);
-      continue;
-    }
-
-    const trimmed = line.trimStart();
-
-    // Strip pure comment lines entirely (lines that start with --)
-    if (trimmed.startsWith('--')) {
-      result.push(''); // keep blank line to preserve line numbers for debugging
-      continue;
-    }
-
-    // Strip inline trailing comments (-- ...) from non-comment lines.
-    // Only strip outside of quoted strings — use a simple heuristic: find '--'
-    // that is not inside single-quoted or double-quoted strings.
-    const cleanLine = stripInlineComment(line);
-    result.push(cleanLine);
-  }
-
-  return result.join('\n');
+function getReferenceSchemaName(): string {
+  return `tenant_migration_ref_${process.pid}`;
 }
 
-/**
- * Strips an inline `--` comment from a single SQL line, respecting quoted strings.
- * Returns the line unchanged if no unquoted `--` is found.
- */
-function stripInlineComment(line: string): string {
-  let inSingle = false;
-  let inDouble = false;
-
-  for (let i = 0; i < line.length - 1; i++) {
-    const c = line[i];
-    if (c === "'" && !inDouble) { inSingle = !inSingle; continue; }
-    if (c === '"' && !inSingle) { inDouble = !inDouble; continue; }
-    if (!inSingle && !inDouble && c === '-' && line[i + 1] === '-') {
-      return line.slice(0, i).trimEnd();
-    }
-  }
-  return line;
+async function createReferenceTenantSchema(
+  client: PgClient,
+  referenceSchemaName: string,
+): Promise<void> {
+  await client.query(`DROP SCHEMA IF EXISTS ${quoteIdentifier(referenceSchemaName)} CASCADE`);
+  await client.query(`CREATE SCHEMA ${quoteIdentifier(referenceSchemaName)}`);
+  await provisionTenantSchema(client, referenceSchemaName);
 }
 
-/**
- * Selectively rewrites schema references from "public" to tenant schema.
- *
- * Handles all forms of table references emitted by Prisma migrations:
- * 1. Qualified quoted:   `"public"."tablename"` → `"schemaName"."tablename"`
- * 2. Unqualified bare:   `public.tablename`     → `"schemaName"."tablename"`
- *
- * Public-only table references (e.g. `"public"."business"`) are preserved for cross-schema FK integrity.
- * PascalCase type references (e.g. `"public"."UserRole"`) are preserved automatically — the
- * character class `[a-z0-9_]+` never matches uppercase-starting identifiers.
- *
- * @internal Exported for unit testing purposes only; not part of the public service API.
- */
-export function transformStatement(sql: string, schemaName: string): string {
-  // Pass 1: Qualified form "public"."tablename" or "public"."TypeName" — rewrite tenant tables/types, preserve public-only
-  let out = sql.replace(/"public"\."([a-zA-Z0-9_]+)"/g, (_match, tableNameOrType) => {
-    if (PUBLIC_ONLY_TABLES.has(tableNameOrType.toLowerCase())) {
-      return `"public"."${tableNameOrType}"`;
-    }
-    return `"${schemaName}"."${tableNameOrType}"`;
-  });
-
-  // Pass 2: Unqualified bare form public.tablename or public.TypeName — same selective logic
-  out = out.replace(/\bpublic\.([a-zA-Z0-9_]+)\b/g, (_match, tableNameOrType) => {
-    if (PUBLIC_ONLY_TABLES.has(tableNameOrType.toLowerCase())) {
-      return `"public"."${tableNameOrType}"`;
-    }
-    return `"${schemaName}"."${tableNameOrType}"`;
-  });
-
-  return out;
+async function dropSchemaIfExists(client: PgClient, schemaName: string): Promise<void> {
+  await client.query(`DROP SCHEMA IF EXISTS ${quoteIdentifier(schemaName)} CASCADE`);
 }
 
-/**
- * Extracts the primary table name from a SQL statement.
- * Handles CREATE TABLE, ALTER TABLE, CREATE [UNIQUE] INDEX ... ON, UPDATE, and DROP TABLE patterns,
- * with or without explicit "public". schema qualification.
- * Returns null if the statement type is not recognized or has no extractable table name.
- *
- * @internal Exported for testing purposes
- */
-export function extractTableName(sql: string): string | null {
-  const patterns = [
-    // CREATE TABLE "public"."tablename" or CREATE TABLE "tablename" or CREATE TABLE tablename
-    /CREATE\s+TABLE\s+(?:"public"\.)?"?([a-z0-9_]+)"?/i,
-    // ALTER TABLE "public"."tablename" or ALTER TABLE "tablename" or ALTER TABLE tablename
-    /ALTER\s+TABLE\s+(?:"public"\.)?"?([a-z0-9_]+)"?/i,
-    // CREATE [UNIQUE] INDEX indexname ON "public"."tablename" or ON tablename
-    /CREATE\s+(?:UNIQUE\s+)?INDEX\s+\S+\s+ON\s+(?:"public"\.)?"?([a-z0-9_]+)"?/i,
-    // UPDATE "public"."tablename" or UPDATE "tablename" or UPDATE tablename
-    /UPDATE\s+(?:"public"\.)?"?([a-z0-9_]+)"?/i,
-    // DROP TABLE "public"."tablename" or DROP TABLE "tablename" or DROP TABLE tablename (with optional IF EXISTS)
-    /DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:"public"\.)?"?([a-z0-9_]+)"?/i,
-  ];
-  for (const pattern of patterns) {
-    const match = sql.match(pattern);
-    if (match && match[1]) return match[1].toLowerCase();
-  }
-  return null;
-}
-
-/**
- * Returns true for PostgreSQL error codes that are safe to ignore when running
- * tenant migrations idempotently (i.e. the object already exists).
- *
- * - 42P07: relation already exists
- * - 42710: type/extension already exists
- * - 42701: column already exists
- * - 42P16: constraint already exists
- * - 42723: function already exists
- */
-function isAlreadyExistsError(err: any): boolean {
-  const pgCode: string = err?.code || err?.meta?.code || '';
-  const msg: string = err?.message || err?.meta?.message || '';
-  return (
-    ['42P07', '42710', '42701', '42P16', '42723'].includes(pgCode) ||
-    /already exists/i.test(msg)
+async function findMissingTenantColumns(
+  client: PgClient,
+  tenantSchemaName: string,
+  referenceSchemaName: string,
+): Promise<MissingTenantColumn[]> {
+  const result = await client.query<MissingTenantColumn>(
+    FIND_MISSING_TENANT_COLUMNS_SQL,
+    [tenantSchemaName, referenceSchemaName, Array.from(PUBLIC_ONLY_TABLES)],
   );
+  return result.rows;
 }
 
-/**
- * Returns true for statements that define or alter shared database-global types/extensions.
- * These must be executed on the public schema and are idempotent (already-exists errors ignored).
- *
- * NOTE: DO $$ blocks that contain IF NOT EXISTS FK guard logic are NOT global type statements
- * even though they use $$ quoting — they operate on tenant tables and must run in the tenant schema.
- */
-function isGlobalTypeStatement(sql: string): boolean {
-  const normalized = sql.trim();
-  // CREATE EXTENSION — shared extensions (must run database-wide)
-  if (/^CREATE\s+EXTENSION\b/i.test(normalized)) return true;
-  return false;
+async function addMissingTenantColumn(
+  client: PgClient,
+  schemaName: string,
+  column: MissingTenantColumn,
+): Promise<void> {
+  if (column.is_not_null && !column.column_default) {
+    throw new Error(
+      `Cannot auto-add required column ${column.table_name}.${column.column_name} without a default`,
+    );
+  }
+
+  const tableName = `${quoteIdentifier(schemaName)}.${quoteIdentifier(column.table_name)}`;
+  const columnName = quoteIdentifier(column.column_name);
+  const defaultClause = column.column_default ? ` DEFAULT ${column.column_default}` : '';
+
+  await client.query(
+    `ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${column.data_type}${defaultClause}`,
+  );
+
+  if (column.is_not_null) {
+    await client.query(
+      `UPDATE ${tableName} SET ${columnName} = ${column.column_default} WHERE ${columnName} IS NULL`,
+    );
+    await client.query(`ALTER TABLE ${tableName} ALTER COLUMN ${columnName} SET NOT NULL`);
+  }
+
+  logger.info('Added missing tenant column', {
+    schemaName,
+    tableName: column.table_name,
+    columnName: column.column_name,
+  });
 }
 
-async function executeTenantMigrationSql(schemaName: string, sql: string): Promise<void> {
-  // Open a dedicated pg.Client (simple query protocol) so we can:
-  //  1. SET search_path once for the entire session — no connection pool re-assignment risk.
-  //  2. Execute each statement individually without Prisma's prepared-statement wrapping
-  //     (which rejects multi-command strings with error 42601).
-  const client = await openRawClient();
+async function syncMissingTenantColumns(
+  client: PgClient,
+  schemaName: string,
+  referenceSchemaName: string,
+): Promise<void> {
+  const missingColumns = await findMissingTenantColumns(client, schemaName, referenceSchemaName);
+  await client.query(`SET search_path = ${quoteIdentifier(schemaName)}, public`);
 
-  try {
-    // Set search_path once for this connection: tenant schema first, then public so that
-    // shared enum types defined in the public schema are visible during CREATE TABLE.
-    // Unqualified table names in later migrations (e.g. "practice_tests") resolve to
-    // the tenant schema because it is first in the search path.
-    await client.query(`SET search_path = "${schemaName}", public`);
-
-    // Preprocess SQL: strip all -- comments (including those containing semicolons
-    // or non-ASCII Unicode characters like ∩) before splitting into statements.
-    const cleanSql = preprocessSql(sql);
-    const statements = splitSqlStatements(cleanSql);
-
-    for (const statement of statements) {
-      const trimmed = statement.trim();
-      if (!trimmed) continue;
-
-      // Skip CREATE SCHEMA IF NOT EXISTS "public" — only valid for initial DB setup.
-      if (/^\s*CREATE\s+SCHEMA\s+IF\s+NOT\s+EXISTS\s+"?public"?/i.test(trimmed)) {
-        continue;
-      }
-
-      // Global type/extension statements must run against the public schema (shared across tenants).
-      // "Already exists" errors (42710) are silently ignored — idempotent for 2nd+ tenant.
-      if (isGlobalTypeStatement(trimmed)) {
-        try {
-          await client.query(trimmed);
-        } catch (err: any) {
-          if (!isAlreadyExistsError(err)) throw err;
-          // silently ignore: type already exists — expected when provisioning 2nd+ tenant
-        }
-        continue;
-      }
-
-      // Skip statements that exclusively target public-only tables (business, system_config, etc.).
-      // These already exist in the public schema and must never be recreated in tenant schemas.
-      const tableName = extractTableName(trimmed);
-      if (tableName && PUBLIC_ONLY_TABLES.has(tableName)) {
-        logger.debug(`Skipping public-only table statement for "${tableName}" in tenant migration`);
-        continue;
-      }
-
-      // Rewrite "public"."tablename" → "schemaName"."tablename" for tenant tables.
-      // Public-only table references (cross-schema FKs) and PascalCase type references are preserved.
-      // Unqualified statements (no schema prefix) already resolve correctly via search_path.
-      const transformed = transformStatement(trimmed, schemaName);
-
-      try {
-        await client.query(transformed);
-      } catch (err: any) {
-        // Idempotency: ignore "already exists" errors. This allows re-provisioning a partially
-        // created schema (e.g. after a previous failure) to complete cleanly.
-        if (!isAlreadyExistsError(err)) {
-          logger.error(`Tenant migration statement failed in schema "${schemaName}"`, {
-            statement: transformed.slice(0, 300),
-            pgCode: err?.code,
-            error: err?.message,
-          });
-          throw err;
-        }
-        logger.debug(
-          `Idempotent skip — object already exists in "${schemaName}": ${err?.message}`,
-        );
-      }
-    }
-  } finally {
-    await client.end();
+  for (const column of missingColumns) {
+    // eslint-disable-next-line no-await-in-loop
+    await addMissingTenantColumn(client, schemaName, column);
   }
 }
 
 export async function migrateTenantSchema(schemaName: string): Promise<void> {
   assertValidTenantSchemaName(schemaName);
   const client = await openRawClient();
+  const referenceSchemaName = getReferenceSchemaName();
   try {
     await provisionTenantSchema(client, schemaName);
+    await createReferenceTenantSchema(client, referenceSchemaName);
+    await syncMissingTenantColumns(client, schemaName, referenceSchemaName);
   } catch (error) {
     logger.error(`Tenant schema "${schemaName}" provisioning failed`, { schemaName, error });
     throw error;
   } finally {
+    await dropSchemaIfExists(client, referenceSchemaName);
     await client.end();
   }
 
@@ -421,68 +246,5 @@ export async function seedTenantDefaults(schemaName: string): Promise<void> {
   } catch (error) {
     logger.error('Failed to seed tenant defaults', { schemaName, error });
     throw error;
-  }
-}
-
-/**
- * @deprecated No longer called during provisioning. Users live exclusively in
- * public.users and are never copied to tenant schemas. Will be removed after
- * the data migration (migrate-users-to-public.ts) is confirmed complete.
- *
- * Upserts the initial admin user into the tenant schema.
- *
- * Uses a raw pg.Client with explicit search_path rather than the Prisma tenant client.
- * Prisma's `?schema=` URL parameter sets search_path to only the tenant schema, which causes
- * enum type resolution to fail (e.g. "tenant_x.UserRole" does not exist — enums live in public).
- * By using a raw client with search_path = "tenant_x", public, both the tenant tables and the
- * shared public enums are visible within the same session.
- */
-export async function syncAdminToTenantSchema(params: {
-  tenantSchema: string;
-  userId: number;
-  email: string;
-  name: string;
-  password: string;
-  mobile: string | null;
-  profilePicture: string | null;
-  role: string;
-  status: string;
-  businessId: number;
-}): Promise<void> {
-  assertValidTenantSchemaName(params.tenantSchema);
-  const client = await openRawClient();
-  try {
-    await client.query(`SET search_path = "${params.tenantSchema}", public`);
-    // Upsert by id — if user already exists in tenant schema update it, otherwise insert.
-    await client.query(
-      `INSERT INTO "users" (
-        "id", "email", "name", "mobile", "profile_picture", "password_hash",
-        "role", "status", "business_id", "email_verified",
-        "created_at", "updated_at"
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7::\"UserRole\", $8::\"UserStatus\", $9, true, NOW(), NOW())
-      ON CONFLICT ("id") DO UPDATE SET
-        "email"           = EXCLUDED."email",
-        "name"            = EXCLUDED."name",
-        "mobile"          = EXCLUDED."mobile",
-        "profile_picture" = EXCLUDED."profile_picture",
-        "password_hash"   = EXCLUDED."password_hash",
-        "role"            = EXCLUDED."role",
-        "status"          = EXCLUDED."status",
-        "business_id"     = EXCLUDED."business_id",
-        "updated_at"      = NOW()`,
-      [
-        params.userId,
-        params.email,
-        params.name,
-        params.mobile,
-        params.profilePicture,
-        params.password,
-        params.role,
-        params.status,
-        params.businessId,
-      ],
-    );
-  } finally {
-    await client.end();
   }
 }

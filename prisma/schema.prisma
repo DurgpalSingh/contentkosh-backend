@@ -230,6 +230,7 @@ model Course {
   name        String
   description String?
   thumbnail   String?
+  price       Int          @default(0)
   startDate   DateTime?    @map("start_date")
   endDate     DateTime?    @map("end_date")
   status      CourseStatus @default(ACTIVE)
