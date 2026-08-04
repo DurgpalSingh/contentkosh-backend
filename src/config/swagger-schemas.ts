@@ -655,9 +655,11 @@ export const swaggerSchemas = {
         nullable: true,
         description: 'Course thumbnail URL or file path'
       },
-      duration: {
-        type: 'string',
-        description: 'Duration of the course (e.g., 6 months, 1 year)'
+      price: {
+        type: 'integer',
+        minimum: 0,
+        default: 0,
+        description: 'Course price as a whole number. Use 0 for free courses.'
       },
       status: {
         type: 'string',
@@ -705,9 +707,11 @@ export const swaggerSchemas = {
         nullable: true,
         description: 'Course thumbnail URL or file path'
       },
-      duration: {
-        type: 'string',
-        description: 'Duration of the course (e.g., 6 months, 1 year)'
+      price: {
+        type: 'integer',
+        minimum: 0,
+        default: 0,
+        description: 'Course price as a whole number. Use 0 for free courses.'
       },
       status: {
         type: 'string',
@@ -742,9 +746,10 @@ export const swaggerSchemas = {
         type: 'boolean',
         description: 'Clear the existing course thumbnail'
       },
-      duration: {
-        type: 'string',
-        description: 'Duration of the course (e.g., 6 months, 1 year)'
+      price: {
+        type: 'integer',
+        minimum: 0,
+        description: 'Course price as a whole number. Use 0 for free courses.'
       },
       status: {
         type: 'string',
@@ -773,9 +778,11 @@ export const swaggerSchemas = {
         nullable: true,
         description: 'Course thumbnail URL or file path'
       },
-      duration: {
-        type: 'string',
-        description: 'Duration of the course'
+      price: {
+        type: 'integer',
+        minimum: 0,
+        default: 0,
+        description: 'Course price as a whole number. Use 0 for free courses.'
       },
       status: {
         type: 'string',

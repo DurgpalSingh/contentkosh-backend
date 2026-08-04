@@ -81,6 +81,7 @@ CREATE TABLE IF NOT EXISTS "courses" (
   "name" TEXT NOT NULL,
   "description" TEXT,
   "thumbnail" TEXT,
+  "price" INTEGER NOT NULL DEFAULT 0,
   "start_date" TIMESTAMP(3),
   "end_date" TIMESTAMP(3),
   "status" "CourseStatus" NOT NULL DEFAULT 'ACTIVE',
