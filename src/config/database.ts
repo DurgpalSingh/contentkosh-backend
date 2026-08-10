@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { requestContext } from '../contexts/request-context';
+import { PUBLIC_MODEL_NAMES } from './tenant-schema.constants';
 
 type PrismaLikeClient = PrismaClient & Record<string, any>;
 
@@ -71,15 +72,6 @@ export async function evictTenantPrisma(schemaName: string): Promise<void> {
     await client.$disconnect().catch(() => {/* ignore disconnect errors */});
   }
 }
-
-const PUBLIC_MODEL_NAMES = new Set([
-  'user',         // always in public schema
-  'refreshToken', // FK references public.users; must stay co-located
-  'business',
-  'businessSlugHistory',
-  'systemConfig',
-  'apiAuditLog',
-]);
 
 export function resolveActiveClientForModel(modelName: string): PrismaLikeClient {
   const tenant = requestContext.getTenant();

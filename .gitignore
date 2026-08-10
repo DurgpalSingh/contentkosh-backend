@@ -65,5 +65,6 @@ Thumbs.db
 
 /src/generated/prisma
 
-prisma/migrations/
+# Pre-baseline migration history, kept locally for reference only (see prisma/migrations/20260807000000_baseline_init)
+prisma/migrations_archive_pre_baseline/
 /uploads/courses/

@@ -63,10 +63,14 @@ By default the server runs on port `8080` (see `PORT` env var). Swagger UI is av
 - `npm run build` — run tests then compile TypeScript (`tsc -p tsconfig.build.json`)
 - `npm start` — run production bundle from `dist/`
 - `npm run db:generate` — `prisma generate`
-- `npm run db:migrate` — create/apply migrations
-- `npm run db:push` — push schema to database (no migrations)
+- `npm run db:migrate` — create/apply a migration (dev only — prompts, uses a shadow DB)
+- `npm run db:migrate:deploy` — apply committed migrations to `public` (production-safe, no prompts)
+- `npm run db:tenants:migrate` — apply any migrations a tenant schema doesn't have yet, for every active business
+- `npm run db:tenants:baseline` — one-time-only: mark existing migrations as already applied for every tenant schema, without running them (see below)
+- `npm run db:setup` — `db:generate` + `db:migrate:deploy` + `db:tenants:migrate` in one shot; the standard "bring this environment up to date" command
+- `npm run db:push` — push schema to database (no migrations, dev only)
 - `npm run db:studio` — open Prisma Studio
-- `npm run db:reset-seed` — reset DB and run seed
+- `npm run db:reset-seed` — reset DB and run seed (dev only, destroys data)
 - `npm test` — run Jest tests
 
 ## Environment variables
@@ -86,9 +90,46 @@ Check the `.env`, `.env.local`, or `.env.uat` files in the repo root to see conc
 
 ## Database — Prisma notes
 
-- Schema: `prisma/schema.prisma` — models and relations live here.
+- Schema: `prisma/schema.prisma` — models and relations live here. It's the **only** place table structure is defined; there is no second hand-written copy anywhere.
 - To generate the client: `npm run db:generate`
 - To inspect data: `npm run db:studio`
+
+### Multi-tenant schema architecture
+
+Each business gets its own PostgreSQL schema (`tenant_<slug>`), created and kept up to date by replaying the real files under `prisma/migrations/` (see `src/services/tenantSchemaMigrator.ts`). A handful of tables are shared and live only in `public`, listed once in `src/config/tenant-schema.constants.ts`:
+
+- `users`, `refresh_tokens`, `business`, `business_slug_history`, `system_config`, `api_audit_logs`
+
+Everything else in `schema.prisma` (exams, courses, batches, content, tests, teachers, students, …) is tenant-scoped: it's created inside every tenant schema and nowhere else is it queried from. `prisma/migrations/` is committed to git — it is the single source of truth for both the public schema and every tenant schema's structure.
+
+Each tenant schema tracks which migrations it has applied in its own `_tenant_migrations` table, similar to Prisma's own `_prisma_migrations`. That's what makes `npm run db:tenants:migrate` safe to run repeatedly: a migration a tenant already has is skipped, only new ones are applied.
+
+### Making a schema change (adding/changing a column, table, etc.)
+
+1. Edit `prisma/schema.prisma`.
+2. `npm run db:migrate` — creates a new folder under `prisma/migrations/` with the generated SQL, applies it to your local `public` schema, regenerates the client. If you're adding a `NOT NULL` column to a table with existing rows, Prisma will ask for a default (or backfill logic can be added to the generated `migration.sql` before running it).
+3. `npm run db:tenants:migrate` — applies that same new migration to your local tenant schemas so you can test the full flow (including tenant-scoped models) before pushing.
+4. Commit the new `prisma/migrations/<timestamp>_<name>/` folder together with your code changes and open a PR — the migration folder is not gitignored.
+
+### Deploying a schema change
+
+Run once against the target environment, in order:
+
+```bash
+npm run db:generate        # regenerate the Prisma client to match schema.prisma
+npm run db:migrate:deploy  # apply any new migrations to the public schema
+npm run db:tenants:migrate # apply any new migrations to every active tenant schema
+```
+
+Or just `npm run db:setup`, which is exactly those three steps. Then restart the app process so it picks up the regenerated client and new code.
+
+This is additive and non-destructive: `db:migrate:deploy` only ever applies migrations Prisma hasn't recorded yet for `public`, and `db:tenants:migrate` only ever applies migrations a given tenant schema hasn't recorded yet — existing data is never dropped or rewritten by this flow. New businesses that sign up after the deploy are provisioned straight from the full up-to-date migration history, so they never need a separate "which fields does this tenant have" check.
+
+**Do not** run `prisma migrate dev` or `npm run db:push` against a shared/production database — both are dev-only tools (interactive prompts, shadow database, or schema drift with no migration record). Always use `db:migrate:deploy` there.
+
+### One-time setup note: `db:tenants:baseline`
+
+`npm run db:tenants:baseline` exists only for the one-time cutover to this bookkeeping system (marks every migration that existed at cutover time as already-applied for every existing tenant schema, without running any SQL, since those schemas were already up to date). It has already been run for this project's existing environments — you should not need to run it again unless you're bringing a brand-new environment's tenant schemas under tracking for the first time. Supports a `--dry-run` flag to preview what it would do first.
 
 ## Testing
 
