@@ -260,6 +260,61 @@ export class BatchService {
         return await batchRepo.updateBatchUser(userId, batchId, data);
     }
 
+    async getBrowsableBatches(user: IUser): Promise<Array<Batch & { isEnrolled: boolean }>> {
+        logger.info('BatchService: Fetching browsable batches', { userId: user.id, role: user.role });
+
+        const allowedRoles: UserRole[] = [UserRole.STUDENT, UserRole.USER];
+        if (!allowedRoles.includes(user.role)) {
+            throw new ForbiddenError('You do not have access to browse batches');
+        }
+        if (!user.businessId) {
+            throw new ForbiddenError('User is not associated with a business');
+        }
+
+        const [batches, enrolledIds] = await Promise.all([
+            batchRepo.findBrowsableBatchesForBusiness(user.businessId),
+            batchRepo.findActiveBatchIdsForUser(user.businessId, user.id),
+        ]);
+
+        const enrolledSet = new Set(enrolledIds);
+        return batches.map((b: any) => ({
+            ...BatchMapper.toDomain(b),
+            isEnrolled: enrolledSet.has(b.id),
+        }));
+    }
+
+    async selfEnrollInBatch(user: IUser, batchId: number): Promise<{ batchId: number; roleChanged: boolean }> {
+        logger.info('BatchService: Self-enroll requested', { userId: user.id, batchId });
+
+        if (user.role !== UserRole.STUDENT && user.role !== UserRole.USER) {
+            throw new ForbiddenError('Only students can enroll in a batch');
+        }
+        if (!user.businessId) {
+            throw new ForbiddenError('User is not associated with a business');
+        }
+
+        const batch = await batchRepo.findBatchForSelfEnroll(batchId);
+        if (!batch) throw new NotFoundError('Batch not found');
+
+        const batchBusinessId = batch.course?.exam?.businessId;
+        if (batchBusinessId !== user.businessId) {
+            throw new BadRequestError('Batch does not belong to your business');
+        }
+
+        const price = Number(batch.course?.price ?? 0);
+        if (price > 0) {
+            throw new BadRequestError('This batch requires payment. Enrollment is not available yet.');
+        }
+
+        const existing = await batchRepo.findBatchUser(user.id, batchId);
+        if (existing) throw new AlreadyExistsError('You are already enrolled in this batch');
+
+        const promote = user.role === UserRole.USER;
+        const result = await batchRepo.enrollUserAndMaybePromote(user.businessId, user.id, batchId, promote);
+
+        return { batchId, roleChanged: result.roleChanged };
+    }
+
     async validateBatchAccess(batchId: number, user: IUser): Promise<void> {
         // Batch -> Course -> Exam -> Business
         const batchWithRelations = await batchRepo.findBatchById(batchId, {

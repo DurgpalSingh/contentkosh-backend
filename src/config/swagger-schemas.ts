@@ -163,6 +163,14 @@ export const swaggerSchemas = {
         type: 'string',
         minLength: 1,
         description: 'User full name'
+      },
+      mobile: {
+        type: 'string',
+        description: 'Optional mobile number'
+      },
+      slug: {
+        type: 'string',
+        description: 'Optional slug of an existing business to join as a guest (role USER). Omit to bootstrap a new institute owner (role ADMIN, no business yet).'
       }
     }
   },
@@ -1471,6 +1479,16 @@ export const swaggerSchemas = {
       batchId: {
         type: 'integer',
         description: 'Batch ID to add user to (required)'
+      }
+    }
+  },
+  SelfEnrollBatchRequest: {
+    type: 'object',
+    required: ['batchId'],
+    properties: {
+      batchId: {
+        type: 'integer',
+        description: 'Batch ID to self-enroll into (required)'
       }
     }
   },

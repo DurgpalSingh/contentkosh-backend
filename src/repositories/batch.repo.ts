@@ -1,6 +1,7 @@
 import { Prisma, UserRole } from '@prisma/client';
 import { prisma } from '../config/database';
-import { queryTenantPublic, userBasicFromRow } from './crossSchema.repo';
+import { queryTenantPublic, userBasicFromRow, openTenantTransaction, commitAndClose, rollbackAndClose } from './crossSchema.repo';
+import { AlreadyExistsError } from '../errors/api.errors';
 import {
   ACTIVE_BATCH_WHERE,
   activeBatchWhereForBusiness,
@@ -23,6 +24,13 @@ const courseSelect = {
   id: true,
   name: true,
   examId: true,
+};
+
+const browsableCourseSelect = {
+  id: true,
+  name: true,
+  description: true,
+  price: true,
 };
 
 const userSelect = {
@@ -494,6 +502,54 @@ export async function isActiveUserInBatch(userId: number, batchId: number): Prom
     select: { id: true },
   });
   return Boolean(membership);
+}
+
+export async function findBrowsableBatchesForBusiness(businessId: number) {
+  return prisma.batch.findMany({
+    where: activeBatchWhereForBusiness(businessId),
+    orderBy: { createdAt: 'desc' },
+    select: {
+      ...batchSelect,
+      course: { select: browsableCourseSelect },
+    },
+  });
+}
+
+export async function findBatchForSelfEnroll(batchId: number) {
+  return findBatchById(batchId, {
+    requireActiveHierarchy: true,
+    select: {
+      id: true,
+      course: { select: { price: true, exam: { select: { businessId: true } } } },
+    },
+  }) as Promise<{ id: number; course: { price: number; exam: { businessId: number } } } | null>;
+}
+
+export async function enrollUserAndMaybePromote(
+  businessId: number,
+  userId: number,
+  batchId: number,
+  promoteToStudent: boolean,
+): Promise<{ batchUserId: number; roleChanged: boolean }> {
+  const { client, schemaSql } = await openTenantTransaction(businessId);
+  try {
+    const inserted = await client.query(
+      `INSERT INTO ${schemaSql}.batch_users (user_id, batch_id) VALUES ($1, $2) RETURNING id`,
+      [userId, batchId],
+    );
+    if (promoteToStudent) {
+      await client.query(
+        `UPDATE public.users SET role = 'STUDENT'::"public"."UserRole" WHERE id = $1 AND role = 'USER'::"public"."UserRole"`,
+        [userId],
+      );
+    }
+    await commitAndClose(client);
+    return { batchUserId: inserted.rows[0].id, roleChanged: promoteToStudent };
+  } catch (error: any) {
+    await rollbackAndClose(client);
+    if (error.code === '23505') throw new AlreadyExistsError('User is already in this batch');
+    throw error;
+  }
 }
 
 export async function findActiveBatchIdsForUser(

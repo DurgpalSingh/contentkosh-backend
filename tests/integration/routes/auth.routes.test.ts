@@ -6,7 +6,7 @@ import authRoutes from '../../../src/routes/auth.routes';
 import { AuthService } from '../../../src/services/auth.service';
 import * as UserService from '../../../src/services/user.service';
 import { errorHandler } from '../../../src/middlewares/error.middleware';
-import { AuthError, ForbiddenError, AlreadyExistsError } from '../../../src/errors/api.errors';
+import { AuthError, ForbiddenError, AlreadyExistsError, NotFoundError } from '../../../src/errors/api.errors';
 
 // Mock dependencies
 jest.mock('../../../src/services/auth.service');
@@ -125,6 +125,74 @@ describe('Auth Routes', () => {
 
             expect(res.status).toBe(409);
             expect(res.body.message).toContain('User with this mobile already exists');
+        });
+    });
+
+    // ==================== SIGNUP (guest join via slug) ====================
+    // Same /auth/signup endpoint as above — passing `slug` routes AuthService.register
+    // down the "join existing business as guest" branch instead of the institute-owner
+    // bootstrap branch. Both flows share one endpoint/DTO to avoid duplicating this logic.
+
+    describe('POST /auth/signup (with slug — guest join)', () => {
+        const validGuestSignupData = {
+            name: 'Guest User',
+            email: 'guest@test.com',
+            password: 'password123',
+            slug: 'vidit-publication'
+        };
+
+        it('should create a guest account successfully and set auth cookies', async () => {
+            (AuthService.register as jest.Mock).mockResolvedValue({
+                accessToken: 'jwt-access-token',
+                refreshToken: 'jwt-refresh-token',
+                user: {
+                    id: 2,
+                    email: 'guest@test.com',
+                    name: 'Guest User',
+                    role: 'USER',
+                    businessId: 1
+                }
+            });
+
+            const res = await request(app)
+                .post('/auth/signup')
+                .send(validGuestSignupData);
+
+            expect(res.status).toBe(201);
+            expect(res.body.data).toHaveProperty('email', 'guest@test.com');
+            expect(res.body.data).toHaveProperty('role', 'USER');
+            expect(res.body.data).not.toHaveProperty('accessToken');
+            expect(res.headers['set-cookie']).toBeDefined();
+            expect(AuthService.register).toHaveBeenCalledWith(expect.objectContaining({ slug: 'vidit-publication' }));
+        });
+
+        it('should return 400 if email is invalid', async () => {
+            const res = await request(app)
+                .post('/auth/signup')
+                .send({ ...validGuestSignupData, email: 'invalid-email' });
+
+            expect(res.status).toBe(400);
+        });
+
+        it('should return 404 if business slug does not exist', async () => {
+            (AuthService.register as jest.Mock).mockRejectedValue(new NotFoundError('Business'));
+
+            const res = await request(app)
+                .post('/auth/signup')
+                .send(validGuestSignupData);
+
+            expect(res.status).toBe(404);
+        });
+
+        it('should return 409 if email already exists in this business', async () => {
+            (AuthService.register as jest.Mock).mockRejectedValue(new AlreadyExistsError('User with this email already exists'));
+
+            const res = await request(app)
+                .post('/auth/signup')
+                .send(validGuestSignupData);
+
+            expect(res.status).toBe(409);
+            expect(res.body.message).toContain('User with this email already exists');
         });
     });
 
