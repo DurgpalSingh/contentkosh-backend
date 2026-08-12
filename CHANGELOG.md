@@ -1,5 +1,19 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.31] - Guest user Flow
+**P.R Raised by** : shubh404-SE on **Date** : 2026-08-12
+
+### Added
+  - added guest user register method in existing bussiness signup flow.
+  - added a new api to get all batches along with their course price to show guest users.
+  - added a new api to enroll in free batches.
+---
+## Version [1.2.30] - Database migration Issue Fix
+**P.R Raised by** : shubh404-SE on **Date** : 2026-08-10
+
+### Fixed
+  - fixed issue in migration script for new tenant, now we will use prisma migrate and db:setup command to setup new tenant in DB.
+--- 
 ## Version [1.2.29] - Price tag for course
 **P.R Raised by** : shubh404-SE on **Date** : 2026-08-01
 

@@ -12,6 +12,13 @@ const router = Router();
  * /api/auth/signup:
  *   post:
  *     summary: Register a new user
+ *     description: >
+ *       Two flows behind one endpoint, selected by whether `slug` is provided:
+ *       omit `slug` to bootstrap a new institute owner (role ADMIN, no business yet —
+ *       the caller creates the Business separately via POST /api/business); pass `slug`
+ *       to self-signup as a guest (role USER) joining that existing business. Used by the
+ *       web "create institute" flow (no slug) and the business-locked mobile app's
+ *       "Create account" flow (with slug).
  *     tags: [Auth]
  *     requestBody:
  *       required: true
@@ -38,6 +45,8 @@ const router = Router();
  *                           type: string
  *                         user:
  *                           type: object
+ *       404:
+ *         description: Business not found for the given slug (guest signup only)
  *       409:
  *         description: Email or mobile already exists
  */

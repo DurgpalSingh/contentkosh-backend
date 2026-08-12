@@ -3,7 +3,7 @@ import { UserRole } from '@prisma/client';
 import { authenticate, authorize } from '../middlewares/auth.middleware';
 import { validateIdParam, authorizeBatchAccess, authorizeCourseAccess } from '../middlewares/validation.middleware';
 import { validateDto } from '../middlewares/validation/dto.middleware';
-import { CreateBatchDto, UpdateBatchDto, AddUserToBatchDto, RemoveUserFromBatchDto, UpdateBatchUserDto } from '../dtos/batch.dto';
+import { CreateBatchDto, UpdateBatchDto, AddUserToBatchDto, RemoveUserFromBatchDto, UpdateBatchUserDto, SelfEnrollBatchDto } from '../dtos/batch.dto';
 import {
     batchController
 } from '../controllers/batch.controller';
@@ -29,6 +29,25 @@ const router = Router();
  *         description: Internal server error
  */
 router.get('/all', batchController.getAllActiveBatches);
+
+/**
+ * @swagger
+ * /api/batches/browse:
+ *   get:
+ *     summary: Browse all active batches in the caller's business (STUDENT/USER only)
+ *     description: Unlike /all (which scopes STUDENT/TEACHER to batches they already belong to), this returns every active batch in the business with an `isEnrolled` flag, for self-service enrollment browsing.
+ *     tags: [Batches]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Browsable batches fetched successfully
+ *       403:
+ *         description: Forbidden
+ *       500:
+ *         description: Internal server error
+ */
+router.get('/browse', batchController.getBrowsableBatches);
 
 /**
  * @swagger
@@ -205,6 +224,37 @@ router.delete('/:id', authorize(UserRole.ADMIN), validateIdParam('id'), authoriz
  *         description: Internal server error
  */
 router.post('/add-user', authorize(UserRole.ADMIN), validateDto(AddUserToBatchDto), batchController.addUserToBatch);
+
+/**
+ * @swagger
+ * /api/batches/self-enroll:
+ *   post:
+ *     summary: Self-enroll into a free batch (STUDENT/USER only)
+ *     description: Enrolls the calling user into a free batch. If the caller's role is USER, they are promoted to STUDENT atomically. Paid batches (course price > 0) are rejected — no payment flow exists yet.
+ *     tags: [Batch Users]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/SelfEnrollBatchRequest'
+ *     responses:
+ *       201:
+ *         description: Enrolled successfully
+ *       400:
+ *         description: Invalid input, batch not in caller's business, or batch requires payment
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Batch not found
+ *       409:
+ *         description: Already enrolled in this batch
+ *       500:
+ *         description: Internal server error
+ */
+router.post('/self-enroll', authorize(UserRole.STUDENT, UserRole.USER), validateDto(SelfEnrollBatchDto), batchController.selfEnrollInBatch);
 
 /**
  * @swagger

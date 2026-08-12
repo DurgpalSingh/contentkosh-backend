@@ -1,6 +1,6 @@
 import { Prisma, UserRole } from '@prisma/client';
-import { prisma } from '../config/database';
-import { queryTenantPublic, userBasicFromRow } from './crossSchema.repo';
+import { prisma, getTenantPrisma } from '../config/database';
+import { queryTenantPublic, userBasicFromRow, getTenantSchemaNameForBusiness } from './crossSchema.repo';
 import {
   ACTIVE_BATCH_WHERE,
   activeBatchWhereForBusiness,
@@ -23,6 +23,13 @@ const courseSelect = {
   id: true,
   name: true,
   examId: true,
+};
+
+const browsableCourseSelect = {
+  id: true,
+  name: true,
+  description: true,
+  price: true,
 };
 
 const userSelect = {
@@ -494,6 +501,58 @@ export async function isActiveUserInBatch(userId: number, batchId: number): Prom
     select: { id: true },
   });
   return Boolean(membership);
+}
+
+export async function findBrowsableBatchesForBusiness(businessId: number) {
+  return prisma.batch.findMany({
+    where: activeBatchWhereForBusiness(businessId),
+    orderBy: { createdAt: 'desc' },
+    select: {
+      ...batchSelect,
+      course: { select: browsableCourseSelect },
+    },
+  });
+}
+
+export async function findBatchForSelfEnroll(batchId: number) {
+  return findBatchById(batchId, {
+    requireActiveHierarchy: true,
+    select: {
+      id: true,
+      course: { select: { price: true, exam: { select: { businessId: true } } } },
+    },
+  }) as Promise<{ id: number; course: { price: number; exam: { businessId: number } } } | null>;
+}
+
+export async function enrollUserAndMaybePromote(
+  businessId: number,
+  userId: number,
+  batchId: number,
+  promoteToStudent: boolean,
+): Promise<{ batchUserId: number; roleChanged: boolean }> {
+  const schemaName = await getTenantSchemaNameForBusiness(businessId);
+  const tenantPrisma = getTenantPrisma(schemaName);
+
+  if (!promoteToStudent) {
+    const batchUser = await tenantPrisma.batchUser.create({
+      data: { userId, batchId },
+      select: { id: true },
+    });
+    return { batchUserId: batchUser.id, roleChanged: false };
+  }
+
+  const [batchUser] = await tenantPrisma.$transaction([
+    tenantPrisma.batchUser.create({
+      data: { userId, batchId },
+      select: { id: true },
+    }),
+    tenantPrisma.user.updateMany({
+      where: { id: userId, role: UserRole.USER },
+      data: { role: UserRole.STUDENT },
+    }),
+  ]);
+
+  return { batchUserId: batchUser.id, roleChanged: true };
 }
 
 export async function findActiveBatchIdsForUser(
