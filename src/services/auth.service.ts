@@ -8,7 +8,7 @@ import * as userRepo from '../repositories/user.repo';
 import * as refreshTokenRepo from '../repositories/refreshToken.repo';
 import * as businessRepo from '../repositories/business.repo';
 import { UserStatus, UserRole } from '@prisma/client';
-import { AlreadyExistsError, AuthError, ForbiddenError } from '../errors/api.errors';
+import { AlreadyExistsError, AuthError, ForbiddenError, NotFoundError } from '../errors/api.errors';
 import { publicPrisma } from '../config/database';
 
 function resolveLoginSlug(data: LoginRequest): string | undefined {
@@ -83,7 +83,19 @@ export class AuthService {
     return this.verifyAccessToken(token);
   }
 
+  /**
+   * Handles both public signup flows behind one endpoint:
+   * - `slug` provided: join an existing business as a guest (role USER) — used by the
+   *   business-locked mobile app's "Create account" flow.
+   * - `slug` omitted: bootstrap a new institute owner (role ADMIN, no business yet) — the
+   *   caller creates the Business separately via POST /api/business.
+   */
   static async register(data: RegisterRequest): Promise<AuthResponse> {
+    const slug = data.slug?.trim();
+    if (slug) {
+      return this.registerGuestForBusiness(data, slug);
+    }
+
     logger.info(`Registering new public user: ${data.email}`);
     const existingUser = await userRepo.findByEmail(data.email);
     if (existingUser) {
@@ -100,23 +112,59 @@ export class AuthService {
       status: UserStatus.ACTIVE,
     });
 
-    const accessToken = this.generateAccessToken({
-      id: newUser.id,
-      email: newUser.email,
-      role: newUser.role,
-      businessId: newUser.businessId ?? null,
+    return this.issueAuthResponse({ ...newUser, businessId: newUser.businessId ?? null });
+  }
+
+  private static async registerGuestForBusiness(data: RegisterRequest, slug: string): Promise<AuthResponse> {
+    logger.info(`Guest signup attempt for email: ${data.email}`, { slug });
+
+    const business = await businessRepo.findBusinessBySlug(slug);
+    if (!business) {
+      throw new NotFoundError('Business');
+    }
+
+    const existingUser = await userRepo.findByBusinessAndEmail(business.id, data.email);
+    if (existingUser) {
+      throw new AlreadyExistsError('User with this email already exists');
+    }
+
+    const hashedPassword = await this.hashPassword(data.password);
+    const newUser = await userRepo.createUser({
+      name: data.name,
+      email: data.email,
+      password: hashedPassword,
+      mobile: data.mobile,
+      role: UserRole.USER,
+      businessId: business.id,
+      status: UserStatus.ACTIVE,
     });
-    const refreshToken = await this.generateRefreshToken(newUser.id);
+
+    return this.issueAuthResponse({ ...newUser, businessId: newUser.businessId ?? null }, business);
+  }
+
+  private static async issueAuthResponse(
+    user: { id: number; email: string; name: string; role: UserRole; businessId: number | null },
+    business?: { slug: string | null; schemaName: string | null },
+  ): Promise<AuthResponse> {
+    const accessToken = this.generateAccessToken({
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      businessId: user.businessId,
+      businessSlug: business?.slug ?? null,
+      tenantSchema: business?.schemaName ?? null,
+    });
+    const refreshToken = await this.generateRefreshToken(user.id);
 
     return {
       accessToken,
       refreshToken,
       user: {
-        id: newUser.id,
-        email: newUser.email,
-        name: newUser.name,
-        role: newUser.role,
-        businessId: newUser.businessId,
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        businessId: user.businessId,
       },
     };
   }

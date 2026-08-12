@@ -5,7 +5,7 @@ import logger from '../utils/logger';
 import { BadRequestError, NotFoundError, AlreadyExistsError, ForbiddenError } from '../errors/api.errors';
 import { ValidationUtils } from '../utils/validation';
 import { plainToInstance } from 'class-transformer';
-import { CreateBatchDto, UpdateBatchDto, AddUserToBatchDto, RemoveUserFromBatchDto, UpdateBatchUserDto } from '../dtos/batch.dto';
+import { CreateBatchDto, UpdateBatchDto, AddUserToBatchDto, RemoveUserFromBatchDto, UpdateBatchUserDto, SelfEnrollBatchDto } from '../dtos/batch.dto';
 import { BatchService } from '../services/batch.service';
 import { AuthRequest } from '../dtos/auth.dto';
 
@@ -58,6 +58,20 @@ export class BatchController {
       }
       logger.error(`Error fetching active batches: ${error.message}`);
       ApiResponseHandler.error(res, 'Failed to fetch active batches');
+    }
+  };
+
+  public getBrowsableBatches = async (req: Request, res: Response) => {
+    try {
+      const user = (req as AuthRequest).user!;
+      const batches = await this.batchService.getBrowsableBatches(user);
+      ApiResponseHandler.success(res, batches, 'Browsable batches fetched successfully');
+    } catch (error: any) {
+      if (error instanceof ForbiddenError) {
+        return ApiResponseHandler.error(res, error.message, 403);
+      }
+      logger.error(`Error fetching browsable batches: ${error.message}`);
+      ApiResponseHandler.error(res, 'Failed to fetch browsable batches');
     }
   };
 
@@ -117,6 +131,24 @@ export class BatchController {
       if (error instanceof AlreadyExistsError || error.name === 'AlreadyExistsError') return ApiResponseHandler.error(res, error.message, 409);
       logger.error(`Error adding user to batch: ${error.message}`);
       ApiResponseHandler.error(res, 'Failed to add user to batch');
+    }
+  };
+
+  public selfEnrollInBatch = async (req: Request, res: Response) => {
+    try {
+      const { batchId } = plainToInstance(SelfEnrollBatchDto, req.body);
+      ValidationUtils.validateId(batchId, 'Batch ID');
+      const user = (req as AuthRequest).user!;
+
+      const result = await this.batchService.selfEnrollInBatch(user, batchId);
+      ApiResponseHandler.success(res, result, 'Enrolled successfully', 201);
+    } catch (error: any) {
+      if (error instanceof ForbiddenError || error.name === 'ForbiddenError') return ApiResponseHandler.error(res, error.message, 403);
+      if (error instanceof BadRequestError || error.name === 'BadRequestError') return ApiResponseHandler.error(res, error.message, 400);
+      if (error instanceof NotFoundError || error.name === 'NotFoundError') return ApiResponseHandler.notFound(res, error.message);
+      if (error instanceof AlreadyExistsError || error.name === 'AlreadyExistsError') return ApiResponseHandler.error(res, error.message, 409);
+      logger.error(`Error self-enrolling in batch: ${error.message}`);
+      ApiResponseHandler.error(res, 'Failed to enroll in batch');
     }
   };
 
