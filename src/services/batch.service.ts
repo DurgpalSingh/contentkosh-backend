@@ -283,36 +283,41 @@ export class BatchService {
         }));
     }
 
+    /** Throws the error for the first guard whose condition is true; no-ops if all pass. */
+    private throwOnFirstMatch(guards: Array<{ when: boolean; error: Error }>): void {
+        const failed = guards.find((guard) => guard.when);
+        if (failed) throw failed.error;
+    }
+
     async selfEnrollInBatch(user: IUser, batchId: number): Promise<{ batchId: number; roleChanged: boolean }> {
         logger.info('BatchService: Self-enroll requested', { userId: user.id, batchId });
 
-        if (user.role !== UserRole.STUDENT && user.role !== UserRole.USER) {
-            throw new ForbiddenError('Only students can enroll in a batch');
-        }
-        if (!user.businessId) {
-            throw new ForbiddenError('User is not associated with a business');
-        }
+        this.throwOnFirstMatch([
+            { when: user.role !== UserRole.STUDENT && user.role !== UserRole.USER, error: new ForbiddenError('Only students can enroll in a batch') },
+            { when: !user.businessId, error: new ForbiddenError('User is not associated with a business') },
+        ]);
 
         const batch = await batchRepo.findBatchForSelfEnroll(batchId);
-        if (!batch) throw new NotFoundError('Batch not found');
+        const batchBusinessId = batch?.course?.exam?.businessId;
+        const price = Number(batch?.course?.price ?? 0);
 
-        const batchBusinessId = batch.course?.exam?.businessId;
-        if (batchBusinessId !== user.businessId) {
-            throw new BadRequestError('Batch does not belong to your business');
-        }
-
-        const price = Number(batch.course?.price ?? 0);
-        if (price > 0) {
-            throw new BadRequestError('This batch requires payment. Enrollment is not available yet.');
-        }
+        this.throwOnFirstMatch([
+            { when: !batch, error: new NotFoundError('Batch not found') },
+            { when: batchBusinessId !== user.businessId, error: new BadRequestError('Batch does not belong to your business') },
+            { when: price > 0, error: new BadRequestError('This batch requires payment. Enrollment is not available yet.') },
+        ]);
 
         const existing = await batchRepo.findBatchUser(user.id, batchId);
         if (existing) throw new AlreadyExistsError('You are already enrolled in this batch');
 
         const promote = user.role === UserRole.USER;
-        const result = await batchRepo.enrollUserAndMaybePromote(user.businessId, user.id, batchId, promote);
-
-        return { batchId, roleChanged: result.roleChanged };
+        try {
+            const result = await batchRepo.enrollUserAndMaybePromote(user.businessId!, user.id, batchId, promote);
+            return { batchId, roleChanged: result.roleChanged };
+        } catch (error: any) {
+            if (error.code === 'P2002') throw new AlreadyExistsError('You are already enrolled in this batch');
+            throw error;
+        }
     }
 
     async validateBatchAccess(batchId: number, user: IUser): Promise<void> {

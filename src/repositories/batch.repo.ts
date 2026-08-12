@@ -1,7 +1,6 @@
 import { Prisma, UserRole } from '@prisma/client';
-import { prisma } from '../config/database';
-import { queryTenantPublic, userBasicFromRow, openTenantTransaction, commitAndClose, rollbackAndClose } from './crossSchema.repo';
-import { AlreadyExistsError } from '../errors/api.errors';
+import { prisma, getTenantPrisma } from '../config/database';
+import { queryTenantPublic, userBasicFromRow, getTenantSchemaNameForBusiness } from './crossSchema.repo';
 import {
   ACTIVE_BATCH_WHERE,
   activeBatchWhereForBusiness,
@@ -531,25 +530,29 @@ export async function enrollUserAndMaybePromote(
   batchId: number,
   promoteToStudent: boolean,
 ): Promise<{ batchUserId: number; roleChanged: boolean }> {
-  const { client, schemaSql } = await openTenantTransaction(businessId);
-  try {
-    const inserted = await client.query(
-      `INSERT INTO ${schemaSql}.batch_users (user_id, batch_id) VALUES ($1, $2) RETURNING id`,
-      [userId, batchId],
-    );
-    if (promoteToStudent) {
-      await client.query(
-        `UPDATE public.users SET role = 'STUDENT'::"public"."UserRole" WHERE id = $1 AND role = 'USER'::"public"."UserRole"`,
-        [userId],
-      );
-    }
-    await commitAndClose(client);
-    return { batchUserId: inserted.rows[0].id, roleChanged: promoteToStudent };
-  } catch (error: any) {
-    await rollbackAndClose(client);
-    if (error.code === '23505') throw new AlreadyExistsError('User is already in this batch');
-    throw error;
+  const schemaName = await getTenantSchemaNameForBusiness(businessId);
+  const tenantPrisma = getTenantPrisma(schemaName);
+
+  if (!promoteToStudent) {
+    const batchUser = await tenantPrisma.batchUser.create({
+      data: { userId, batchId },
+      select: { id: true },
+    });
+    return { batchUserId: batchUser.id, roleChanged: false };
   }
+
+  const [batchUser] = await tenantPrisma.$transaction([
+    tenantPrisma.batchUser.create({
+      data: { userId, batchId },
+      select: { id: true },
+    }),
+    tenantPrisma.user.updateMany({
+      where: { id: userId, role: UserRole.USER },
+      data: { role: UserRole.STUDENT },
+    }),
+  ]);
+
+  return { batchUserId: batchUser.id, roleChanged: true };
 }
 
 export async function findActiveBatchIdsForUser(
