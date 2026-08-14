@@ -315,7 +315,9 @@ export class BatchService {
             const result = await batchRepo.enrollUserAndMaybePromote(user.businessId!, user.id, batchId, promote);
             return { batchId, roleChanged: result.roleChanged };
         } catch (error: any) {
-            if (error.code === 'P2002') throw new AlreadyExistsError('You are already enrolled in this batch');
+            if (error.code === 'P2002' || error.code === '23505') {
+                throw new AlreadyExistsError('You are already enrolled in this batch');
+            }
             throw error;
         }
     }
