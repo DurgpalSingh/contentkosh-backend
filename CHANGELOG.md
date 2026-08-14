@@ -1,5 +1,11 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.32] - Guest user Self enroll Bug
+**P.R Raised by** : shubh404-SE on **Date** : 2026-08-14
+
+### Fixed
+  - fixed cross db issue in guest user self enroll api, now guest user can enroll in free batches.
+---
 ## Version [1.2.31] - Guest user Flow
 **P.R Raised by** : shubh404-SE on **Date** : 2026-08-12
 
