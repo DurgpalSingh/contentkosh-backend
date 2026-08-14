@@ -1,6 +1,12 @@
 import { Prisma, UserRole } from '@prisma/client';
-import { prisma, getTenantPrisma } from '../config/database';
-import { queryTenantPublic, userBasicFromRow, getTenantSchemaNameForBusiness } from './crossSchema.repo';
+import { prisma } from '../config/database';
+import {
+  queryTenantPublic,
+  userBasicFromRow,
+  openTenantTransaction,
+  commitAndClose,
+  rollbackAndClose,
+} from './crossSchema.repo';
 import {
   ACTIVE_BATCH_WHERE,
   activeBatchWhereForBusiness,
@@ -530,29 +536,30 @@ export async function enrollUserAndMaybePromote(
   batchId: number,
   promoteToStudent: boolean,
 ): Promise<{ batchUserId: number; roleChanged: boolean }> {
-  const schemaName = await getTenantSchemaNameForBusiness(businessId);
-  const tenantPrisma = getTenantPrisma(schemaName);
+  const { client, schemaSql } = await openTenantTransaction(businessId);
+  let committed = false;
+  try {
+    const insertResult = await client.query<{ id: number }>(
+      `INSERT INTO ${schemaSql}.batch_users (user_id, batch_id) VALUES ($1, $2) RETURNING id`,
+      [userId, batchId],
+    );
+    const batchUserId = insertResult.rows[0]!.id;
 
-  if (!promoteToStudent) {
-    const batchUser = await tenantPrisma.batchUser.create({
-      data: { userId, batchId },
-      select: { id: true },
-    });
-    return { batchUserId: batchUser.id, roleChanged: false };
+    let roleChanged = false;
+    if (promoteToStudent) {
+      const updateResult = await client.query(
+        `UPDATE public.users SET role = $1, updated_at = now() WHERE id = $2 AND role = $3`,
+        [UserRole.STUDENT, userId, UserRole.USER],
+      );
+      roleChanged = (updateResult.rowCount ?? 0) > 0;
+    }
+
+    await commitAndClose(client);
+    committed = true;
+    return { batchUserId, roleChanged };
+  } finally {
+    if (!committed) await rollbackAndClose(client);
   }
-
-  const [batchUser] = await tenantPrisma.$transaction([
-    tenantPrisma.batchUser.create({
-      data: { userId, batchId },
-      select: { id: true },
-    }),
-    tenantPrisma.user.updateMany({
-      where: { id: userId, role: UserRole.USER },
-      data: { role: UserRole.STUDENT },
-    }),
-  ]);
-
-  return { batchUserId: batchUser.id, roleChanged: true };
 }
 
 export async function findActiveBatchIdsForUser(
