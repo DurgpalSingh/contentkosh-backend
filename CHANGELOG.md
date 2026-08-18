@@ -1,5 +1,12 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.33] - Common Error Handling for code improvment
+**P.R Raised by** : shubh404-SE on **Date** : 2026-08-18
+
+### Fixed
+  - added a common error handler to handle all errors in one place, 
+  - this will improve code quality and reduce code duplication.
+---
 ## Version [1.2.32] - Guest user Self enroll Bug
 **P.R Raised by** : shubh404-SE on **Date** : 2026-08-14
 
