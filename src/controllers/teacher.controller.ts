@@ -1,14 +1,13 @@
 import { Response } from 'express';
-import { UserRole } from '@prisma/client';
 import { ApiResponseHandler } from '../utils/apiResponse';
-import logger from '../utils/logger';
-import { BadRequestError, NotFoundError, ForbiddenError } from '../errors/api.errors';
+import { ForbiddenError } from '../errors/api.errors';
 import { ValidationUtils } from '../utils/validation';
 import { plainToInstance } from 'class-transformer';
 import { CreateTeacherDto, UpdateTeacherDto } from '../dtos/teacher.dto';
 import { TeacherService } from '../services/teacher.service';
 import { TeacherMapper } from '../mappers/teacher.mapper';
 import { AuthRequest } from '../dtos/auth.dto';
+import { handleControllerError } from '../utils/controllerErrorHandler';
 
 export class TeacherController {
   private teacherService: TeacherService;
@@ -31,18 +30,8 @@ export class TeacherController {
       const user = req.user;
       const teacher = await this.teacherService.createTeacher(teacherData, user);
       ApiResponseHandler.success(res, TeacherMapper.toResponse(teacher), 'Teacher profile created successfully', 201);
-    } catch (error: any) {
-      if (error instanceof BadRequestError) {
-        return ApiResponseHandler.error(res, error.message, 400);
-      }
-      if (error instanceof NotFoundError) {
-        return ApiResponseHandler.error(res, error.message, 404);
-      }
-      if (error instanceof ForbiddenError) {
-        return ApiResponseHandler.error(res, error.message, 403);
-      }
-      logger.error(`Error creating teacher profile: ${error.message}`);
-      ApiResponseHandler.error(res, 'Failed to create teacher profile');
+    } catch (error) {
+      handleControllerError(res, error, 'Failed to create teacher profile', 'Error creating teacher profile');
     }
   };
 
@@ -60,15 +49,8 @@ export class TeacherController {
 
       const teacher = await this.teacherService.getTeacherById(teacherId, user);
       ApiResponseHandler.success(res, TeacherMapper.toResponse(teacher), 'Teacher profile fetched successfully');
-    } catch (error: any) {
-      if (error instanceof NotFoundError) {
-        return ApiResponseHandler.notFound(res, error.message);
-      }
-      if (error instanceof ForbiddenError) {
-        return ApiResponseHandler.error(res, error.message, 403);
-      }
-      logger.error(`Error fetching teacher profile: ${error.message}`);
-      ApiResponseHandler.error(res, 'Failed to fetch teacher profile');
+    } catch (error) {
+      handleControllerError(res, error, 'Failed to fetch teacher profile', 'Error fetching teacher profile');
     }
   };
 
@@ -86,15 +68,8 @@ export class TeacherController {
 
       const teacher = await this.teacherService.getTeacherByUserId(userId, user);
       ApiResponseHandler.success(res, TeacherMapper.toResponse(teacher), 'Teacher profile fetched successfully');
-    } catch (error: any) {
-      if (error instanceof NotFoundError) {
-        return ApiResponseHandler.notFound(res, error.message);
-      }
-      if (error instanceof ForbiddenError) {
-        return ApiResponseHandler.error(res, error.message, 403);
-      }
-      logger.error(`Error fetching teacher profile by userId: ${error.message}`);
-      ApiResponseHandler.error(res, 'Failed to fetch teacher profile');
+    } catch (error) {
+      handleControllerError(res, error, 'Failed to fetch teacher profile', 'Error fetching teacher profile by userId');
     }
   };
 
@@ -112,19 +87,9 @@ export class TeacherController {
       const user = req.user;
       const teacher = await this.teacherService.updateTeacher(teacherId, teacherData, user);
       ApiResponseHandler.success(res, TeacherMapper.toResponse(teacher), 'Teacher profile updated successfully');
-    } catch (error: any) {
-      if (error instanceof BadRequestError) {
-        return ApiResponseHandler.error(res, error.message, 400);
-      }
-      if (error instanceof NotFoundError) {
-        return ApiResponseHandler.notFound(res, error.message);
-      }
-      if (error instanceof ForbiddenError) {
-        return ApiResponseHandler.error(res, error.message, 403);
-      }
-      logger.error(`Error updating teacher profile: ${error.message}`);
-      ApiResponseHandler.error(res, 'Failed to update teacher profile');
+    } catch (error) {
+      handleControllerError(res, error, 'Failed to update teacher profile', 'Error updating teacher profile');
     }
   };
-  
+
 }

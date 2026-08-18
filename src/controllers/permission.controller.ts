@@ -5,7 +5,8 @@ import { AssignPermissionDto } from '../dtos/permission.dto';
 import { validate } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
 import { ApiResponseHandler } from '../utils/apiResponse';
-import { ApiError, BadRequestError } from '../errors/api.errors';
+import { BadRequestError } from '../errors/api.errors';
+import { handleControllerError } from '../utils/controllerErrorHandler';
 
 const permissionService = new PermissionService();
 
@@ -18,13 +19,6 @@ export interface AuthenticatedRequest extends Request {
 }
 
 export class PermissionController {
-
-    private handleError(res: Response, error: any) {
-        if (error instanceof ApiError) {
-            return ApiResponseHandler.error(res, error.message, error.statusCode);
-        }
-        return ApiResponseHandler.error(res, error.message || 'Internal Server Error', 500);
-    }
 
     async getPermissions(req: Request, res: Response) {
         try {
@@ -42,8 +36,8 @@ export class PermissionController {
 
             const result = await permissionService.getUserPermissions(userId);
             return ApiResponseHandler.success(res, result);
-        } catch (error: any) {
-            return this.handleError(res, error);
+        } catch (error) {
+            handleControllerError(res, error, 'Internal Server Error', 'Permission controller error');
         }
     }
 
@@ -51,8 +45,8 @@ export class PermissionController {
         try {
             const result = await permissionService.getAllPermissions();
             return ApiResponseHandler.success(res, result);
-        } catch (error: any) {
-            return this.handleError(res, error);
+        } catch (error) {
+            handleControllerError(res, error, 'Internal Server Error', 'Permission controller error');
         }
     }
 
@@ -73,8 +67,8 @@ export class PermissionController {
 
             const result = await permissionService.assignPermissions(dto);
             return ApiResponseHandler.success(res, result);
-        } catch (error: any) {
-            return this.handleError(res, error);
+        } catch (error) {
+            handleControllerError(res, error, 'Internal Server Error', 'Permission controller error');
         }
     }
 
@@ -94,8 +88,8 @@ export class PermissionController {
 
             const result = await permissionService.updatePermissions(dto);
             return ApiResponseHandler.success(res, result);
-        } catch (error: any) {
-            return this.handleError(res, error);
+        } catch (error) {
+            handleControllerError(res, error, 'Internal Server Error', 'Permission controller error');
         }
     }
 
@@ -111,8 +105,8 @@ export class PermissionController {
 
             const result = await permissionService.handlePermissionDeletion(dto);
             return ApiResponseHandler.success(res, result);
-        } catch (error: any) {
-            return this.handleError(res, error);
+        } catch (error) {
+            handleControllerError(res, error, 'Internal Server Error', 'Permission controller error');
         }
     }
 }

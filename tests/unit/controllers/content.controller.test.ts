@@ -103,10 +103,9 @@ describe('Content Controller (Comprehensive)', () => {
 
       await contentController.createContent(req as any, res as any);
 
-      expect(ApiResponseHandler.error).toHaveBeenCalledWith(
+      expect(ApiResponseHandler.badRequest).toHaveBeenCalledWith(
         res,
-        'Title is required',
-        400
+        'Title is required'
       );
     });
 
@@ -119,10 +118,9 @@ describe('Content Controller (Comprehensive)', () => {
 
       await contentController.createContent(req as any, res as any);
 
-      expect(ApiResponseHandler.error).toHaveBeenCalledWith(
+      expect(ApiResponseHandler.notFound).toHaveBeenCalledWith(
         res,
-        'Batch not found',
-        404
+        'Batch not found'
       );
     });
 
@@ -137,10 +135,9 @@ describe('Content Controller (Comprehensive)', () => {
 
       await contentController.createContent(req as any, res as any);
 
-      expect(ApiResponseHandler.error).toHaveBeenCalledWith(
+      expect(ApiResponseHandler.forbidden).toHaveBeenCalledWith(
         res,
-        'No permission to create content',
-        403
+        'No permission to create content'
       );
     });
 
@@ -203,10 +200,9 @@ describe('Content Controller (Comprehensive)', () => {
 
       await contentController.getContent(req as any, res as any);
 
-      expect(ApiResponseHandler.error).toHaveBeenCalledWith(
+      expect(ApiResponseHandler.forbidden).toHaveBeenCalledWith(
         res,
-        'Access denied',
-        403
+        'Access denied'
       );
     });
 
@@ -220,7 +216,7 @@ describe('Content Controller (Comprehensive)', () => {
 
       await contentController.getContent(req as any, res as any);
 
-      expect(ApiResponseHandler.error).toHaveBeenCalled();
+      expect(ApiResponseHandler.badRequest).toHaveBeenCalled();
     });
   });
 
@@ -261,10 +257,9 @@ describe('Content Controller (Comprehensive)', () => {
 
       await contentController.getContentsByBatch(req as any, res as any);
 
-      expect(ApiResponseHandler.error).toHaveBeenCalledWith(
+      expect(ApiResponseHandler.forbidden).toHaveBeenCalledWith(
         res,
-        'Forbidden',
-        403
+        'Forbidden'
       );
     });
   });
@@ -309,10 +304,9 @@ describe('Content Controller (Comprehensive)', () => {
 
       await contentController.updateContent(req as any, res as any);
 
-      expect(ApiResponseHandler.error).toHaveBeenCalledWith(
+      expect(ApiResponseHandler.badRequest).toHaveBeenCalledWith(
         res,
-        'Invalid status',
-        400
+        'Invalid status'
       );
     });
   });
