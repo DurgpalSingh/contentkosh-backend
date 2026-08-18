@@ -1,6 +1,7 @@
 // src/errors/api.errors.ts
 import { Response } from 'express';
 import { ApiResponseHandler } from '../utils/apiResponse';
+import { HTTP_STATUS } from '../constants/httpStatus.constants';
 
 export class ApiError extends Error {
   statusCode: number;
@@ -21,7 +22,7 @@ export class ApiError extends Error {
 
 export class NotFoundError extends ApiError {
   constructor(resource: string = 'Resource') {
-    super(`${resource} not found`, 404);
+    super(`${resource} not found`, HTTP_STATUS.NOT_FOUND);
     this.name = 'NotFoundError';
   }
 
@@ -35,14 +36,14 @@ export class AlreadyExistsError extends ApiError {
     const message = /already exists$/i.test(resource.trim())
       ? resource
       : `${resource} already exists`;
-    super(message, 409); // HTTP 409 Conflict
+    super(message, HTTP_STATUS.CONFLICT);
     this.name = 'AlreadyExistsError';
   }
 }
 
 export class BadRequestError extends ApiError {
   constructor(message: string = 'Bad request') {
-    super(message, 400);
+    super(message, HTTP_STATUS.BAD_REQUEST);
     this.name = 'BadRequestError';
   }
 
@@ -53,7 +54,7 @@ export class BadRequestError extends ApiError {
 
 export class UnauthorizedError extends ApiError {
   constructor(message: string = 'Unauthorized') {
-    super(message, 401);
+    super(message, HTTP_STATUS.UNAUTHORIZED);
     this.name = 'UnauthorizedError';
   }
 
@@ -64,14 +65,14 @@ export class UnauthorizedError extends ApiError {
 
 export class AuthError extends ApiError {
   constructor(message: string = 'Authentication failed') {
-    super(message, 401);
+    super(message, HTTP_STATUS.UNAUTHORIZED);
     this.name = 'AuthError';
   }
 }
 
 export class ForbiddenError extends ApiError {
   constructor(message: string = 'Forbidden') {
-    super(message, 403);
+    super(message, HTTP_STATUS.FORBIDDEN);
     this.name = 'ForbiddenError';
   }
 
