@@ -625,8 +625,7 @@ describe('Practice Test Attempt Routes', () => {
         .post('/api/business/1/practice-tests/attempts')
         .send({ practiceTestId: 'pt-1', language: TestLanguage.en });
 
-      // ForbiddenError is not caught by the controller — falls through to 500
-      expect(res.status).toBe(500);
+      expect(res.status).toBe(403);
     });
 
     it('returns 403 when admin tries to start attempt', async () => {
@@ -1250,8 +1249,7 @@ describe('Exam Test Attempt Routes', () => {
         .post('/api/business/1/exam-tests/attempts')
         .send({ examTestId: 'et-1', language: TestLanguage.en });
 
-      // ForbiddenError is not caught by the controller — falls through to 500
-      expect(res.status).toBe(500);
+      expect(res.status).toBe(403);
     });
 
     it('returns 403 when admin tries to start exam attempt', async () => {

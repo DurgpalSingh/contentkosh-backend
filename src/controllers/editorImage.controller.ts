@@ -4,7 +4,7 @@ import { AuthRequest } from '../dtos/auth.dto';
 import { ApiResponseHandler } from '../utils/apiResponse';
 import { BadRequestError } from '../errors/api.errors';
 import { editorImageService } from '../services/editorImage.service';
-import logger from '../utils/logger';
+import { handleControllerError } from '../utils/controllerErrorHandler';
 
 /**
  * POST /api/editor/image
@@ -19,16 +19,12 @@ export const uploadEditorImage = async (req: AuthRequest, res: Response) => {
 
     const url = await editorImageService.uploadImage(req.file.path);
     ApiResponseHandler.success(res, { url }, 'Image uploaded successfully', 201);
-  } catch (error: any) {
+  } catch (error) {
     // Clean up the temp file on any failure
     if (req.file?.path) {
       try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
     }
-    if (error instanceof BadRequestError) {
-      return ApiResponseHandler.error(res, error.message, 400);
-    }
-    logger.error(`[editorImage] Upload failed: ${error.message}`);
-    ApiResponseHandler.error(res, 'Failed to upload image');
+    handleControllerError(res, error, 'Failed to upload image', '[editorImage] Upload failed');
   }
 };
 
@@ -42,11 +38,7 @@ export const deleteEditorImage = async (req: AuthRequest, res: Response) => {
     const { url } = req.body as { url?: string };
     editorImageService.deleteImage(url ?? '');
     ApiResponseHandler.success(res, null, 'Image deleted successfully');
-  } catch (error: any) {
-    if (error instanceof BadRequestError) {
-      return ApiResponseHandler.error(res, error.message, 400);
-    }
-    logger.error(`[editorImage] Delete failed: ${error.message}`);
-    ApiResponseHandler.error(res, 'Failed to delete image');
+  } catch (error) {
+    handleControllerError(res, error, 'Failed to delete image', '[editorImage] Delete failed');
   }
 };

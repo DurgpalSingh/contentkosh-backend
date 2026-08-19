@@ -36,6 +36,7 @@ const browsableCourseSelect = {
   name: true,
   description: true,
   price: true,
+  thumbnail: true,
 };
 
 const userSelect = {

@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import logger from './logger';
 import { ApiResponseHandler } from './apiResponse';
-import { BadRequestError, NotFoundError } from '../errors/api.errors';
+import { ApiError, BadRequestError } from '../errors/api.errors';
 import { Request } from 'express';
 
 export function getBusinessId(req: Request): number {
@@ -31,11 +31,13 @@ export function handleTestControllerError(params: {
 }): void {
   const { res, error, endpoint, serverErrorMessage } = params;
 
-  if (error instanceof BadRequestError) return ApiResponseHandler.badRequest(res, error.message);
-  if (error instanceof NotFoundError) return ApiResponseHandler.notFound(res, error.message);
+  if (error instanceof ApiError) {
+    error.respond(res);
+    return;
+  }
 
   const message = error instanceof Error ? error.message : 'Unknown error';
   logger.error(`[test-controller] ${endpoint}: ${message}`);
-  return ApiResponseHandler.serverError(res, serverErrorMessage);
+  ApiResponseHandler.serverError(res, serverErrorMessage);
 }
 
