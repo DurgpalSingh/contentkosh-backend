@@ -1,13 +1,12 @@
 import { Response } from 'express';
-import { UserRole } from '@prisma/client';
 import { ApiResponseHandler } from '../utils/apiResponse';
 import logger from '../utils/logger';
-import { BadRequestError, NotFoundError, ForbiddenError } from '../errors/api.errors';
 import { ValidationUtils } from '../utils/validation';
 import { plainToInstance } from 'class-transformer';
 import { CreateContentDto, UpdateContentDto, ContentQueryDto } from '../dtos/content.dto';
 import { ContentService } from '../services/content.service';
 import { AuthRequest } from '../dtos/auth.dto';
+import { handleControllerError } from '../utils/controllerErrorHandler';
 import * as fs from 'fs';
 
 export class ContentController {
@@ -32,17 +31,8 @@ export class ContentController {
       );
 
       ApiResponseHandler.success(res, content, 'Content created successfully', 201);
-    } catch (error: any) {
-      if (error instanceof BadRequestError || error instanceof NotFoundError || error instanceof ForbiddenError) {
-
-        //TODO: Need to change this in future
-
-        const statusCode = error instanceof NotFoundError ? 404 :
-          error instanceof ForbiddenError ? 403 : 400;
-        return ApiResponseHandler.error(res, error.message, statusCode);
-      }
-      logger.error(`Error creating content: ${error.message}`);
-      ApiResponseHandler.error(res, 'Failed to create content');
+    } catch (error) {
+      handleControllerError(res, error, 'Failed to create content', 'Error creating content');
     }
   };
 
@@ -53,15 +43,8 @@ export class ContentController {
 
       const content = await this.contentService.getContent(id, user);
       ApiResponseHandler.success(res, content, 'Content fetched successfully');
-    } catch (error: any) {
-      if (error instanceof NotFoundError) {
-        return ApiResponseHandler.notFound(res, error.message);
-      }
-      if (error instanceof ForbiddenError) {
-        return ApiResponseHandler.error(res, error.message, 403);
-      }
-      logger.error(`Error fetching content: ${error.message}`);
-      ApiResponseHandler.error(res, 'Failed to fetch content');
+    } catch (error) {
+      handleControllerError(res, error, 'Failed to fetch content', 'Error fetching content');
     }
   };
 
@@ -78,15 +61,8 @@ export class ContentController {
       );
 
       ApiResponseHandler.success(res, result, 'Contents fetched successfully');
-    } catch (error: any) {
-      if (error instanceof NotFoundError) {
-        return ApiResponseHandler.notFound(res, error.message);
-      }
-      if (error instanceof ForbiddenError) {
-        return ApiResponseHandler.error(res, error.message, 403);
-      }
-      logger.error(`Error fetching contents: ${error.message}`);
-      ApiResponseHandler.error(res, 'Failed to fetch contents');
+    } catch (error) {
+      handleControllerError(res, error, 'Failed to fetch contents', 'Error fetching contents');
     }
   };
 
@@ -98,18 +74,8 @@ export class ContentController {
 
       const content = await this.contentService.updateContent(id, contentData, user);
       ApiResponseHandler.success(res, content, 'Content updated successfully');
-    } catch (error: any) {
-      if (error instanceof NotFoundError) {
-        return ApiResponseHandler.notFound(res, error.message);
-      }
-      if (error instanceof ForbiddenError) {
-        return ApiResponseHandler.error(res, error.message, 403);
-      }
-      if (error instanceof BadRequestError) {
-        return ApiResponseHandler.error(res, error.message, 400);
-      }
-      logger.error(`Error updating content: ${error.message}`);
-      ApiResponseHandler.error(res, 'Failed to update content');
+    } catch (error) {
+      handleControllerError(res, error, 'Failed to update content', 'Error updating content');
     }
   };
 
@@ -120,15 +86,8 @@ export class ContentController {
 
       await this.contentService.deleteContent(id, user);
       ApiResponseHandler.success(res, null, 'Content deleted successfully');
-    } catch (error: any) {
-      if (error instanceof NotFoundError) {
-        return ApiResponseHandler.notFound(res, error.message);
-      }
-      if (error instanceof ForbiddenError) {
-        return ApiResponseHandler.error(res, error.message, 403);
-      }
-      logger.error(`Error deleting content: ${error.message}`);
-      ApiResponseHandler.error(res, 'Failed to delete content');
+    } catch (error) {
+      handleControllerError(res, error, 'Failed to delete content', 'Error deleting content');
     }
   };
 
@@ -166,15 +125,8 @@ export class ContentController {
         fileStream.destroy();
       });
 
-    } catch (error: any) {
-      if (error instanceof NotFoundError) {
-        return ApiResponseHandler.notFound(res, error.message);
-      }
-      if (error instanceof ForbiddenError) {
-        return ApiResponseHandler.error(res, error.message, 403);
-      }
-      logger.error(`Error getting content file: ${error.message}`);
-      ApiResponseHandler.error(res, 'Failed to get content file');
+    } catch (error) {
+      handleControllerError(res, error, 'Failed to get content file', 'Error getting content file');
     }
   };
 }

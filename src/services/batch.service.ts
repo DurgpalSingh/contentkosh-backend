@@ -10,6 +10,8 @@ import logger from '../utils/logger';
 import { BatchMapper } from '../mappers/batch.mapper';
 import { QueryBuilder } from '../utils/queryBuilder';
 import { activeBatchWhereForBusiness } from '../constants/hierarchyFilters';
+import { translatePrismaError } from '../utils/prismaError';
+import { PRISMA_ERROR_CODES, POSTGRES_ERROR_CODES } from '../constants/prismaErrorCodes.constants';
 
 export class BatchService {
     private normalizeStudentBatchIncludes(options: any) {
@@ -70,10 +72,9 @@ export class BatchService {
             const batch = await batchRepo.createBatch(createData);
             return BatchMapper.toDomain(batch);
         } catch (error: any) {
-            if (error.code === 'P2002') {
-                throw new AlreadyExistsError('Batch with this code name already exists');
-            }
-            throw error;
+            translatePrismaError(error, {
+                [PRISMA_ERROR_CODES.UNIQUE_CONSTRAINT_VIOLATION]: () => new AlreadyExistsError('Batch with this code name already exists'),
+            });
         }
     }
 
@@ -140,10 +141,9 @@ export class BatchService {
             const batch = await batchRepo.updateBatch(id, updateData);
             return BatchMapper.toDomain(batch);
         } catch (error: any) {
-            if (error.code === 'P2002') {
-                throw new AlreadyExistsError('Batch with this code name already exists');
-            }
-            throw error;
+            translatePrismaError(error, {
+                [PRISMA_ERROR_CODES.UNIQUE_CONSTRAINT_VIOLATION]: () => new AlreadyExistsError('Batch with this code name already exists'),
+            });
         }
     }
 
@@ -152,10 +152,9 @@ export class BatchService {
         try {
             await batchRepo.deleteBatch(id);
         } catch (error: any) {
-            if (error.code === 'P2025') {
-                throw new NotFoundError('Batch not found');
-            }
-            throw error;
+            translatePrismaError(error, {
+                [PRISMA_ERROR_CODES.RECORD_NOT_FOUND]: () => new NotFoundError('Batch not found'),
+            });
         }
     }
 
@@ -315,10 +314,10 @@ export class BatchService {
             const result = await batchRepo.enrollUserAndMaybePromote(user.businessId!, user.id, batchId, promote);
             return { batchId, roleChanged: result.roleChanged };
         } catch (error: any) {
-            if (error.code === 'P2002' || error.code === '23505') {
-                throw new AlreadyExistsError('You are already enrolled in this batch');
-            }
-            throw error;
+            translatePrismaError(error, {
+                [PRISMA_ERROR_CODES.UNIQUE_CONSTRAINT_VIOLATION]: () => new AlreadyExistsError('You are already enrolled in this batch'),
+                [POSTGRES_ERROR_CODES.UNIQUE_VIOLATION]: () => new AlreadyExistsError('You are already enrolled in this batch'),
+            });
         }
     }
 

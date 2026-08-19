@@ -1,13 +1,12 @@
 import { Request, Response } from 'express';
 import { UserRole } from '@prisma/client';
 import { ApiResponseHandler } from '../utils/apiResponse';
-import logger from '../utils/logger';
-import { BadRequestError, NotFoundError, AlreadyExistsError, ForbiddenError } from '../errors/api.errors';
 import { ValidationUtils } from '../utils/validation';
 import { plainToInstance } from 'class-transformer';
 import { CreateBatchDto, UpdateBatchDto, AddUserToBatchDto, RemoveUserFromBatchDto, UpdateBatchUserDto, SelfEnrollBatchDto } from '../dtos/batch.dto';
 import { BatchService } from '../services/batch.service';
 import { AuthRequest } from '../dtos/auth.dto';
+import { handleControllerError } from '../utils/controllerErrorHandler';
 
 export class BatchController {
   private batchService: BatchService;
@@ -23,12 +22,8 @@ export class BatchController {
       const batch = await this.batchService.createBatch(batchData);
 
       ApiResponseHandler.success(res, batch, 'Batch created successfully', 201);
-    } catch (error: any) {
-      if (error instanceof BadRequestError || error instanceof AlreadyExistsError || error instanceof NotFoundError) {
-        return ApiResponseHandler.error(res, error.message, (error instanceof NotFoundError || error.name === 'NotFoundError') ? 404 : ((error instanceof AlreadyExistsError || error.name === 'AlreadyExistsError') ? 409 : 400));
-      }
-      logger.error(`Error creating batch: ${error.message}`);
-      ApiResponseHandler.error(res, 'Failed to create batch');
+    } catch (error) {
+      handleControllerError(res, error, 'Failed to create batch', 'Error creating batch');
     }
   };
 
@@ -37,11 +32,8 @@ export class BatchController {
       const id = ValidationUtils.validateId(req.params.id, 'Batch ID');
       const batch = await this.batchService.getBatch(id);
       ApiResponseHandler.success(res, batch, 'Batch fetched successfully');
-    } catch (error: any) {
-      if (error instanceof NotFoundError || error.name === 'NotFoundError') {
-        return ApiResponseHandler.notFound(res, error.message);
-      }
-      ApiResponseHandler.error(res, 'Failed to fetch batch');
+    } catch (error) {
+      handleControllerError(res, error, 'Failed to fetch batch', 'Error fetching batch');
     }
   };
 
@@ -52,12 +44,8 @@ export class BatchController {
 
       const batches = await this.batchService.getAllActiveBatches(user, queryParams);
       ApiResponseHandler.success(res, batches, 'Active batches fetched successfully');
-    } catch (error: any) {
-      if (error instanceof ForbiddenError) {
-        return ApiResponseHandler.error(res, error.message, 403);
-      }
-      logger.error(`Error fetching active batches: ${error.message}`);
-      ApiResponseHandler.error(res, 'Failed to fetch active batches');
+    } catch (error) {
+      handleControllerError(res, error, 'Failed to fetch active batches', 'Error fetching active batches');
     }
   };
 
@@ -66,12 +54,8 @@ export class BatchController {
       const user = (req as AuthRequest).user!;
       const batches = await this.batchService.getBrowsableBatches(user);
       ApiResponseHandler.success(res, batches, 'Browsable batches fetched successfully');
-    } catch (error: any) {
-      if (error instanceof ForbiddenError) {
-        return ApiResponseHandler.error(res, error.message, 403);
-      }
-      logger.error(`Error fetching browsable batches: ${error.message}`);
-      ApiResponseHandler.error(res, 'Failed to fetch browsable batches');
+    } catch (error) {
+      handleControllerError(res, error, 'Failed to fetch browsable batches', 'Error fetching browsable batches');
     }
   };
 
@@ -82,9 +66,8 @@ export class BatchController {
       const user = (req as AuthRequest).user!;
       const batches = await this.batchService.getBatchesByCourse(courseId, user,  queryParams);
       ApiResponseHandler.success(res, batches, 'Batches fetched successfully');
-    } catch (error: any) {
-      logger.error(`Error fetching batches for course: ${error.message}`);
-      ApiResponseHandler.error(res, 'Failed to fetch batches');
+    } catch (error) {
+      handleControllerError(res, error, 'Failed to fetch batches', 'Error fetching batches for course');
     }
   };
 
@@ -95,11 +78,8 @@ export class BatchController {
 
       const batch = await this.batchService.updateBatch(id, batchData);
       ApiResponseHandler.success(res, batch, 'Batch updated successfully');
-    } catch (error: any) {
-      if (error instanceof NotFoundError) return ApiResponseHandler.notFound(res, error.message);
-      if (error instanceof AlreadyExistsError) return ApiResponseHandler.error(res, error.message, 409);
-      logger.error(`Error updating batch: ${error.message}`);
-      ApiResponseHandler.error(res, 'Failed to update batch');
+    } catch (error) {
+      handleControllerError(res, error, 'Failed to update batch', 'Error updating batch');
     }
   };
 
@@ -108,10 +88,8 @@ export class BatchController {
       const id = ValidationUtils.validateId(req.params.id, 'Batch ID');
       await this.batchService.deleteBatch(id);
       ApiResponseHandler.success(res, null, 'Batch deleted successfully');
-    } catch (error: any) {
-      if (error instanceof NotFoundError) return ApiResponseHandler.notFound(res, error.message);
-      logger.error(`Error deleting batch: ${error.message}`);
-      ApiResponseHandler.error(res, 'Failed to delete batch');
+    } catch (error) {
+      handleControllerError(res, error, 'Failed to delete batch', 'Error deleting batch');
     }
   };
 
@@ -125,12 +103,8 @@ export class BatchController {
 
       const result = await this.batchService.addUserToBatch(userId, batchId);
       ApiResponseHandler.success(res, result, 'User added to batch successfully', 201);
-    } catch (error: any) {
-      if (error instanceof BadRequestError || error.name === 'BadRequestError') return ApiResponseHandler.error(res, error.message, 400);
-      if (error instanceof NotFoundError || error.name === 'NotFoundError') return ApiResponseHandler.notFound(res, error.message);
-      if (error instanceof AlreadyExistsError || error.name === 'AlreadyExistsError') return ApiResponseHandler.error(res, error.message, 409);
-      logger.error(`Error adding user to batch: ${error.message}`);
-      ApiResponseHandler.error(res, 'Failed to add user to batch');
+    } catch (error) {
+      handleControllerError(res, error, 'Failed to add user to batch', 'Error adding user to batch');
     }
   };
 
@@ -142,13 +116,8 @@ export class BatchController {
 
       const result = await this.batchService.selfEnrollInBatch(user, batchId);
       ApiResponseHandler.success(res, result, 'Enrolled successfully', 201);
-    } catch (error: any) {
-      if (error instanceof ForbiddenError || error.name === 'ForbiddenError') return ApiResponseHandler.error(res, error.message, 403);
-      if (error instanceof BadRequestError || error.name === 'BadRequestError') return ApiResponseHandler.error(res, error.message, 400);
-      if (error instanceof NotFoundError || error.name === 'NotFoundError') return ApiResponseHandler.notFound(res, error.message);
-      if (error instanceof AlreadyExistsError || error.name === 'AlreadyExistsError') return ApiResponseHandler.error(res, error.message, 409);
-      logger.error(`Error self-enrolling in batch: ${error.message}`);
-      ApiResponseHandler.error(res, 'Failed to enroll in batch');
+    } catch (error) {
+      handleControllerError(res, error, 'Failed to enroll in batch', 'Error self-enrolling in batch');
     }
   };
 
@@ -160,10 +129,8 @@ export class BatchController {
 
       await this.batchService.removeUserFromBatch(userId, batchId);
       ApiResponseHandler.success(res, null, 'User removed from batch successfully');
-    } catch (error: any) {
-      if (error instanceof NotFoundError || error.name === 'NotFoundError') return ApiResponseHandler.notFound(res, error.message);
-      logger.error(`Error removing user from batch: ${error.message}`);
-      ApiResponseHandler.error(res, 'Failed to remove user from batch');
+    } catch (error) {
+      handleControllerError(res, error, 'Failed to remove user from batch', 'Error removing user from batch');
     }
   };
 
@@ -173,9 +140,8 @@ export class BatchController {
       const userId = ValidationUtils.validateId(req.params.userId, 'User ID');
       const batches = await this.batchService.getBatchesByUser(userId);
       ApiResponseHandler.success(res, batches, 'User batches fetched successfully');
-    } catch (error: any) {
-      logger.error(`Error fetching user batches: ${error.message}`);
-      ApiResponseHandler.error(res, 'Failed to fetch user batches');
+    } catch (error) {
+      handleControllerError(res, error, 'Failed to fetch user batches', 'Error fetching user batches');
     }
   };
 
@@ -190,9 +156,8 @@ export class BatchController {
 
       const users = await this.batchService.getUsersByBatch(batchId, role);
       ApiResponseHandler.success(res, users, 'Batch users fetched successfully');
-    } catch (error: any) {
-      logger.error(`Error fetching batch users: ${error.message}`);
-      ApiResponseHandler.error(res, 'Failed to fetch batch users');
+    } catch (error) {
+      handleControllerError(res, error, 'Failed to fetch batch users', 'Error fetching batch users');
     }
   };
 
@@ -204,10 +169,8 @@ export class BatchController {
 
       const updated = await this.batchService.updateBatchUser(batchId, userId, { isActive });
       ApiResponseHandler.success(res, updated, 'Batch user updated successfully');
-    } catch (error: any) {
-      if (error instanceof NotFoundError || error.name === 'NotFoundError') return ApiResponseHandler.notFound(res, error.message);
-      logger.error(`Error updating batch user: ${error.message}`);
-      ApiResponseHandler.error(res, 'Failed to update batch user');
+    } catch (error) {
+      handleControllerError(res, error, 'Failed to update batch user', 'Error updating batch user');
     }
   };
 }

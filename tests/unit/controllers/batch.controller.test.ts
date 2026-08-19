@@ -89,7 +89,7 @@ describe('Batch Controller', () => {
 
             await batchController.createBatch(req as Request, res as Response);
 
-            expect(ApiResponseHandler.error).toHaveBeenCalledWith(res, 'Invalid batch data', 400);
+            expect(ApiResponseHandler.badRequest).toHaveBeenCalledWith(res, 'Invalid batch data');
         });
 
         it('should handle AlreadyExistsError', async () => {
@@ -130,8 +130,8 @@ describe('Batch Controller', () => {
             await batchController.getBatch(req as Request, res as Response);
 
             expect(getBatchSpy).not.toHaveBeenCalled();
-            // Validation error is generic BadRequest, controller catches generic
-            expect(ApiResponseHandler.error).toHaveBeenCalled();
+            // Validation error is a BadRequestError
+            expect(ApiResponseHandler.badRequest).toHaveBeenCalled();
         });
     });
 
