@@ -1,5 +1,11 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.34] - Batch Thumbnail added
+**P.R Raised by** : shubh404-SE on **Date** : 2026-08-19
+
+### Added
+  - in batch added thumbnail picture from course.
+---
 ## Version [1.2.33] - Common Error Handling for code improvment
 **P.R Raised by** : shubh404-SE on **Date** : 2026-08-18
 
