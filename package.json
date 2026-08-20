@@ -1,6 +1,6 @@
 {
   "name": "contentkosh-backend",
-  "version": "1.2.34",
+  "version": "1.2.3",
   "description": "Backend API for Contentkosh application",
   "license": "ISC",
   "author": "",
@@ -20,7 +20,8 @@
     "db:studio": "prisma studio",
     "db:reset": "prisma migrate reset",
     "db:seed": "npx tsx prisma/seed.ts",
-    "db:reset-seed": "prisma migrate reset --force && npm run db:seed",
+    "db:seed:superadmin": "npx tsx prisma/seed-superadmin.ts",
+    "db:reset-seed": "prisma migrate reset --force && npm run db:seed && npm run db:seed:superadmin",
     "export-swagger": "tsx src/scripts/generate-docs.ts",
     "test": "jest",
     "test:watch": "jest --watch",

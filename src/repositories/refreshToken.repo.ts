@@ -29,6 +29,8 @@ export async function findByToken(token: string) {
                         select: {
                             slug: true,
                             schemaName: true,
+                            status: true,
+                            statusReason: true,
                         },
                     },
                 },

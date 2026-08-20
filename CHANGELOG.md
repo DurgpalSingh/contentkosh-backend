@@ -1,5 +1,13 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.3] - Super admin Flow
+**P.R Raised by** : shubh404-SE on **Date** : 2026-08-21
+
+### Added
+  - added super admin flow to manage all business, 
+  - super admin can pause/resume or delete any business,
+  - created apis to get bussiness list, get business details, pause/resume business, delete business.
+---
 ## Version [1.2.34] - Batch Thumbnail added
 **P.R Raised by** : shubh404-SE on **Date** : 2026-08-19
 

@@ -92,6 +92,14 @@ model Business {
   isDeleted     Boolean        @default(false) @map("is_deleted")
   provisionedAt DateTime?      @map("provisioned_at")
   archivedAt    DateTime?      @map("archived_at")
+
+  // Super Admin lifecycle control — independent of isDeleted/provisioningStatus above,
+  // which track tenant self-provisioning and an Admin's own self-delete flow.
+  status          BusinessStatus @default(ACTIVE) @map("status")
+  statusReason    String?        @map("status_reason")
+  statusChangedAt DateTime?      @map("status_changed_at")
+  statusChangedBy Int?           @map("status_changed_by")
+
   announcements Announcement[]
   exams         Exam[]
   users         User[]
@@ -326,6 +334,12 @@ enum BusinessProvisioningStatus {
   ACTIVE
   FAILED
   ARCHIVED
+}
+
+enum BusinessStatus {
+  ACTIVE
+  PAUSED
+  DELETED
 }
 
 enum ContentType {
