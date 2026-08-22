@@ -47,6 +47,9 @@ npm run db:push
 
 # seed initial data (optional)
 npm run db:seed
+
+# seed the platform Super Admin (optional; password passed as a CLI arg, never stored in .env)
+npx tsx prisma/seed-superadmin.ts "MyPlainPassword123"
 ```
 
 4. Run development server:
@@ -71,6 +74,7 @@ By default the server runs on port `8080` (see `PORT` env var). Swagger UI is av
 - `npm run db:push` — push schema to database (no migrations, dev only)
 - `npm run db:studio` — open Prisma Studio
 - `npm run db:reset-seed` — reset DB and run seed (dev only, destroys data)
+- `npx tsx prisma/seed-superadmin.ts "<plain-password>"` — create the platform Super Admin; email comes from `SUPERADMIN_EMAIL` (defaults to `info@contentkosh.com`), password is passed as a CLI arg so it's never stored in `.env`
 - `npm test` — run Jest tests
 
 ## Environment variables

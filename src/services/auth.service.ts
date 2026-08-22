@@ -7,8 +7,15 @@ import logger from '../utils/logger';
 import * as userRepo from '../repositories/user.repo';
 import * as refreshTokenRepo from '../repositories/refreshToken.repo';
 import * as businessRepo from '../repositories/business.repo';
-import { UserStatus, UserRole } from '@prisma/client';
-import { AlreadyExistsError, AuthError, ForbiddenError, NotFoundError } from '../errors/api.errors';
+import { UserStatus, UserRole, BusinessStatus } from '@prisma/client';
+import { AlreadyExistsError, AuthError, BusinessSuspendedError, ForbiddenError, NotFoundError } from '../errors/api.errors';
+import { BUSINESS_STATUS_ACTION } from '../constants/business.constants';
+
+function buildBusinessSuspendedError(business: { status: BusinessStatus; statusReason: string | null }): BusinessSuspendedError {
+  const action = business.status === BusinessStatus.PAUSED ? BUSINESS_STATUS_ACTION.PAUSED : BUSINESS_STATUS_ACTION.REMOVED;
+  const reason = business.statusReason ? ` Reason: ${business.statusReason}` : '';
+  return new BusinessSuspendedError(`This institute has been ${action} by the administrator.${reason}`);
+}
 import { publicPrisma } from '../config/database';
 
 function resolveLoginSlug(data: LoginRequest): string | undefined {
@@ -186,7 +193,7 @@ export class AuthService {
         ...(businessId !== undefined ? { businessId } : {}),
       },
       include: {
-        business: { select: { id: true, slug: true, schemaName: true } },
+        business: { select: { id: true, slug: true, schemaName: true, status: true, statusReason: true } },
       },
     });
 
@@ -195,6 +202,8 @@ export class AuthService {
       if (!isMatch) continue;
       if (candidate.status !== UserStatus.ACTIVE)
         throw new ForbiddenError('User account is inactive');
+      if (candidate.businessId && candidate.business && candidate.business.status !== BusinessStatus.ACTIVE)
+        throw buildBusinessSuspendedError(candidate.business);
 
       const accessToken = this.generateAccessToken({
         id: candidate.id,
@@ -230,6 +239,9 @@ export class AuthService {
     const user = storedToken.user;
     if (user.status !== UserStatus.ACTIVE) {
       throw new ForbiddenError('User account is inactive');
+    }
+    if (user.businessId && user.business && user.business.status !== BusinessStatus.ACTIVE) {
+      throw buildBusinessSuspendedError(user.business);
     }
 
     await refreshTokenRepo.revokeToken(refreshToken);

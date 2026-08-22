@@ -9,6 +9,7 @@ export enum ApiCode {
     ERR_UNAUTHORIZED = 'ERR_UNAUTHORIZED',
     ERR_FORBIDDEN = 'ERR_FORBIDDEN',
     ERR_SERVER_ERROR = 'ERR_SERVER_ERROR',
+    ERR_BUSINESS_SUSPENDED = 'ERR_BUSINESS_SUSPENDED',
 }
 
 export interface ApiResponse<T = any> {

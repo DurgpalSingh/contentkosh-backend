@@ -4,10 +4,11 @@ import { requestContext } from '../contexts/request-context';
 import { ApiResponseHandler } from '../utils/apiResponse';
 import { AuthService } from '../services/auth.service';
 import { AuthRequest, IUser } from '../dtos/auth.dto';
-import { UserRole } from '@prisma/client';
-import { ApiError } from '../errors/api.errors';
+import { UserRole, BusinessStatus } from '@prisma/client';
+import { ApiError, BusinessSuspendedError } from '../errors/api.errors';
 import { getAccessTokenFromRequest } from '../utils/authCookies';
 import * as businessRepo from '../repositories/business.repo';
+import { BUSINESS_STATUS_ACTION } from '../constants/business.constants';
 
 export const authenticate = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
@@ -32,6 +33,15 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
 
         if (tenantBusinessId != null) {
             const business = await businessRepo.findBusinessById(tenantBusinessId);
+            if (business && business.status !== BusinessStatus.ACTIVE) {
+                const action = business.status === BusinessStatus.PAUSED ? BUSINESS_STATUS_ACTION.PAUSED : BUSINESS_STATUS_ACTION.REMOVED;
+                const err = new BusinessSuspendedError(
+                    `This institute has been ${action} by the administrator.` +
+                        (business.statusReason ? ` Reason: ${business.statusReason}` : '')
+                );
+                err.respond(res);
+                return;
+            }
             if (business?.schemaName) {
                     tenant = {
                         businessId: business.id,
