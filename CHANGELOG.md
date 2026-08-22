@@ -1,6 +1,6 @@
 # Changelog
 All notable changes to this project will be documented in this file.
-## Version [1.2.3] - Super admin Flow
+## Version [1.2.35] - Super admin Flow
 **P.R Raised by** : shubh404-SE on **Date** : 2026-08-21
 
 ### Added

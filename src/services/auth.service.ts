@@ -9,9 +9,10 @@ import * as refreshTokenRepo from '../repositories/refreshToken.repo';
 import * as businessRepo from '../repositories/business.repo';
 import { UserStatus, UserRole, BusinessStatus } from '@prisma/client';
 import { AlreadyExistsError, AuthError, BusinessSuspendedError, ForbiddenError, NotFoundError } from '../errors/api.errors';
+import { BUSINESS_STATUS_ACTION } from '../constants/business.constants';
 
 function buildBusinessSuspendedError(business: { status: BusinessStatus; statusReason: string | null }): BusinessSuspendedError {
-  const action = business.status === BusinessStatus.PAUSED ? 'paused' : 'removed';
+  const action = business.status === BusinessStatus.PAUSED ? BUSINESS_STATUS_ACTION.PAUSED : BUSINESS_STATUS_ACTION.REMOVED;
   const reason = business.statusReason ? ` Reason: ${business.statusReason}` : '';
   return new BusinessSuspendedError(`This institute has been ${action} by the administrator.${reason}`);
 }

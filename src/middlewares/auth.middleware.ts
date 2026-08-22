@@ -8,6 +8,7 @@ import { UserRole, BusinessStatus } from '@prisma/client';
 import { ApiError, BusinessSuspendedError } from '../errors/api.errors';
 import { getAccessTokenFromRequest } from '../utils/authCookies';
 import * as businessRepo from '../repositories/business.repo';
+import { BUSINESS_STATUS_ACTION } from '../constants/business.constants';
 
 export const authenticate = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
@@ -33,8 +34,9 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
         if (tenantBusinessId != null) {
             const business = await businessRepo.findBusinessById(tenantBusinessId);
             if (business && business.status !== BusinessStatus.ACTIVE) {
+                const action = business.status === BusinessStatus.PAUSED ? BUSINESS_STATUS_ACTION.PAUSED : BUSINESS_STATUS_ACTION.REMOVED;
                 const err = new BusinessSuspendedError(
-                    `This institute has been ${business.status === BusinessStatus.PAUSED ? 'paused' : 'removed'} by the administrator.` +
+                    `This institute has been ${action} by the administrator.` +
                         (business.statusReason ? ` Reason: ${business.statusReason}` : '')
                 );
                 err.respond(res);
