@@ -1,6 +1,6 @@
 // src/errors/api.errors.ts
 import { Response } from 'express';
-import { ApiResponseHandler } from '../utils/apiResponse';
+import { ApiResponseHandler, ApiCode } from '../utils/apiResponse';
 import { HTTP_STATUS } from '../constants/httpStatus.constants';
 
 export class ApiError extends Error {
@@ -78,5 +78,16 @@ export class ForbiddenError extends ApiError {
 
   override respond(res: Response): void {
     ApiResponseHandler.forbidden(res, this.message);
+  }
+}
+
+export class BusinessSuspendedError extends ApiError {
+  constructor(message: string = 'This institute is not currently active') {
+    super(message, HTTP_STATUS.FORBIDDEN);
+    this.name = 'BusinessSuspendedError';
+  }
+
+  override respond(res: Response): void {
+    ApiResponseHandler.error(res, this.message, this.statusCode, ApiCode.ERR_BUSINESS_SUSPENDED);
   }
 }

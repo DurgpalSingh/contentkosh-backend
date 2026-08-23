@@ -18,6 +18,7 @@ import { examTestRouter } from './examTest.routes';
 import { bulkUploadRouter } from './bulkUpload.routes';
 import { authenticate } from '../middlewares/auth.middleware';
 import editorImageRoutes from './editorImage.routes';
+import businessAdminRoutes from './businessAdmin.routes';
 
 const router = Router();
 
@@ -43,5 +44,6 @@ router.use('/api/students', authenticate, studentRoutes);
 router.use('/api', dashboardRoutes);
 router.use('/api', settingsProfileRoutes);
 router.use('/api', editorImageRoutes);
+router.use('/api/superadmin', authenticate, businessAdminRoutes);
 
 export default router; 

@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, BusinessStatus } from '@prisma/client';
 import { prisma } from '../config/database';
 
 export type BusinessCreateInput = Prisma.BusinessCreateInput;
@@ -49,5 +49,56 @@ export async function deleteBusiness(id: number) {
     data: {
       isDeleted: true
     }
+  });
+}
+
+export interface ListBusinessesForSuperAdminParams {
+  skip: number;
+  take: number;
+  status?: BusinessStatus | undefined;
+  search?: string | undefined;
+}
+
+export async function listBusinessesForSuperAdmin({ skip, take, status, search }: ListBusinessesForSuperAdminParams) {
+  const where: Prisma.BusinessWhereInput = {
+    ...(status ? { status } : {}),
+    ...(search
+      ? {
+          OR: [
+            { instituteName: { contains: search, mode: 'insensitive' } },
+            { slug: { contains: search, mode: 'insensitive' } },
+          ],
+        }
+      : {}),
+  };
+
+  const [items, total] = await Promise.all([
+    prisma.business.findMany({
+      where,
+      skip,
+      take,
+      orderBy: { createdAt: 'desc' },
+    }),
+    prisma.business.count({ where }),
+  ]);
+
+  return { items, total };
+}
+
+export interface UpdateBusinessStatusData {
+  status: BusinessStatus;
+  statusReason: string | null;
+  statusChangedBy: number;
+}
+
+export async function updateBusinessStatus(id: number, data: UpdateBusinessStatusData) {
+  return prisma.business.update({
+    where: { id },
+    data: {
+      status: data.status,
+      statusReason: data.statusReason,
+      statusChangedBy: data.statusChangedBy,
+      statusChangedAt: new Date(),
+    },
   });
 }
