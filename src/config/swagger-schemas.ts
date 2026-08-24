@@ -125,7 +125,7 @@ export const swaggerSchemas = {
       },
       role: {
         type: 'string',
-        enum: ['ADMIN', 'TEACHER', 'STUDENT', 'USER'],
+        enum: ['SUPERADMIN', 'ADMIN', 'TEACHER', 'STUDENT', 'USER'],
         description: 'User role'
       },
       status: {

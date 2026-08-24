@@ -82,6 +82,7 @@ describe('Auth Middleware', () => {
                 id: 1,
                 slug: 'test-slug',
                 schemaName: 'tenant_test_slug',
+                status: 'ACTIVE',
             });
 
             await authenticate(req, res, next);
@@ -92,6 +93,31 @@ describe('Auth Middleware', () => {
                 tenantSchema: 'tenant_test_slug',
             });
             expect(next).toHaveBeenCalled();
+        });
+
+        it('should block with a suspended error and not call next if the business is paused', async () => {
+            req.cookies = { ck_access_token: 'validtoken' };
+            const mockUser = { id: 1, email: 'test@test.com', role: 'USER', businessId: 1 };
+            (AuthService.verifyAccessToken as jest.Mock).mockReturnValue(mockUser);
+            (businessRepo.findBusinessById as jest.Mock).mockResolvedValue({
+                id: 1,
+                slug: 'test-slug',
+                schemaName: 'tenant_test_slug',
+                status: 'PAUSED',
+                statusReason: 'Non-payment',
+            });
+
+            await authenticate(req, res, next);
+
+            expect(res.status).toHaveBeenCalledWith(403);
+            expect(res.json).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    success: false,
+                    apiCode: 'ERR_BUSINESS_SUSPENDED',
+                    message: expect.stringContaining('Non-payment'),
+                })
+            );
+            expect(next).not.toHaveBeenCalled();
         });
     });
 
