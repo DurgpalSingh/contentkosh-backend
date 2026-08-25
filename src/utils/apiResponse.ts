@@ -17,6 +17,7 @@ export interface ApiResponse<T = any> {
     message?: string;
     data?: T;
     apiCode: ApiCode;
+    reason?: string;
 }
 export class ApiResponseHandler {
     static success<T>(res: Response, data?: T, message?: string, statusCode: number = 200): void {

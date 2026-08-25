@@ -1,5 +1,10 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.36] - BusinessSuspendedError responce updated
+**P.R Raised by** : shubh404-SE on **Date** : 2026-08-25
+
+### Changed
+  - updated BusinessSuspendedError responce to include action and reason, now frontend can show proper message to user.
 ## Version [1.2.35] - Super admin Flow
 **P.R Raised by** : shubh404-SE on **Date** : 2026-08-21
 
