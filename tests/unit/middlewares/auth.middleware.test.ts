@@ -114,7 +114,8 @@ describe('Auth Middleware', () => {
                 expect.objectContaining({
                     success: false,
                     apiCode: 'ERR_BUSINESS_SUSPENDED',
-                    message: expect.stringContaining('Non-payment'),
+                    action: 'paused',
+                    reason: 'Non-payment',
                 })
             );
             expect(next).not.toHaveBeenCalled();
