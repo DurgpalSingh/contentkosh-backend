@@ -82,12 +82,22 @@ export class ForbiddenError extends ApiError {
 }
 
 export class BusinessSuspendedError extends ApiError {
-  constructor(message: string = 'This institute is not currently active') {
-    super(message, HTTP_STATUS.FORBIDDEN);
+  action: string;
+  reason: string | null | undefined;
+
+  constructor(action: string, reason?: string | null) {
+    super(`Business access restricted (${action})`, HTTP_STATUS.FORBIDDEN);
     this.name = 'BusinessSuspendedError';
+    this.action = action;
+    this.reason = reason;
   }
 
   override respond(res: Response): void {
-    ApiResponseHandler.error(res, this.message, this.statusCode, ApiCode.ERR_BUSINESS_SUSPENDED);
+    res.status(this.statusCode).json({
+      success: false,
+      apiCode: ApiCode.ERR_BUSINESS_SUSPENDED,
+      action: this.action,
+      ...(this.reason ? { reason: this.reason } : {}),
+    });
   }
 }

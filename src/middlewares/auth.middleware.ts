@@ -35,10 +35,7 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
             const business = await businessRepo.findBusinessById(tenantBusinessId);
             if (business && business.status !== BusinessStatus.ACTIVE) {
                 const action = business.status === BusinessStatus.PAUSED ? BUSINESS_STATUS_ACTION.PAUSED : BUSINESS_STATUS_ACTION.REMOVED;
-                const err = new BusinessSuspendedError(
-                    `This institute has been ${action} by the administrator.` +
-                        (business.statusReason ? ` Reason: ${business.statusReason}` : '')
-                );
+                const err = new BusinessSuspendedError(action, business.statusReason);
                 err.respond(res);
                 return;
             }

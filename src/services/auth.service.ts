@@ -13,8 +13,7 @@ import { BUSINESS_STATUS_ACTION } from '../constants/business.constants';
 
 function buildBusinessSuspendedError(business: { status: BusinessStatus; statusReason: string | null }): BusinessSuspendedError {
   const action = business.status === BusinessStatus.PAUSED ? BUSINESS_STATUS_ACTION.PAUSED : BUSINESS_STATUS_ACTION.REMOVED;
-  const reason = business.statusReason ? ` Reason: ${business.statusReason}` : '';
-  return new BusinessSuspendedError(`This institute has been ${action} by the administrator.${reason}`);
+  return new BusinessSuspendedError(action, business.statusReason);
 }
 import { publicPrisma } from '../config/database';
 
