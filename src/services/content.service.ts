@@ -11,8 +11,10 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import { FILE_TYPE_CONFIG } from '../config/file-type';
 import { MIME_TYPES } from '../constants/file.constants';
+import { AiKnowledgeBaseService } from './aiKnowledgeBase.service';
 
 export class ContentService {
+  constructor(private readonly aiKnowledgeBaseService: AiKnowledgeBaseService = new AiKnowledgeBaseService()) {}
 
   async createContent(
     batchId: number,
@@ -28,8 +30,20 @@ export class ContentService {
 
     this.validateFileUpload(data.type, data.fileSize);
     this.validateFilePath(data.filePath, data.type);
+    const batchContext = await this.getBatchContext(batchId);
+
+    if (user.role !== UserRole.SUPERADMIN && batchContext.businessId !== user.businessId) {
+      throw new ForbiddenError('You do not have access to this batch');
+    }
 
     try {
+      await this.aiKnowledgeBaseService.uploadPdfToKnowledgeBase({
+        filePath: data.filePath,
+        businessId: batchContext.businessId,
+        courseId: batchContext.courseId,
+        contentType: data.type,
+      });
+
       const createData: Prisma.ContentCreateInput = {
         title: data.title,
         type: data.type,
@@ -60,7 +74,7 @@ export class ContentService {
       return ContentMapper.toResponse(content);
     } catch (error: any) {
       if (data.filePath) { // If DB creation fails, delete the uploaded file
-        fs.unlink(data.filePath);
+        await fs.unlink(data.filePath).catch(() => undefined);
       }
       throw error;
     }
@@ -395,5 +409,33 @@ export class ContentService {
       isAdmin,
       batchUser
     };
+  }
+
+  private async getBatchContext(batchId: number): Promise<{ businessId: number; courseId: number }> {
+    const batch = (await batchRepo.findBatchById(batchId, {
+      requireActiveHierarchy: true,
+      select: {
+        id: true,
+        courseId: true,
+        course: {
+          select: {
+            exam: {
+              select: { businessId: true },
+            },
+          },
+        },
+      },
+    })) as { courseId: number; course?: { exam?: { businessId: number } } } | null;
+
+    if (!batch) {
+      throw new NotFoundError('Batch not found');
+    }
+
+    const businessId = batch.course?.exam?.businessId;
+    if (!businessId) {
+      throw new ForbiddenError('Batch is not correctly associated with an exam');
+    }
+
+    return { businessId, courseId: batch.courseId };
   }
 }
