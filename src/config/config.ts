@@ -15,6 +15,11 @@ export const config = {
     nodeEnv: process.env.NODE_ENV || 'development',
     frontendUrl: process.env.FRONTEND_URL || DEVELOPMENT_URL,
   },
+  aiAgent: {
+    baseUrl: process.env.AI_AGENT_BASE_URL || 'http://localhost:8000',
+    apiKey: process.env.AI_AGENT_API_KEY || undefined,
+    timeoutMs: process.env.AI_AGENT_TIMEOUT_MS ? parseInt(process.env.AI_AGENT_TIMEOUT_MS) : 30000,
+  },
   cookies: {
     accessCookieName: process.env.ACCESS_COOKIE_NAME || 'ck_access_token',
     refreshCookieName: process.env.REFRESH_COOKIE_NAME || 'ck_refresh_token',

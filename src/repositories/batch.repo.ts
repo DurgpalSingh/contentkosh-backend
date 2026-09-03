@@ -510,6 +510,25 @@ export async function isActiveUserInBatch(userId: number, batchId: number): Prom
   return Boolean(membership);
 }
 
+export async function isActiveUserInCourse(
+  userId: number,
+  businessId: number,
+  courseId: number,
+): Promise<boolean> {
+  const membership = await prisma.batchUser.findFirst({
+    where: {
+      userId,
+      isActive: true,
+      batch: {
+        courseId,
+        ...activeBatchWhereForBusiness(businessId),
+      },
+    },
+    select: { id: true },
+  });
+  return Boolean(membership);
+}
+
 export async function findBrowsableBatchesForBusiness(businessId: number) {
   return prisma.batch.findMany({
     where: activeBatchWhereForBusiness(businessId),
