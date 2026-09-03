@@ -16,6 +16,11 @@ export const config = {
     frontendUrl: process.env.FRONTEND_URL || DEVELOPMENT_URL,
     backendUrl: (process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 8080}`).replace(/\/+$/, ''),
   },
+  aiAgent: {
+    baseUrl: process.env.AI_AGENT_BASE_URL || 'http://localhost:8000',
+    apiKey: process.env.AI_AGENT_API_KEY || undefined,
+    timeoutMs: process.env.AI_AGENT_TIMEOUT_MS ? parseInt(process.env.AI_AGENT_TIMEOUT_MS) : 30000,
+  },
   cookies: {
     accessCookieName: process.env.ACCESS_COOKIE_NAME || 'ck_access_token',
     refreshCookieName: process.env.REFRESH_COOKIE_NAME || 'ck_refresh_token',
