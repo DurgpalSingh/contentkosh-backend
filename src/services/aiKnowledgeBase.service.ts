@@ -29,7 +29,7 @@ export class AiKnowledgeBaseService {
     const buffer = await fs.readFile(params.filePath);
     const formData = new FormData();
     formData.append('business_id', String(params.businessId));
-    formData.append('course_id', String(params.courseId));
+    formData.append('course_ids', String(params.courseId));
     formData.append(
       'files',
       new Blob([new Uint8Array(buffer)], { type: 'application/pdf' }),
@@ -41,32 +41,29 @@ export class AiKnowledgeBaseService {
 
   async queryKnowledgeBase(params: {
     businessId: number;
-    courseId: number;
     query: string;
     user: IUser;
   }): Promise<KnowledgeBaseQueryResponse> {
-    await this.validateStudentCourseAccess(params.businessId, params.courseId, params.user);
+    const courseIds = await this.resolveEnrolledCourseIds(params.businessId, params.user);
 
     return this.agentClient.postJson<KnowledgeBaseQueryResponse>('/llm/kb/query', {
       business_id: String(params.businessId),
-      course_id: String(params.courseId),
+      course_ids: courseIds.map(String),
       query: params.query,
     });
   }
 
-  private async validateStudentCourseAccess(
-    businessId: number,
-    courseId: number,
-    user: IUser,
-  ): Promise<void> {
+  private async resolveEnrolledCourseIds(businessId: number, user: IUser): Promise<number[]> {
     if (user.role !== UserRole.STUDENT || !user.businessId || user.businessId !== businessId) {
       throw new ForbiddenError('You do not have access to this knowledge base');
     }
 
-    const hasCourseAccess = await batchRepo.isActiveUserInCourse(user.id, businessId, courseId);
-    if (!hasCourseAccess) {
-      throw new ForbiddenError('You must be enrolled in this course to use Contentkosh AI');
+    const { courseIds } = await batchRepo.findUserBatchAndCourseMembership(businessId, user.id);
+    if (courseIds.length === 0) {
+      throw new ForbiddenError('You must be enrolled in a course to use Contentkosh AI');
     }
+
+    return courseIds;
   }
 }
 

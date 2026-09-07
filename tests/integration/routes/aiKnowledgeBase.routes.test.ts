@@ -37,7 +37,7 @@ describe('AI Knowledge Base Routes', () => {
   it('returns an answer for an authorized student', async () => {
     const response = await request(app)
       .post('/api/business/1/ai/kb/query')
-      .send({ courseId: 2, query: 'What is photosynthesis?' });
+      .send({ query: 'What is photosynthesis?' });
 
     expect(response.status).toBe(200);
     expect(response.body.data).toEqual({ answer: 'Answer' });
@@ -48,7 +48,7 @@ describe('AI Knowledge Base Routes', () => {
 
     const response = await request(app)
       .post('/api/business/1/ai/kb/query')
-      .send({ courseId: 2, query: 'What is photosynthesis?' });
+      .send({ query: 'What is photosynthesis?' });
 
     expect(response.status).toBe(403);
   });
@@ -56,7 +56,7 @@ describe('AI Knowledge Base Routes', () => {
   it('returns 403 for cross-business access', async () => {
     const response = await request(app)
       .post('/api/business/2/ai/kb/query')
-      .send({ courseId: 2, query: 'What is photosynthesis?' });
+      .send({ query: 'What is photosynthesis?' });
 
     expect(response.status).toBe(403);
   });
@@ -64,7 +64,7 @@ describe('AI Knowledge Base Routes', () => {
   it('returns 400 for invalid payload', async () => {
     const response = await request(app)
       .post('/api/business/1/ai/kb/query')
-      .send({ courseId: 0, query: '' });
+      .send({ query: '' });
 
     expect(response.status).toBe(400);
   });

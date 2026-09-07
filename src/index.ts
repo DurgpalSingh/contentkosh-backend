@@ -18,6 +18,8 @@ import { apiAuditLogger } from './middlewares/audit.middleware';
 import cron from 'node-cron';
 import { auditService } from './services/audit.service';
 import { auditConfig } from './config/audit.config';
+import { aiChatCleanupService } from './services/aiChatCleanup.service';
+import { aiChatConfig } from './config/aiChat.config';
 import { registerAnnouncementSocket } from './sockets/announcement.socket';
 
 // Load environment variables
@@ -59,6 +61,16 @@ async function start() {
         logger.info(`Audit cleanup complete. Deleted ${deletedCount} old logs.`);
       } catch (error) {
         logger.error('Audit cleanup failed:', error);
+      }
+    });
+
+    // Schedule AI Chat Cleanup (configurable via aiChatConfig.cleanupSchedule)
+    cron.schedule(aiChatConfig.cleanupSchedule, async () => {
+      logger.info('Running scheduled AI chat cleanup...');
+      try {
+        await aiChatCleanupService.cleanupOldChats();
+      } catch (error) {
+        logger.error('AI chat cleanup failed:', error);
       }
     });
 

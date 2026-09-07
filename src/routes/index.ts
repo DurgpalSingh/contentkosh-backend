@@ -20,6 +20,7 @@ import { authenticate } from '../middlewares/auth.middleware';
 import editorImageRoutes from './editorImage.routes';
 import businessAdminRoutes from './businessAdmin.routes';
 import { aiKnowledgeBaseRouter } from './aiKnowledgeBase.routes';
+import { aiChatRouter } from './aiChat.routes';
 
 const router = Router();
 
@@ -36,6 +37,7 @@ router.use('/api/business', authenticate, practiceTestRouter);
 router.use('/api/business', authenticate, examTestRouter);
 router.use('/api/business', authenticate, bulkUploadRouter);
 router.use('/api/business', authenticate, aiKnowledgeBaseRouter);
+router.use('/api/business', authenticate, aiChatRouter);
 router.use('/api/exams', authenticate, examRoutes);
 router.use('/api/announcements', authenticate, announcementRoutes);
 router.use('/api/batches', authenticate, batchRoutes);

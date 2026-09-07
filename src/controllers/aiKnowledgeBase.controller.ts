@@ -18,7 +18,6 @@ export class AiKnowledgeBaseController {
 
       const result = await this.service.queryKnowledgeBase({
         businessId,
-        courseId: dto.courseId,
         query: dto.query,
         user,
       });
