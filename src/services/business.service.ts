@@ -1,9 +1,12 @@
-import { UserRole, UserStatus, BusinessProvisioningStatus } from '@prisma/client';
+import { Business, UserRole, UserStatus, BusinessProvisioningStatus } from '@prisma/client';
 import * as businessRepo from '../repositories/business.repo';
 import * as userRepo from '../repositories/user.repo';
 import { AlreadyExistsError, BadRequestError, NotFoundError } from '../errors/api.errors';
 import { prisma, publicPrisma } from '../config/database';
+import { mailConfig } from '../config/mail.config';
 import logger from '../utils/logger';
+import { escapeHtml } from '../utils/parserHtml.utils';
+import { sendMail } from './mail.service';
 import {
   ensureTenantSchema,
   migrateTenantSchema,
@@ -12,6 +15,33 @@ import {
   dropTenantSchema,
   seedTenantDefaults,
 } from './tenantProvisioning.service';
+
+function buildBusinessSignupEmailHtml(business: Business): string {
+  const row = (label: string, value: string | null) =>
+    `<li><strong>${escapeHtml(label)}:</strong> ${escapeHtml(value ?? '—')}</li>`;
+
+  return [
+    '<h2>New business signup on Contentkosh</h2>',
+    '<ul>',
+    row('Institute name', business.instituteName),
+    row('Slug', business.slug),
+    row('Contact email', business.email),
+    row('Contact number', business.contactNumber),
+    '</ul>',
+  ].join('');
+}
+
+async function notifyBusinessSignup(business: Business): Promise<void> {
+  try {
+    await sendMail({
+      to: mailConfig.businessSignupNotificationEmail,
+      subject: `New business signup: ${business.instituteName}`,
+      html: buildBusinessSignupEmailHtml(business),
+    });
+  } catch (error) {
+    logger.error('Failed to send business signup notification email', { businessId: business.id, error });
+  }
+}
 
 export class BusinessService {
   static async createBusiness(data: businessRepo.BusinessCreateInput, userId: number) {
@@ -71,10 +101,15 @@ export class BusinessService {
         status: UserStatus.ACTIVE,
       });
 
-      return await businessRepo.updateBusiness(business.id, {
+      const activeBusiness = await businessRepo.updateBusiness(business.id, {
         provisioningStatus: BusinessProvisioningStatus.ACTIVE,
         provisionedAt: new Date(),
       });
+
+      // Fire-and-forget: a notification failure must not fail signup itself.
+      void notifyBusinessSignup(activeBusiness);
+
+      return activeBusiness;
     } catch (error) {
       logger.error('Business provisioning failed', { businessId: business.id, schemaName, error });
 
