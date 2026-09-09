@@ -1,7 +1,6 @@
 import { OAuth2Client } from 'google-auth-library';
 import { mailConfig } from '../config/mail.config';
-
-const GMAIL_SEND_ENDPOINT = 'https://gmail.googleapis.com/gmail/v1/users/me/messages/send';
+import { BASE64URL_REPLACEMENTS, GMAIL_API, MAIL_ERROR_MESSAGES, MIME_MESSAGE } from '../constants/mail.constants';
 
 export interface SendMailParams {
   to: string | string[];
@@ -14,7 +13,7 @@ let cachedOAuthClient: OAuth2Client | null = null;
 function getOAuthClient(): OAuth2Client {
   const { clientId, clientSecret, refreshToken } = mailConfig.gmail;
   if (!clientId || !clientSecret || !refreshToken) {
-    throw new Error('Gmail API is not configured: set GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET and GMAIL_REFRESH_TOKEN');
+    throw new Error(MAIL_ERROR_MESSAGES.MISSING_OAUTH_CONFIG);
   }
 
   if (!cachedOAuthClient) {
@@ -26,11 +25,8 @@ function getOAuthClient(): OAuth2Client {
 }
 
 function toBase64Url(input: string): string {
-  return Buffer.from(input, 'utf-8')
-    .toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
+  const base64 = Buffer.from(input, 'utf-8').toString('base64');
+  return BASE64URL_REPLACEMENTS.reduce((result, { pattern, replacement }) => result.replace(pattern, replacement), base64);
 }
 
 function buildRawMessage(params: { from: string; to: string; subject: string; html: string }): string {
@@ -38,11 +34,11 @@ function buildRawMessage(params: { from: string; to: string; subject: string; ht
     `From: ${params.from}`,
     `To: ${params.to}`,
     `Subject: ${params.subject}`,
-    'MIME-Version: 1.0',
-    'Content-Type: text/html; charset=utf-8',
+    MIME_MESSAGE.VERSION_HEADER,
+    MIME_MESSAGE.CONTENT_TYPE_HTML_HEADER,
     '',
     params.html,
-  ].join('\r\n');
+  ].join(MIME_MESSAGE.LINE_BREAK);
 
   return toBase64Url(message);
 }
@@ -55,13 +51,13 @@ function buildRawMessage(params: { from: string; to: string; subject: string; ht
 export async function sendMail({ to, subject, html }: SendMailParams): Promise<void> {
   const { senderEmail } = mailConfig.gmail;
   if (!senderEmail) {
-    throw new Error('Gmail API is not configured: set GMAIL_SENDER_EMAIL');
+    throw new Error(MAIL_ERROR_MESSAGES.MISSING_SENDER);
   }
 
   const client = getOAuthClient();
   const { token: accessToken } = await client.getAccessToken();
   if (!accessToken) {
-    throw new Error('Failed to obtain a Gmail API access token');
+    throw new Error(MAIL_ERROR_MESSAGES.MISSING_ACCESS_TOKEN);
   }
 
   const raw = buildRawMessage({
@@ -71,7 +67,7 @@ export async function sendMail({ to, subject, html }: SendMailParams): Promise<v
     html,
   });
 
-  const response = await fetch(GMAIL_SEND_ENDPOINT, {
+  const response = await fetch(GMAIL_API.SEND_ENDPOINT, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -82,6 +78,6 @@ export async function sendMail({ to, subject, html }: SendMailParams): Promise<v
 
   if (!response.ok) {
     const errorBody = await response.text().catch(() => '');
-    throw new Error(`Gmail API request failed (${response.status}): ${errorBody}`);
+    throw new Error(`${MAIL_ERROR_MESSAGES.SEND_FAILED_PREFIX} (${response.status}): ${errorBody}`);
   }
 }

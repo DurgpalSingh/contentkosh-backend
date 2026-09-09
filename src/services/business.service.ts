@@ -5,8 +5,8 @@ import { AlreadyExistsError, BadRequestError, NotFoundError } from '../errors/ap
 import { prisma, publicPrisma } from '../config/database';
 import { mailConfig } from '../config/mail.config';
 import logger from '../utils/logger';
-import { escapeHtml } from '../utils/parserHtml.utils';
 import { sendMail } from './mail.service';
+import { buildBusinessSignupEmailHtml, buildBusinessSignupEmailSubject } from '../templates/businessSignupEmail.template';
 import {
   ensureTenantSchema,
   migrateTenantSchema,
@@ -16,27 +16,18 @@ import {
   seedTenantDefaults,
 } from './tenantProvisioning.service';
 
-function buildBusinessSignupEmailHtml(business: Business): string {
-  const row = (label: string, value: string | null) =>
-    `<li><strong>${escapeHtml(label)}:</strong> ${escapeHtml(value ?? '—')}</li>`;
-
-  return [
-    '<h2>New business signup on Contentkosh</h2>',
-    '<ul>',
-    row('Institute name', business.instituteName),
-    row('Slug', business.slug),
-    row('Contact email', business.email),
-    row('Contact number', business.contactNumber),
-    '</ul>',
-  ].join('');
-}
-
-async function notifyBusinessSignup(business: Business): Promise<void> {
+async function notifyBusinessSignup(business: Business, admin: { name: string; email: string }): Promise<void> {
   try {
     await sendMail({
       to: mailConfig.businessSignupNotificationEmail,
-      subject: `New business signup: ${business.instituteName}`,
-      html: buildBusinessSignupEmailHtml(business),
+      subject: buildBusinessSignupEmailSubject(business.instituteName),
+      html: buildBusinessSignupEmailHtml({
+        instituteName: business.instituteName,
+        slug: business.slug,
+        businessEmail: business.email,
+        adminName: admin.name,
+        adminEmail: admin.email,
+      }),
     });
   } catch (error) {
     logger.error('Failed to send business signup notification email', { businessId: business.id, error });
@@ -95,7 +86,7 @@ export class BusinessService {
       }
 
       // 4) Link the creating user's public-schema row to this business
-      await userRepo.updateUser(userId, {
+      const adminUser = await userRepo.updateUser(userId, {
         businessId: business.id,
         role: UserRole.ADMIN,
         status: UserStatus.ACTIVE,
@@ -107,7 +98,7 @@ export class BusinessService {
       });
 
       // Fire-and-forget: a notification failure must not fail signup itself.
-      void notifyBusinessSignup(activeBusiness);
+      void notifyBusinessSignup(activeBusiness, { name: adminUser.name, email: adminUser.email });
 
       return activeBusiness;
     } catch (error) {

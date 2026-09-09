@@ -1,5 +1,11 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.37] - Mail notification on new bussiness signup
+**P.R Raised by** : shubh404-SE on **Date** : 2026-09-09
+
+### Added
+  - add gmail service to send email on every bussiness signup
+---
 ## Version [1.2.36] - BusinessSuspendedError responce updated
 **P.R Raised by** : shubh404-SE on **Date** : 2026-08-25
 
