@@ -1,6 +1,6 @@
 {
   "name": "contentkosh-backend",
-  "version": "1.2.36",
+  "version": "1.2.37",
   "description": "Backend API for Contentkosh application",
   "license": "ISC",
   "author": "",
@@ -42,11 +42,11 @@
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
+    "google-auth-library": "^11.0.2",
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.1",
     "node-cron": "^4.2.1",
     "officeparser": "^6.1.0",
-    "xlsx": "^0.18.5",
     "pg": "^8.21.0",
     "reflect-metadata": "^0.2.2",
     "sanitize-html": "2.13.0",
@@ -54,7 +54,8 @@
     "socket.io": "^4.8.3",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
-    "winston": "^3.17.0"
+    "winston": "^3.17.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
