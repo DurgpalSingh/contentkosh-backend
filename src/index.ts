@@ -18,6 +18,7 @@ import { apiAuditLogger } from './middlewares/audit.middleware';
 import cron from 'node-cron';
 import { auditService } from './services/audit.service';
 import { auditConfig } from './config/audit.config';
+import { externalApiAuditService } from './services/externalApiAudit.service';
 import { aiChatCleanupService } from './services/aiChatCleanup.service';
 import { aiChatConfig } from './config/aiChat.config';
 import { registerAnnouncementSocket } from './sockets/announcement.socket';
@@ -61,6 +62,17 @@ async function start() {
         logger.info(`Audit cleanup complete. Deleted ${deletedCount} old logs.`);
       } catch (error) {
         logger.error('Audit cleanup failed:', error);
+      }
+    });
+
+    // Schedule External API Audit Cleanup (reuses the same retention/schedule as ApiAuditLog)
+    cron.schedule(auditConfig.cleanupSchedule, async () => {
+      logger.info('Running scheduled external API audit cleanup...');
+      try {
+        const deletedCount = await externalApiAuditService.cleanupOldExternalApiAudits(auditConfig.retentionDays);
+        logger.info(`External API audit cleanup complete. Deleted ${deletedCount} old logs.`);
+      } catch (error) {
+        logger.error('External API audit cleanup failed:', error);
       }
     });
 

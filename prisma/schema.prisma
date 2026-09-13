@@ -481,6 +481,32 @@ model ApiAuditLog {
   @@map("api_audit_logs")
 }
 
+// Audits outbound calls this backend makes to external services (e.g. the AI agent
+// server). Separate from ApiAuditLog, which audits inbound requests to this API.
+model ExternalApiAuditLog {
+  id             Int      @id @default(autoincrement())
+  serviceName    String   @map("service_name")
+  businessId     Int?     @map("business_id")
+  userId         Int?     @map("user_id")
+  role           String?
+  httpMethod     String   @map("http_method")
+  requestUrl     String   @map("request_url")
+  requestPath    String   @map("request_path")
+  requestBody    Json?    @map("request_body")
+  responseStatus Int?     @map("response_status")
+  responseTimeMs Int      @map("response_time_ms")
+  responseBody   Json?    @map("response_body")
+  isSuccess      Boolean  @map("is_success")
+  errorCode      String?  @map("error_code")
+  errorMessage   String?  @map("error_message")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([serviceName])
+  @@index([businessId])
+  @@index([createdAt])
+  @@map("external_api_audit_logs")
+}
+
 // -----------------------------
 // LMS Test Module (Practice/Exam)
 // NOTE: enum-like fields are stored as Int (see src/constants/test-enums.ts)

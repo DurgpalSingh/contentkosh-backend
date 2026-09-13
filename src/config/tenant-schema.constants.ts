@@ -14,6 +14,7 @@ export const PUBLIC_ONLY_MODELS = [
   { modelName: 'businessSlugHistory', tableName: 'business_slug_history' },
   { modelName: 'systemConfig', tableName: 'system_config' },
   { modelName: 'apiAuditLog', tableName: 'api_audit_logs' },
+  { modelName: 'externalApiAuditLog', tableName: 'external_api_audit_logs' },
 ] as const;
 
 export const PUBLIC_ONLY_TABLES: ReadonlySet<string> = new Set(
