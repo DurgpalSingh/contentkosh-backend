@@ -2,7 +2,7 @@ import { BusinessProvisioningStatus, BusinessStatus, UserRole } from '@prisma/cl
 import * as businessRepo from '../repositories/business.repo';
 import { BadRequestError, NotFoundError } from '../errors/api.errors';
 import { AuthService } from './auth.service';
-import { workspaceExpiryTime } from '../constants/business.constants';
+import { config } from '../config/config';
 
 export interface ListBusinessesQuery {
   page?: number | undefined;
@@ -78,7 +78,7 @@ export class BusinessAdminService {
         businessSlug: business.slug,
         tenantSchema: business.schemaName,
       },
-      workspaceExpiryTime,
+      config.cookies.workspaceExpiryTime,
     );
 
     return { accessToken, business };
