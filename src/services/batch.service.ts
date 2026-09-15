@@ -216,9 +216,20 @@ export class BatchService {
         return await batchRepo.findBatchesByUserId(userId);
     }
 
-    async getUsersByBatch(batchId: number, role?: UserRole) {
+    async getUsersByBatch(batchId: number, requestingUser: IUser, role?: UserRole) {
         logger.info('BatchService: Fetching users for batch', { batchId, role });
-        return await batchRepo.findUsersByBatchId(batchId, role);
+        const users = await batchRepo.findUsersByBatchId(batchId, role);
+
+        const canSeeEmail = requestingUser.role === UserRole.ADMIN
+            || requestingUser.role === UserRole.TEACHER
+            || requestingUser.role === UserRole.SUPERADMIN;
+        if (canSeeEmail) return users;
+
+        return users.map((batchUser: any) => {
+            if (!batchUser.user) return batchUser;
+            const { email: _email, ...userWithoutEmail } = batchUser.user;
+            return { ...batchUser, user: userWithoutEmail };
+        });
     }
 
     async getAllActiveBatches(user: IUser, query: ParsedQs = {}): Promise<Batch[]> {
@@ -335,10 +346,21 @@ export class BatchService {
         }
 
         const isSuperAdmin = user.role === UserRole.SUPERADMIN;
+        const isAdmin = user.role === UserRole.ADMIN;
         const hasBusinessAccess = exam.businessId === user.businessId;
 
         if (!isSuperAdmin && !hasBusinessAccess) {
             throw new ForbiddenError('You do not have access to this batch');
+        }
+
+        // Guests (USER) and students must be actively enrolled in THIS batch to view it;
+        // SUPERADMIN/ADMIN retain full business-wide access, and TEACHER access is
+        // unchanged (business-scoped) as before.
+        if (!isSuperAdmin && !isAdmin && (user.role === UserRole.USER || user.role === UserRole.STUDENT)) {
+            const isMember = await batchRepo.isActiveUserInBatch(user.id, batchId);
+            if (!isMember) {
+                throw new ForbiddenError('You must be enrolled in this batch to access it');
+            }
         }
     }
 }
