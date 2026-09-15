@@ -1,5 +1,11 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.38] - superadmin cookie modification for workspace access
+**P.R Raised by** : shubh404-SE on **Date** : 2026-09-11
+
+### Changes
+  - superadmin cookie modified to admin of a bussiness so he can access that bussiness.
+---
 ## Version [1.2.37] - Mail notification on new bussiness signup
 **P.R Raised by** : shubh404-SE on **Date** : 2026-09-09
 

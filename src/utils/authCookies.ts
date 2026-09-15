@@ -51,6 +51,10 @@ export function setAuthCookies(res: Response, accessToken: string, refreshToken:
   res.cookie(config.cookies.refreshCookieName, refreshToken, getBaseCookieOptions(config.cookies.refreshCookieMaxAgeMs));
 }
 
+export function setAccessTokenCookie(res: Response, accessToken: string, maxAgeMs?: number): void {
+  res.cookie(config.cookies.accessCookieName, accessToken, getBaseCookieOptions(maxAgeMs ?? config.cookies.accessCookieMaxAgeMs));
+}
+
 export function clearAuthCookies(res: Response): void {
   const clearOptions = {
     httpOnly: true,

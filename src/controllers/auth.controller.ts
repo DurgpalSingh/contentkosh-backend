@@ -58,7 +58,17 @@ export const getProfile = async (req: AuthRequest, res: Response) => {
             return ApiResponseHandler.error(res, 'User not found in database', 404);
         }
 
-        ApiResponseHandler.success(res, user, 'Profile fetched successfully');
+        // The token's role/businessId reflect the active session (which can differ from the
+        // DB row while a Super Admin is impersonating a business) - overlay them so the
+        // frontend hydrates the impersonated context rather than the real one.
+        const responseUser = {
+            ...user,
+            role: tokenUser.role,
+            businessId: tokenUser.businessId,
+            isImpersonating: user.role !== tokenUser.role,
+        };
+
+        ApiResponseHandler.success(res, responseUser, 'Profile fetched successfully');
     } catch (error) {
         handleControllerError(res, error, 'Error fetching profile', 'Error fetching profile');
     }

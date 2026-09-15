@@ -23,5 +23,6 @@ export const config = {
     refreshCookieMaxAgeMs: process.env.REFRESH_COOKIE_MAX_AGE_MS ? parseInt(process.env.REFRESH_COOKIE_MAX_AGE_MS) : ONE_HOUR_MS,
     secure: process.env.COOKIE_SECURE ? process.env.COOKIE_SECURE === 'true' : process.env.NODE_ENV === 'production',
     sameSite: (process.env.COOKIE_SAME_SITE || 'lax').toLowerCase(),
+    workspaceExpiryTime: process.env.WORKSPACE_EXPIRY_TIME || "60m"
   },
 };

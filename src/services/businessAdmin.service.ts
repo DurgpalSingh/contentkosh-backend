@@ -1,6 +1,8 @@
-import { BusinessStatus } from '@prisma/client';
+import { BusinessProvisioningStatus, BusinessStatus, UserRole } from '@prisma/client';
 import * as businessRepo from '../repositories/business.repo';
 import { BadRequestError, NotFoundError } from '../errors/api.errors';
+import { AuthService } from './auth.service';
+import { config } from '../config/config';
 
 export interface ListBusinessesQuery {
   page?: number | undefined;
@@ -55,5 +57,30 @@ export class BusinessAdminService {
       statusReason: status === BusinessStatus.ACTIVE ? null : reason!.trim(),
       statusChangedBy: actorId,
     });
+  }
+
+  static async impersonate(businessId: number, actor: { id: number; email: string }) {
+    const business = await businessRepo.findBusinessById(businessId);
+    if (!business) {
+      throw new NotFoundError('Business');
+    }
+
+    if (business.status !== BusinessStatus.ACTIVE || business.provisioningStatus !== BusinessProvisioningStatus.ACTIVE) {
+      throw new BadRequestError('Cannot open a business that is not active');
+    }
+
+    const accessToken = AuthService.generateAccessToken(
+      {
+        id: actor.id,
+        email: actor.email,
+        role: UserRole.ADMIN,
+        businessId: business.id,
+        businessSlug: business.slug,
+        tenantSchema: business.schemaName,
+      },
+      config.cookies.workspaceExpiryTime,
+    );
+
+    return { accessToken, business };
   }
 }

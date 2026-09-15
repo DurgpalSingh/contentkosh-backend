@@ -32,9 +32,9 @@ export class AuthService {
     return bcrypt.compare(password, hashedPassword);
   }
 
-  static generateAccessToken(user: IUser): string {
+  static generateAccessToken(user: IUser, expiresInOverride?: string): string {
     const secret = config.jwt.secret;
-    const expiresIn = config.jwt.accessTokenExpiresIn;
+    const expiresIn = expiresInOverride || config.jwt.accessTokenExpiresIn;
 
     return jwt.sign(
       {

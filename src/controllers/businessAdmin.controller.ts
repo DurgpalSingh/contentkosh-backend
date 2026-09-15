@@ -6,6 +6,7 @@ import { BadRequestError } from '../errors/api.errors';
 import { BusinessAdminService } from '../services/businessAdmin.service';
 import { AuthRequest } from '../dtos/auth.dto';
 import { UpdateBusinessStatusDto } from '../dtos/businessAdmin.dto';
+import { setAccessTokenCookie } from '../utils/authCookies';
 
 function getBusinessIdFromParams(req: AuthRequest): number {
   const id = Number(req.params.id);
@@ -61,6 +62,22 @@ export const updateBusinessStatus = async (req: AuthRequest, res: Response, next
     ApiResponseHandler.success(res, business, 'Business status updated successfully');
   } catch (error) {
     logger.error(`Error updating status for business ${req.params.id}: ${error}`);
+    next(error);
+  }
+};
+
+export const impersonateBusiness = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const id = getBusinessIdFromParams(req);
+    const actor = { id: req.user!.id, email: req.user!.email };
+
+    logger.info(`Super Admin ${actor.id} opening business ${id}`);
+    const { accessToken, business } = await BusinessAdminService.impersonate(id, actor);
+
+    setAccessTokenCookie(res, accessToken, 60 * 60 * 1000);
+    ApiResponseHandler.success(res, { businessId: business.id, businessSlug: business.slug }, 'Now viewing business');
+  } catch (error) {
+    logger.error(`Error opening business ${req.params.id}: ${error}`);
     next(error);
   }
 };
