@@ -154,7 +154,8 @@ export class BatchController {
         return ApiResponseHandler.error(res, `Invalid role: ${role}`, 400);
       }
 
-      const users = await this.batchService.getUsersByBatch(batchId, role);
+      const user = (req as AuthRequest).user!;
+      const users = await this.batchService.getUsersByBatch(batchId, user, role);
       ApiResponseHandler.success(res, users, 'Batch users fetched successfully');
     } catch (error) {
       handleControllerError(res, error, 'Failed to fetch batch users', 'Error fetching batch users');
