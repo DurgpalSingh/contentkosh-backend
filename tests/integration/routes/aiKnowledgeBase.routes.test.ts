@@ -68,4 +68,23 @@ describe('AI Knowledge Base Routes', () => {
 
     expect(response.status).toBe(400);
   });
+
+  it('rejects a whitespace-only query without calling the agent', async () => {
+    const response = await request(app)
+      .post('/api/business/1/ai/kb/query')
+      .send({ query: '   ' });
+
+    expect(response.status).toBe(400);
+    expect(mockQueryKnowledgeBase).not.toHaveBeenCalled();
+  });
+
+  it('passes a trimmed query to the service', async () => {
+    await request(app)
+      .post('/api/business/1/ai/kb/query')
+      .send({ query: '  What is photosynthesis?  ' });
+
+    expect(mockQueryKnowledgeBase).toHaveBeenCalledWith(
+      expect.objectContaining({ businessId: 1, query: 'What is photosynthesis?' }),
+    );
+  });
 });

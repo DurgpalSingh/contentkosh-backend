@@ -4,6 +4,7 @@ import { Transform } from 'class-transformer';
 const toNumber = (value: unknown): number => Number(value);
 
 export class QueryKnowledgeBaseDto {
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   @IsNotEmpty()
   @MaxLength(1000)
