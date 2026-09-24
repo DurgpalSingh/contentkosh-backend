@@ -1,8 +1,37 @@
-import { BusinessProvisioningStatus, BusinessStatus, UserRole } from '@prisma/client';
+import { Business, BusinessProvisioningStatus, BusinessStatus, UserRole } from '@prisma/client';
 import * as businessRepo from '../repositories/business.repo';
+import * as userRepo from '../repositories/user.repo';
 import { BadRequestError, NotFoundError } from '../errors/api.errors';
 import { AuthService } from './auth.service';
 import { config } from '../config/config';
+import logger from '../utils/logger';
+import { sendMail } from './mail.service';
+import { buildBusinessStatusEmailHtml, buildBusinessStatusEmailSubject, BusinessStatusEmailAction } from '../templates/businessStatusEmail.template';
+import { BUSINESS_STATUS_ACTION } from '../constants/business.constants';
+
+async function notifyBusinessStatusChange(business: Business, action: BusinessStatusEmailAction): Promise<void> {
+  try {
+    const admins = await userRepo.findByBusinessId(business.id, UserRole.ADMIN);
+    const recipients = admins.map((admin) => admin.user.email);
+
+    if (recipients.length === 0) {
+      logger.warn('No admin email found to notify about business status change', { businessId: business.id, action });
+      return;
+    }
+
+    await sendMail({
+      to: recipients,
+      subject: buildBusinessStatusEmailSubject(business.instituteName, action),
+      html: buildBusinessStatusEmailHtml({
+        instituteName: business.instituteName,
+        action,
+        reason: business.statusReason,
+      }),
+    });
+  } catch (error) {
+    logger.error('Failed to send business status change notification email', { businessId: business.id, action, error });
+  }
+}
 
 export interface ListBusinessesQuery {
   page?: number | undefined;
@@ -52,11 +81,17 @@ export class BusinessAdminService {
       throw new BadRequestError('A reason is required to pause or delete a business');
     }
 
-    return businessRepo.updateBusinessStatus(id, {
+    const updated = await businessRepo.updateBusinessStatus(id, {
       status,
       statusReason: status === BusinessStatus.ACTIVE ? null : reason!.trim(),
       statusChangedBy: actorId,
     });
+
+    if (status === BusinessStatus.PAUSED || status === BusinessStatus.DELETED) {
+      void notifyBusinessStatusChange(updated, BUSINESS_STATUS_ACTION[status === BusinessStatus.PAUSED ? 'PAUSED' : 'REMOVED']);
+    }
+
+    return updated;
   }
 
   static async impersonate(businessId: number, actor: { id: number; email: string }) {

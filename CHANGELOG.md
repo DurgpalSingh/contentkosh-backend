@@ -1,5 +1,11 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.39] - notify bussiness when it is on hold by superadmin
+**P.R Raised by** : shubh404-SE on **Date** : 2026-09-25
+
+### Added
+  - added a new logic to notify bussiness when it is on hold by superadmin, this will send email to bussiness admin.
+---
 ## Version [1.2.38] - superadmin cookie modification for workspace access
 **P.R Raised by** : shubh404-SE on **Date** : 2026-09-11
 
