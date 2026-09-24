@@ -1,4 +1,4 @@
-import { Prisma, Content } from '@prisma/client';
+import { Prisma, Content, ContentAgentUploadStatus } from '@prisma/client';
 import { getTenantPrisma, prisma } from '../config/database';
 import { ACTIVE_BATCH_WHERE } from '../constants/hierarchyFilters';
 import { getTenantSchemaNameForBusiness, queryTenantPublic, userBasicFromRow } from './crossSchema.repo';
@@ -65,6 +65,23 @@ export const createContents = async (
   const ids = created.map((item) => item.id);
   const rows = await findContentWithPublicRelations(businessId, 'c.id = ANY($1::int[])', ids);
   return rows.length > 0 ? rows : created;
+
+}
+export const updateAgentUploadStatus = async (
+  id: number,
+  businessId: number,
+  agentUploadStatus: ContentAgentUploadStatus,
+  agentUploadError?: string | null,
+): Promise<void> => {
+  const schemaName = await getTenantSchemaNameForBusiness(businessId);
+  const tenantPrisma = getTenantPrisma(schemaName);
+  await tenantPrisma.content.update({
+    where: { id },
+    data: {
+      agentUploadStatus,
+      agentUploadError: agentUploadError ?? null,
+    },
+  });
 };
 
 export const findContentById = async (

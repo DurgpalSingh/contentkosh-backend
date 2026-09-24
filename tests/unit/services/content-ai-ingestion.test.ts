@@ -1,4 +1,4 @@
-import { ContentStatus, ContentType, UserRole } from '@prisma/client';
+import { ContentAgentUploadStatus, ContentStatus, ContentType, UserRole } from '@prisma/client';
 import { ContentService } from '../../../src/services/content.service';
 import * as batchRepo from '../../../src/repositories/batch.repo';
 import * as contentRepo from '../../../src/repositories/content.repo';
@@ -39,7 +39,7 @@ describe('ContentService AI ingestion', () => {
     });
   });
 
-  it('calls the agent before creating PDF content', async () => {
+  it('creates PDF content immediately and starts agent processing in the background', async () => {
     aiKnowledgeBaseService.uploadPdfToKnowledgeBase.mockResolvedValue({ message: 'uploaded' });
     const service = new ContentService(aiKnowledgeBaseService as any);
 
@@ -54,38 +54,44 @@ describe('ContentService AI ingestion', () => {
       user,
     );
 
+    expect(contentRepo.createContent).toHaveBeenCalled();
+    await new Promise<void>((resolve) => setImmediate(resolve));
     expect(aiKnowledgeBaseService.uploadPdfToKnowledgeBase).toHaveBeenCalledWith({
       filePath: 'uploads/content/file.pdf',
       businessId: 1,
       courseId: 4,
       contentType: ContentType.PDF,
     });
-    expect(contentRepo.createContent).toHaveBeenCalled();
+    expect(contentRepo.updateAgentUploadStatus).toHaveBeenCalledWith(
+      20,
+      1,
+      ContentAgentUploadStatus.SUCCEEDED,
+    );
   });
 
-  it('does not create content and removes the local file when PDF agent upload fails', async () => {
+  it('keeps content created and records a failed agent job when agent upload fails', async () => {
     aiKnowledgeBaseService.uploadPdfToKnowledgeBase.mockRejectedValue(new Error('agent down'));
     const service = new ContentService(aiKnowledgeBaseService as any);
 
-    await expect(
-      service.createContent(
-        3,
-        {
-          title: 'PDF',
-          type: ContentType.PDF,
-          filePath: 'uploads/content/file.pdf',
-          fileSize: 100,
-        },
-        user,
-      ),
-    ).rejects.toThrow('agent down');
+    await service.createContent(3, {
+      title: 'PDF',
+      type: ContentType.PDF,
+      filePath: 'uploads/content/file.pdf',
+      fileSize: 100,
+    }, user);
 
-    expect(contentRepo.createContent).not.toHaveBeenCalled();
-    expect(fs.unlink).toHaveBeenCalledWith('uploads/content/file.pdf');
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(contentRepo.createContent).toHaveBeenCalled();
+    expect(contentRepo.updateAgentUploadStatus).toHaveBeenCalledWith(
+      20,
+      1,
+      ContentAgentUploadStatus.FAILED,
+      'agent down',
+    );
+    expect(fs.unlink).not.toHaveBeenCalled();
   });
 
   it('keeps non-PDF uploads on the normal content path', async () => {
-    aiKnowledgeBaseService.uploadPdfToKnowledgeBase.mockResolvedValue(null);
     const service = new ContentService(aiKnowledgeBaseService as any);
 
     await service.createContent(
@@ -99,12 +105,7 @@ describe('ContentService AI ingestion', () => {
       user,
     );
 
-    expect(aiKnowledgeBaseService.uploadPdfToKnowledgeBase).toHaveBeenCalledWith({
-      filePath: 'uploads/content/file.docx',
-      businessId: 1,
-      courseId: 4,
-      contentType: ContentType.DOC,
-    });
+    expect(aiKnowledgeBaseService.uploadPdfToKnowledgeBase).not.toHaveBeenCalled();
     expect(contentRepo.createContent).toHaveBeenCalled();
   });
 });
