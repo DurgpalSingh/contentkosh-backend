@@ -49,26 +49,56 @@ export class AiAgentClient {
   }
 
   private async request<TResponse>(path: string, contentType: string, payload: Buffer): Promise<TResponse> {
+    const startedAt = Date.now();
+    logger.info('AiAgentClient: Request started', {
+      path,
+      contentType,
+      payloadBytes: payload.length,
+      timeoutMs: this.timeoutMs,
+    });
     try {
       const { status, text } = await this.send(path, contentType, payload);
+      const durationMs = Date.now() - startedAt;
       const parsed = text ? this.parseJson(text) : undefined;
 
       if (status < 200 || status >= 300) {
         const message = this.extractErrorMessage(parsed) || `AI agent returned ${status}`;
-        logger.warn('AI agent request failed', { path, status, message });
+        logger.warn('AiAgentClient: Request returned an error status', { path, status, durationMs, message });
         throw new AiAgentError(message, status >= 500 ? 502 : status);
       }
 
+      logger.info('AiAgentClient: Request succeeded', {
+        path,
+        status,
+        durationMs,
+        responseBytes: Buffer.byteLength(text, 'utf8'),
+      });
       return parsed as TResponse;
     } catch (error) {
-      if (error instanceof AiAgentError) throw error;
+      if (error instanceof AiAgentError) {
+        logger.warn('AiAgentClient: Request failed with agent error', {
+          path,
+          durationMs: Date.now() - startedAt,
+          statusCode: error.statusCode,
+          message: error.message,
+        });
+        throw error;
+      }
       if (error instanceof AiAgentTimeoutError) {
-        logger.error('AI agent request timed out', { path, timeoutMs: this.timeoutMs });
+        logger.error('AiAgentClient: Request timed out', {
+          path,
+          timeoutMs: this.timeoutMs,
+          durationMs: Date.now() - startedAt,
+        });
         throw new AiAgentError('AI agent request timed out', 504);
       }
 
       const message = error instanceof Error ? error.message : String(error);
-      logger.error('AI agent request error', { path, message });
+      logger.error('AiAgentClient: Network or response processing error', {
+        path,
+        durationMs: Date.now() - startedAt,
+        message,
+      });
       throw new AiAgentError('AI agent is unavailable', 502);
     }
   }
@@ -90,6 +120,10 @@ export class AiAgentClient {
       const timer = setTimeout(() => req.destroy(new AiAgentTimeoutError()), this.timeoutMs);
       const fail = (error: Error) => {
         clearTimeout(timer);
+        logger.debug('AiAgentClient: HTTP request failed', {
+          path,
+          message: error.message,
+        });
         reject(error);
       };
 

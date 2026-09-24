@@ -355,6 +355,14 @@ enum ContentStatus {
   INACTIVE
 }
 
+enum ContentAgentUploadStatus {
+  NOT_APPLICABLE
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+}
+
 model Content {
   id         Int           @id @default(autoincrement())
   batchId    Int           @map("batch_id")
@@ -364,6 +372,8 @@ model Content {
   filePath   String        @map("file_path")
   fileSize   Int           @map("file_size") // in bytes
   status     ContentStatus @default(ACTIVE)
+  agentUploadStatus ContentAgentUploadStatus @default(NOT_APPLICABLE) @map("agent_upload_status")
+  agentUploadError  String? @map("agent_upload_error")
   uploadedBy Int           @map("uploaded_by")
   updatedBy  Int?          @map("updated_by")
   createdAt  DateTime      @default(now()) @map("created_at")

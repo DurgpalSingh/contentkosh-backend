@@ -1,4 +1,4 @@
-import { Prisma, Content, ContentType, ContentStatus, UserRole, SubjectStatus } from '@prisma/client';
+import { Prisma, Content, ContentType, ContentStatus, ContentAgentUploadStatus, UserRole, SubjectStatus } from '@prisma/client';
 import * as contentRepo from '../repositories/content.repo';
 import * as batchRepo from '../repositories/batch.repo';
 import * as subjectRepo from '../repositories/subject.repo';
@@ -37,19 +37,15 @@ export class ContentService {
     }
 
     try {
-      await this.aiKnowledgeBaseService.uploadPdfToKnowledgeBase({
-        filePath: data.filePath,
-        businessId: batchContext.businessId,
-        courseId: batchContext.courseId,
-        contentType: data.type,
-      });
-
       const createData: Prisma.ContentCreateInput = {
         title: data.title,
         type: data.type,
         filePath: data.filePath,
         fileSize: data.fileSize,
         status: data.status || ContentStatus.ACTIVE,
+        agentUploadStatus: data.type === ContentType.PDF
+          ? ContentAgentUploadStatus.PENDING
+          : ContentAgentUploadStatus.NOT_APPLICABLE,
         batch: {
           connect: { id: batchId }
         },
@@ -71,14 +67,96 @@ export class ContentService {
         userId: user.id,
         subjectId: data.subjectId
       });
+
+      if (data.type === ContentType.PDF && content.id) {
+        logger.info('ContentService: Starting background CK Agent upload', {
+          contentId: content.id,
+          businessId: batchContext.businessId,
+          courseId: batchContext.courseId,
+        });
+        void this.processAgentUpload({
+          contentId: content.id,
+          filePath: data.filePath,
+          businessId: batchContext.businessId,
+          courseId: batchContext.courseId,
+        });
+      }
+
+      logger.info('ContentService: Returning content upload response', {
+        contentId: content.id,
+        batchId,
+        agentUploadQueued: data.type === ContentType.PDF,
+      });
       return ContentMapper.toResponse(content);
-    } catch (error: any) {
-      if (data.filePath) { // If DB creation fails, delete the uploaded file
-        await fs.unlink(data.filePath).catch(() => undefined);
+    } catch (error) {
+      logger.error('ContentService: Content upload failed', {
+        batchId,
+        userId: user.id,
+        type: data.type,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      if (data.filePath) {
+        await fs.unlink(data.filePath).catch((cleanupError) => {
+          logger.warn('ContentService: Failed to clean up uploaded file after error', {
+            batchId,
+            message: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+          });
+        });
       }
       throw error;
     }
 
+  }
+
+  private async processAgentUpload(params: {
+    contentId: number;
+    filePath: string;
+    businessId: number;
+    courseId: number;
+  }): Promise<void> {
+    try {
+      logger.info('ContentService: CK Agent upload job processing started', {
+        contentId: params.contentId,
+        businessId: params.businessId,
+        courseId: params.courseId,
+      });
+      await contentRepo.updateAgentUploadStatus(
+        params.contentId,
+        params.businessId,
+        ContentAgentUploadStatus.PROCESSING,
+      );
+      await this.aiKnowledgeBaseService.uploadPdfToKnowledgeBase({
+        filePath: params.filePath,
+        businessId: params.businessId,
+        courseId: params.courseId,
+        contentType: ContentType.PDF,
+      });
+      await contentRepo.updateAgentUploadStatus(
+        params.contentId,
+        params.businessId,
+        ContentAgentUploadStatus.SUCCEEDED,
+      );
+      logger.info('ContentService: CK Agent upload completed', { contentId: params.contentId });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'CK Agent upload failed';
+      try {
+        await contentRepo.updateAgentUploadStatus(
+          params.contentId,
+          params.businessId,
+          ContentAgentUploadStatus.FAILED,
+          message,
+        );
+      } catch (statusError) {
+        logger.error('ContentService: Failed to update CK Agent status', {
+          contentId: params.contentId,
+          statusError,
+        });
+      }
+      logger.error('ContentService: CK Agent upload failed', {
+        contentId: params.contentId,
+        message,
+      });
+    }
   }
 
   async getContent(id: number, user: IUser): Promise<Content> {
