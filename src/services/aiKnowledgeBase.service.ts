@@ -6,6 +6,7 @@ import { IUser } from '../dtos/auth.dto';
 import { KnowledgeBaseQueryResponse } from '../dtos/ai.dto';
 import { AiAgentClient, aiAgentClient } from './aiAgent.client';
 import * as batchRepo from '../repositories/batch.repo';
+import logger from '../utils/logger';
 
 interface AgentUploadResponse {
   request_id?: string;
@@ -23,6 +24,11 @@ export class AiKnowledgeBaseService {
     contentType: ContentType;
   }): Promise<AgentUploadResponse | null> {
     if (params.contentType !== ContentType.PDF) {
+      logger.debug('AiKnowledgeBaseService: Skipping agent upload for non-PDF content', {
+        businessId: params.businessId,
+        courseId: params.courseId,
+        contentType: params.contentType,
+      });
       return null;
     }
 
@@ -36,7 +42,21 @@ export class AiKnowledgeBaseService {
       params.originalFileName || path.basename(params.filePath),
     );
 
-    return this.agentClient.postForm<AgentUploadResponse>('/llm/upload', formData);
+    logger.info('AiKnowledgeBaseService: Sending document to CK Agent', {
+      businessId: params.businessId,
+      courseId: params.courseId,
+      contentType: params.contentType,
+      fileName: params.originalFileName || path.basename(params.filePath),
+      fileSize: buffer.length,
+    });
+    const response = await this.agentClient.postForm<AgentUploadResponse>('/llm/upload', formData);
+    logger.info('AiKnowledgeBaseService: CK Agent accepted document upload', {
+      businessId: params.businessId,
+      courseId: params.courseId,
+      requestId: response.request_id,
+      message: response.message,
+    });
+    return response;
   }
 
   async queryKnowledgeBase(params: {
