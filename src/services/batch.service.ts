@@ -353,9 +353,6 @@ export class BatchService {
             throw new ForbiddenError('You do not have access to this batch');
         }
 
-        // Guests (USER) and students must be actively enrolled in THIS batch to view it;
-        // SUPERADMIN/ADMIN retain full business-wide access, and TEACHER access is
-        // unchanged (business-scoped) as before.
         if (!isSuperAdmin && !isAdmin && (user.role === UserRole.USER || user.role === UserRole.STUDENT)) {
             const isMember = await batchRepo.isActiveUserInBatch(user.id, batchId);
             if (!isMember) {
