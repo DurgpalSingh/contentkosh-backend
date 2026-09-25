@@ -1,4 +1,4 @@
-import { AIChat, Prisma } from '@prisma/client';
+import { AIChat, AIChatStatus, Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 
 export interface CreateAIChatInput {
@@ -17,6 +17,57 @@ export async function createAIChat(data: CreateAIChatInput): Promise<AIChat> {
       source: source ?? Prisma.JsonNull,
     },
   });
+}
+
+export async function createPendingAIChat(data: {
+  userId: number;
+  businessId: number;
+  userMessage: string;
+}): Promise<AIChat> {
+  return prisma.aIChat.create({
+    data: { ...data, status: AIChatStatus.PENDING },
+  });
+}
+
+export async function findPendingAIChatByUser(userId: number, businessId: number): Promise<AIChat | null> {
+  return prisma.aIChat.findFirst({
+    where: { userId, businessId, status: AIChatStatus.PENDING },
+    orderBy: { createdAt: 'desc' },
+  });
+}
+
+// Scoped to PENDING so a chat deleted (cancelled) mid-flight is silently skipped (count 0).
+export async function completePendingAIChat(
+  id: number,
+  data: { assistantResponse: string; source: Prisma.InputJsonValue | null },
+): Promise<number> {
+  const result = await prisma.aIChat.updateMany({
+    where: { id, status: AIChatStatus.PENDING },
+    data: {
+      status: AIChatStatus.COMPLETED,
+      assistantResponse: data.assistantResponse,
+      source: data.source ?? Prisma.JsonNull,
+      errorMessage: null,
+    },
+  });
+  return result.count;
+}
+
+export async function failPendingAIChats(
+  where: { id?: number; userId?: number; businessId?: number; createdBefore?: Date },
+  errorMessage: string,
+): Promise<number> {
+  const result = await prisma.aIChat.updateMany({
+    where: {
+      status: AIChatStatus.PENDING,
+      ...(where.id !== undefined ? { id: where.id } : {}),
+      ...(where.userId !== undefined ? { userId: where.userId } : {}),
+      ...(where.businessId !== undefined ? { businessId: where.businessId } : {}),
+      ...(where.createdBefore ? { createdAt: { lt: where.createdBefore } } : {}),
+    },
+    data: { status: AIChatStatus.FAILED, errorMessage },
+  });
+  return result.count;
 }
 
 export interface FindAIChatsByUserParams {

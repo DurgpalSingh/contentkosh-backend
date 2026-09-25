@@ -742,6 +742,13 @@ model SubjectiveTestSubmission {
   @@index([subjectiveTestId, status])
   @@index([studentId, status])
   @@map("subjective_test_submissions")
+
+}
+
+enum AIChatStatus {
+  PENDING
+  COMPLETED
+  FAILED
 }
 
 model AIChat {
@@ -750,8 +757,10 @@ model AIChat {
   businessId Int    @map("business_id")
 
   userMessage         String  @map("user_message")
-  assistantResponse   String  @map("assistant_response")
+  assistantResponse   String? @map("assistant_response") // Null until the agent answers
   source              Json?   @map("source")  // Knowledge base reference
+  status              AIChatStatus @default(COMPLETED)
+  errorMessage        String? @map("error_message")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -763,6 +772,7 @@ model AIChat {
   @@index([businessId])
   @@index([userId, createdAt])
   @@index([businessId, createdAt])
+  @@index([userId, businessId, status])
   @@map("ai_chats")
-  
+
 }

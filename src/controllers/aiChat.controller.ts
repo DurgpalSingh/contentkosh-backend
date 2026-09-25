@@ -54,6 +54,24 @@ export class AIChatController {
     }
   };
 
+  public getChat = async (req: AuthRequest, res: Response) => {
+    try {
+      const businessId = ValidationUtils.validateId(req.params.businessId, 'Business ID');
+      const chatId = ValidationUtils.validateId(req.params.chatId, 'Chat ID');
+      const user = req.user!;
+
+      const result = await this.service.getChat({
+        businessId,
+        chatId,
+        user,
+      });
+
+      ApiResponseHandler.success(res, result, 'Chat retrieved successfully');
+    } catch (error) {
+      handleControllerError(res, error, 'Failed to retrieve chat', 'Error retrieving chat');
+    }
+  };
+
   public deleteChat = async (req: AuthRequest, res: Response) => {
     try {
       const businessId = ValidationUtils.validateId(req.params.businessId, 'Business ID');

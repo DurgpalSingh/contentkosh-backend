@@ -219,6 +219,7 @@ function toUncheckedCreate(data: Prisma.ContentCreateInput): Prisma.ContentUnche
     filePath: raw.filePath,
     fileSize: raw.fileSize,
     status: raw.status,
+    agentUploadStatus: raw.agentUploadStatus,
     uploadedBy: raw.uploader?.connect?.id,
     updatedBy: raw.updater?.connect?.id ?? null,
   };
@@ -246,6 +247,8 @@ function mapContentRow(row: any): Content {
     filePath: row.file_path,
     fileSize: row.file_size,
     status: row.status,
+    agentUploadStatus: row.agent_upload_status,
+    agentUploadError: row.agent_upload_error,
     uploadedBy: row.uploaded_by,
     updatedBy: row.updated_by,
     createdAt: row.created_at,
