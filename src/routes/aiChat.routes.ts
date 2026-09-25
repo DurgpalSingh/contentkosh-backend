@@ -27,6 +27,16 @@ aiChatRouter.get(
   aiChatController.getChats,
 );
 
+// Get a single chat (used to poll a PENDING answer)
+aiChatRouter.get(
+  '/:businessId/ai/chats/:chatId',
+  authorize(UserRole.STUDENT),
+  validateIdParam('businessId'),
+  validateIdParam('chatId'),
+  authorizeBusinessAccess,
+  aiChatController.getChat,
+);
+
 // Delete a specific chat
 aiChatRouter.delete(
   '/:businessId/ai/chats/:chatId',

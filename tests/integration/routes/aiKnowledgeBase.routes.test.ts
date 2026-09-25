@@ -4,10 +4,10 @@ import { UserRole } from '@prisma/client';
 
 var mockQueryKnowledgeBase: jest.Mock;
 
-jest.mock('../../../src/services/aiKnowledgeBase.service', () => ({
-  AiKnowledgeBaseService: jest.fn().mockImplementation(() => ({
-    queryKnowledgeBase: (...args: unknown[]) => mockQueryKnowledgeBase(...args),
-  })),
+jest.mock('../../../src/services/aiChat.service', () => ({
+  aiChatService: {
+    submitQuery: (...args: unknown[]) => mockQueryKnowledgeBase(...args),
+  },
 }));
 jest.mock('../../../src/utils/logger');
 
@@ -31,16 +31,16 @@ describe('AI Knowledge Base Routes', () => {
   beforeEach(() => {
     currentUser = { id: 1, email: 'student@test.com', role: UserRole.STUDENT, businessId: 1 };
     mockQueryKnowledgeBase = jest.fn();
-    mockQueryKnowledgeBase.mockResolvedValue({ answer: 'Answer' });
+    mockQueryKnowledgeBase.mockResolvedValue({ id: 5, status: 'PENDING', assistantResponse: null });
   });
 
-  it('returns an answer for an authorized student', async () => {
+  it('returns the pending chat for an authorized student', async () => {
     const response = await request(app)
       .post('/api/business/1/ai/kb/query')
       .send({ query: 'What is photosynthesis?' });
 
     expect(response.status).toBe(200);
-    expect(response.body.data).toEqual({ answer: 'Answer' });
+    expect(response.body.data).toEqual({ id: 5, status: 'PENDING', assistantResponse: null });
   });
 
   it('returns 403 for non-student users', async () => {

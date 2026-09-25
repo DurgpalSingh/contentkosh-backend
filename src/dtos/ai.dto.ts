@@ -51,13 +51,17 @@ export class GetAIChatDto {
   offset?: number;
 }
 
+export type AIChatStatusDto = 'PENDING' | 'COMPLETED' | 'FAILED';
+
 export interface AIChatResponseDto {
   id: number;
   userId: number;
   businessId: number;
   userMessage: string;
-  assistantResponse: string;
+  assistantResponse: string | null;
   source?: KnowledgeBaseQueryResponse | null;
+  status: AIChatStatusDto;
+  errorMessage: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
