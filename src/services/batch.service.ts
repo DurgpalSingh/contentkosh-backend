@@ -338,26 +338,24 @@ export class BatchService {
             include: { course: { include: { exam: true } } }
         }) as any; // Cast for simplified access
 
-        if (!batchWithRelations) throw new NotFoundError('Batch not found');
+        const exam = batchWithRelations?.course?.exam;
+        this.throwOnFirstMatch([
+            { when: !batchWithRelations, error: new NotFoundError('Batch not found') },
+            { when: !exam, error: new ForbiddenError('Batch is not correctly associated with an exam') },
+            {
+                when: user.role !== UserRole.SUPERADMIN && exam?.businessId !== user.businessId,
+                error: new ForbiddenError('You do not have access to this batch')
+            },
+        ]);
 
-        const exam = batchWithRelations.course?.exam;
-        if (!exam) {
-            throw new ForbiddenError('Batch is not correctly associated with an exam');
-        }
+        const enrollmentRequired = new Set<string>([UserRole.USER, UserRole.STUDENT]).has(user.role);
+        const isMember = !enrollmentRequired || await batchRepo.isActiveUserInBatch(user.id, batchId);
 
-        const isSuperAdmin = user.role === UserRole.SUPERADMIN;
-        const isAdmin = user.role === UserRole.ADMIN;
-        const hasBusinessAccess = exam.businessId === user.businessId;
-
-        if (!isSuperAdmin && !hasBusinessAccess) {
-            throw new ForbiddenError('You do not have access to this batch');
-        }
-
-        if (!isSuperAdmin && !isAdmin && (user.role === UserRole.USER || user.role === UserRole.STUDENT)) {
-            const isMember = await batchRepo.isActiveUserInBatch(user.id, batchId);
-            if (!isMember) {
-                throw new ForbiddenError('You must be enrolled in this batch to access it');
-            }
-        }
+        this.throwOnFirstMatch([
+            {
+                when: enrollmentRequired && !isMember,
+                error: new ForbiddenError('You must be enrolled in this batch to access it')
+            },
+        ]);
     }
 }
