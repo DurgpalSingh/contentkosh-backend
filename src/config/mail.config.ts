@@ -6,4 +6,9 @@ export const mailConfig = {
     senderEmail: process.env.GMAIL_SENDER_EMAIL,
   },
   businessSignupNotificationEmail: process.env.BUSINESS_SIGNUP_NOTIFICATION_EMAIL || 'info@contentkosh.in',
+  
+  contact: {
+    supportEmail: 'info@contentkosh.in' as string,
+    supportPhone: '6549873215' as string | null,
+  },
 };

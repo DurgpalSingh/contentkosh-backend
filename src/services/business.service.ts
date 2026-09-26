@@ -3,6 +3,7 @@ import * as businessRepo from '../repositories/business.repo';
 import * as userRepo from '../repositories/user.repo';
 import { AlreadyExistsError, BadRequestError, NotFoundError } from '../errors/api.errors';
 import { prisma, publicPrisma } from '../config/database';
+import { config } from '../config/config';
 import { mailConfig } from '../config/mail.config';
 import logger from '../utils/logger';
 import { sendMail } from './mail.service';
@@ -24,9 +25,11 @@ async function notifyBusinessSignup(business: Business, admin: { name: string; e
       html: buildBusinessSignupEmailHtml({
         instituteName: business.instituteName,
         slug: business.slug,
-        businessEmail: business.email,
         adminName: admin.name,
         adminEmail: admin.email,
+        registeredOn: business.provisionedAt ?? new Date(),
+        dashboardUrl: `${config.server.frontendUrl}/superadmin/businesses`,
+        privacyUrl: `${config.server.frontendUrl}/privacy-policy`,
       }),
     });
   } catch (error) {
