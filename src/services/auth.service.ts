@@ -309,7 +309,18 @@ export class AuthService {
   }
 
   static async logout(refreshToken: string): Promise<void> {
-    const revoked = await refreshTokenRepo.revokeToken(refreshToken);
-    logger.info(`Logout: session revoked`, { userId: revoked.userId });
+    // Resolve the user from the refresh token itself, not req.user: the /auth/logout
+    // route has no `authenticate` middleware (logout must still work with an expired
+    // or missing access token, using only the refresh-token cookie), so req.user is
+    // never populated here.
+    const stored = await refreshTokenRepo.findByToken(refreshToken);
+    if (!stored) {
+      logger.warn(`Logout: token not found`);
+      return;
+    }
+
+    await refreshTokenRepo.revokeAllUserTokens(stored.userId);
+
+    logger.info(`Logout: all sessions revoked`, { userId: stored.userId });
   }
 }
