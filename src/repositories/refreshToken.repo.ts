@@ -46,6 +46,16 @@ export async function revokeToken(token: string) {
     });
 }
 
+export async function findActiveTokenByUserId(userId: number) {
+    return prisma.refreshToken.findFirst({
+        where: {
+            userId,
+            isRevoked: false,
+            expiresAt: { gt: new Date() },
+        },
+    });
+}
+
 export async function revokeAllUserTokens(userId: number) {
     return prisma.refreshToken.updateMany({
         where: { userId, isRevoked: false },

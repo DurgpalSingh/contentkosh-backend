@@ -1,5 +1,11 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.40] - Single Session Login
+**P.R Raised by** : shubh404-SE on **Date** : 2026-09-27
+
+### Added
+  - added a new feature to restrict user to login in one place only, if user try to login in another place then it will show error message "You're already logged in on another device or browser. Please log out there first, or wait for that session to expire before signing in again."
+---
 ## Version [1.2.39] - notify bussiness when it is on hold by superadmin
 **P.R Raised by** : shubh404-SE on **Date** : 2026-09-25
 

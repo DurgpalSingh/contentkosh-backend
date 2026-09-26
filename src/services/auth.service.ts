@@ -8,7 +8,7 @@ import * as userRepo from '../repositories/user.repo';
 import * as refreshTokenRepo from '../repositories/refreshToken.repo';
 import * as businessRepo from '../repositories/business.repo';
 import { UserStatus, UserRole, BusinessStatus } from '@prisma/client';
-import { AlreadyExistsError, AuthError, BusinessSuspendedError, ForbiddenError, NotFoundError } from '../errors/api.errors';
+import { AlreadyExistsError, AuthError, BusinessSuspendedError, ForbiddenError, NotFoundError, SessionAlreadyActiveError } from '../errors/api.errors';
 import { BUSINESS_STATUS_ACTION } from '../constants/business.constants';
 
 function buildBusinessSuspendedError(business: { status: BusinessStatus; statusReason: string | null }): BusinessSuspendedError {
@@ -105,6 +105,7 @@ export class AuthService {
     logger.info(`Registering new public user: ${data.email}`);
     const existingUser = await userRepo.findByEmail(data.email);
     if (existingUser) {
+      logger.warn(`Signup rejected: email already exists`, { email: data.email });
       throw new AlreadyExistsError('User with this email already exists');
     }
 
@@ -126,11 +127,13 @@ export class AuthService {
 
     const business = await businessRepo.findBusinessBySlug(slug);
     if (!business) {
+      logger.warn(`Guest signup rejected: business not found`, { slug });
       throw new NotFoundError('Business');
     }
 
     const existingUser = await userRepo.findByBusinessAndEmail(business.id, data.email);
     if (existingUser) {
+      logger.warn(`Guest signup rejected: email already exists`, { email: data.email, businessId: business.id });
       throw new AlreadyExistsError('User with this email already exists');
     }
 
@@ -161,6 +164,8 @@ export class AuthService {
       tenantSchema: business?.schemaName ?? null,
     });
     const refreshToken = await this.generateRefreshToken(user.id);
+
+    logger.info(`Signup successful`, { userId: user.id, email: user.email, businessId: user.businessId });
 
     return {
       accessToken,
@@ -199,10 +204,28 @@ export class AuthService {
     for (const candidate of candidates) {
       const isMatch = await this.verifyPassword(data.password, candidate.password);
       if (!isMatch) continue;
-      if (candidate.status !== UserStatus.ACTIVE)
+
+      if (candidate.status !== UserStatus.ACTIVE) {
+        logger.warn(`Login rejected: account inactive`, { userId: candidate.id, email: candidate.email });
         throw new ForbiddenError('User account is inactive');
-      if (candidate.businessId && candidate.business && candidate.business.status !== BusinessStatus.ACTIVE)
+      }
+      if (candidate.businessId && candidate.business && candidate.business.status !== BusinessStatus.ACTIVE) {
+        logger.warn(`Login rejected: business not active`, {
+          userId: candidate.id,
+          businessId: candidate.businessId,
+          businessStatus: candidate.business.status,
+        });
         throw buildBusinessSuspendedError(candidate.business);
+      }
+
+      // Enforce one active session per account: reject the login outright rather than
+      // silently kicking the other session out. The user must log out there first, or
+      // wait for that session's refresh token to go idle and expire.
+      const activeSession = await refreshTokenRepo.findActiveTokenByUserId(candidate.id);
+      if (activeSession) {
+        logger.warn(`Login rejected: session already active`, { userId: candidate.id, email: candidate.email });
+        throw new SessionAlreadyActiveError();
+      }
 
       const accessToken = this.generateAccessToken({
         id: candidate.id,
@@ -213,6 +236,9 @@ export class AuthService {
         tenantSchema: candidate.business?.schemaName ?? null,
       });
       const refreshToken = await this.generateRefreshToken(candidate.id);
+
+      logger.info(`Login successful`, { userId: candidate.id, email: candidate.email, businessId: candidate.businessId });
+
       return {
         accessToken,
         refreshToken,
@@ -226,20 +252,32 @@ export class AuthService {
       };
     }
 
+    logger.warn(`Login rejected: invalid credentials`, { email: data.email });
     throw new AuthError('Invalid email or password');
   }
 
   static async refreshTokens(refreshToken: string): Promise<AuthResponse> {
     const storedToken = await refreshTokenRepo.findByToken(refreshToken);
-    if (!storedToken) throw new AuthError('Invalid refresh token');
-    if (storedToken.isRevoked) throw new AuthError('Refresh token has been revoked');
-    if (new Date() > storedToken.expiresAt) throw new AuthError('Refresh token has expired');
+    if (!storedToken) {
+      logger.warn(`Refresh rejected: token not found`);
+      throw new AuthError('Invalid refresh token');
+    }
+    if (storedToken.isRevoked) {
+      logger.warn(`Refresh rejected: token already revoked`, { userId: storedToken.userId });
+      throw new AuthError('Refresh token has been revoked');
+    }
+    if (new Date() > storedToken.expiresAt) {
+      logger.warn(`Refresh rejected: token expired`, { userId: storedToken.userId });
+      throw new AuthError('Refresh token has expired');
+    }
 
     const user = storedToken.user;
     if (user.status !== UserStatus.ACTIVE) {
+      logger.warn(`Refresh rejected: account inactive`, { userId: user.id });
       throw new ForbiddenError('User account is inactive');
     }
     if (user.businessId && user.business && user.business.status !== BusinessStatus.ACTIVE) {
+      logger.warn(`Refresh rejected: business not active`, { userId: user.id, businessId: user.businessId });
       throw buildBusinessSuspendedError(user.business);
     }
 
@@ -255,6 +293,8 @@ export class AuthService {
     });
     const newRefreshToken = await this.generateRefreshToken(user.id);
 
+    logger.info(`Token refreshed`, { userId: user.id });
+
     return {
       accessToken,
       refreshToken: newRefreshToken,
@@ -269,6 +309,7 @@ export class AuthService {
   }
 
   static async logout(refreshToken: string): Promise<void> {
-    await refreshTokenRepo.revokeToken(refreshToken);
+    const revoked = await refreshTokenRepo.revokeToken(refreshToken);
+    logger.info(`Logout: session revoked`, { userId: revoked.userId });
   }
 }
