@@ -1,5 +1,11 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.40] - email template improved
+**P.R Raised by** : shubh404-SE on **Date** : 2026-09-27
+
+### Changed
+  - email template improved for better look and feel.
+---
 ## Version [1.2.39] - notify bussiness when it is on hold by superadmin
 **P.R Raised by** : shubh404-SE on **Date** : 2026-09-25
 
