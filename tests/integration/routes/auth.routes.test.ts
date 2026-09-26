@@ -360,6 +360,28 @@ describe('Auth Routes', () => {
             expect(res.status).toBe(200);
             expect(res.body.message).toContain('Logout successful');
         });
+
+        it('should call AuthService.logout with the refresh token itself, not req.user (unset on this route)', async () => {
+            (AuthService.logout as jest.Mock).mockResolvedValue(undefined);
+
+            const res = await request(app)
+                .post('/auth/logout')
+                .set('Cookie', ['ck_refresh_token=some-refresh-token-value']);
+
+            expect(res.status).toBe(200);
+            expect(AuthService.logout).toHaveBeenCalledWith('some-refresh-token-value');
+        });
+
+        it('should still return success even if AuthService.logout throws', async () => {
+            (AuthService.logout as jest.Mock).mockRejectedValue(new Error('db down'));
+
+            const res = await request(app)
+                .post('/auth/logout')
+                .set('Cookie', ['ck_refresh_token=some-refresh-token-value']);
+
+            expect(res.status).toBe(200);
+            expect(res.body.message).toContain('Logout successful');
+        });
     });
 
     // ==================== GET PROFILE ====================
