@@ -9,6 +9,6 @@ export const mailConfig = {
   
   contact: {
     supportEmail: 'info@contentkosh.in' as string,
-    supportPhone: '6549873215' as string | null,
+    supportPhone: '9351274467' as string | null,
   },
 };
