@@ -26,6 +26,7 @@ async function notifyBusinessStatusChange(business: Business, action: BusinessSt
         instituteName: business.instituteName,
         action,
         reason: business.statusReason,
+        privacyUrl: `${config.server.frontendUrl}/privacy-policy`,
       }),
     });
   } catch (error) {
