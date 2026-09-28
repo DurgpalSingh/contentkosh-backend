@@ -1,5 +1,11 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.40] - restrict batch detail access from unknown user
+**P.R Raised by** : shubh404-SE on **Date** : 2026-09-25
+
+### Fixed
+  - fixed issue in batch detail api, now only student and teacher of that batch can access the batch details.
+---
 ## Version [1.2.39] - notify bussiness when it is on hold by superadmin
 **P.R Raised by** : shubh404-SE on **Date** : 2026-09-25
 

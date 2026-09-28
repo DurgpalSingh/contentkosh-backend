@@ -216,9 +216,20 @@ export class BatchService {
         return await batchRepo.findBatchesByUserId(userId);
     }
 
-    async getUsersByBatch(batchId: number, role?: UserRole) {
+    async getUsersByBatch(batchId: number, requestingUser: IUser, role?: UserRole) {
         logger.info('BatchService: Fetching users for batch', { batchId, role });
-        return await batchRepo.findUsersByBatchId(batchId, role);
+        const users = await batchRepo.findUsersByBatchId(batchId, role);
+
+        const canSeeEmail = requestingUser.role === UserRole.ADMIN
+            || requestingUser.role === UserRole.TEACHER
+            || requestingUser.role === UserRole.SUPERADMIN;
+        if (canSeeEmail) return users;
+
+        return users.map((batchUser: any) => {
+            if (!batchUser.user) return batchUser;
+            const { email: _email, ...userWithoutEmail } = batchUser.user;
+            return { ...batchUser, user: userWithoutEmail };
+        });
     }
 
     async getAllActiveBatches(user: IUser, query: ParsedQs = {}): Promise<Batch[]> {
@@ -327,18 +338,24 @@ export class BatchService {
             include: { course: { include: { exam: true } } }
         }) as any; // Cast for simplified access
 
-        if (!batchWithRelations) throw new NotFoundError('Batch not found');
+        const exam = batchWithRelations?.course?.exam;
+        this.throwOnFirstMatch([
+            { when: !batchWithRelations, error: new NotFoundError('Batch not found') },
+            { when: !exam, error: new ForbiddenError('Batch is not correctly associated with an exam') },
+            {
+                when: user.role !== UserRole.SUPERADMIN && exam?.businessId !== user.businessId,
+                error: new ForbiddenError('You do not have access to this batch')
+            },
+        ]);
 
-        const exam = batchWithRelations.course?.exam;
-        if (!exam) {
-            throw new ForbiddenError('Batch is not correctly associated with an exam');
-        }
+        const enrollmentRequired = new Set<string>([UserRole.USER, UserRole.STUDENT]).has(user.role);
+        const isMember = !enrollmentRequired || await batchRepo.isActiveUserInBatch(user.id, batchId);
 
-        const isSuperAdmin = user.role === UserRole.SUPERADMIN;
-        const hasBusinessAccess = exam.businessId === user.businessId;
-
-        if (!isSuperAdmin && !hasBusinessAccess) {
-            throw new ForbiddenError('You do not have access to this batch');
-        }
+        this.throwOnFirstMatch([
+            {
+                when: enrollmentRequired && !isMember,
+                error: new ForbiddenError('You must be enrolled in this batch to access it')
+            },
+        ]);
     }
 }
