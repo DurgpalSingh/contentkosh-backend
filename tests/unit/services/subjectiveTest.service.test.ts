@@ -16,6 +16,7 @@ jest.mock('../../../src/repositories/user.repo');
 jest.mock('../../../src/utils/test.utils');
 jest.mock('../../../src/utils/fileSignature.util');
 jest.mock('../../../src/services/privateFile.service', () => ({
+  ...jest.requireActual('../../../src/services/privateFile.service'),
   privateFileService: {
     buildKey: (...segments: Array<string | number>) => segments.join('/'),
     moveIntoPlace: jest.fn(),
@@ -79,7 +80,7 @@ const buildSubmission = (
   ...overrides,
 });
 
-const uploadedFile = { path: 'private-uploads/tmp/tmp-1.pdf' } as Express.Multer.File;
+const uploadedFile = { path: 'private-uploads/tmp/tmp-1.pdf', originalname: 'rahul-gs1-mock3.pdf' } as Express.Multer.File;
 
 const uniqueViolation = () =>
   new Prisma.PrismaClientKnownRequestError('Unique constraint failed', { code: 'P2002', clientVersion: 'test' });
@@ -316,7 +317,7 @@ describe('SubjectiveTestService', () => {
       repo.markSubmissionSubmitted.mockResolvedValue(1);
       const result = await service.submit(BUSINESS_ID, 'st-1', uploadedFile, STUDENT);
       const key = files.moveIntoPlace.mock.calls[0]![1];
-      expect(key).toMatch(/^subjective\/1\/st-1\/answers\/42-.*\.pdf$/);
+      expect(key).toMatch(/^subjective\/1\/st-1\/answers\/42-\d+-\d+__rahul-gs1-mock3\.pdf$/);
       expect(repo.markSubmissionSubmitted).toHaveBeenCalledWith('sub-1', { answerSheetPath: key, submittedAt: result.submittedAt });
       expect(result.displayStatus).toBe(SubjectiveDisplayStatus.SUBMITTED);
     });
@@ -434,6 +435,9 @@ describe('SubjectiveTestService', () => {
       startedAt: status === null ? null : new Date(Date.now() - 10 * 60_000),
       submittedAt: null,
       marksAwarded: null,
+      remarks: null,
+      answerSheetPath: null,
+      hasCheckedAnswerSheet: false,
       checkedAt: null,
     });
 

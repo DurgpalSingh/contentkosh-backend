@@ -67,6 +67,9 @@ export type SubjectiveRosterRow = {
   startedAt: Date | null;
   submittedAt: Date | null;
   marksAwarded: number | null;
+  remarks: string | null;
+  answerSheetPath: string | null;
+  hasCheckedAnswerSheet: boolean;
   checkedAt: Date | null;
 };
 
@@ -245,7 +248,8 @@ export async function findSubmissionRoster(
       )
       SELECT
         u.id AS student_id, u.name AS student_name, u.email AS student_email,
-        s.id AS submission_id, s.status, s.started_at, s.submitted_at, s.marks_awarded, s.checked_at
+        s.id AS submission_id, s.status, s.started_at, s.submitted_at, s.marks_awarded, s.checked_at,
+        s.remarks, s.answer_sheet_path, (s.checked_answer_sheet_path IS NOT NULL) AS has_checked_answer_sheet
       FROM roster r
       JOIN public.users u ON u.id = r.user_id
       LEFT JOIN ${schema}.subjective_test_submissions s
@@ -267,6 +271,9 @@ export async function findSubmissionRoster(
     startedAt: row.started_at ?? null,
     submittedAt: row.submitted_at ?? null,
     marksAwarded: row.marks_awarded ?? null,
+    remarks: row.remarks ?? null,
+    answerSheetPath: row.answer_sheet_path ?? null,
+    hasCheckedAnswerSheet: row.has_checked_answer_sheet === true,
     checkedAt: row.checked_at ?? null,
   }));
 }

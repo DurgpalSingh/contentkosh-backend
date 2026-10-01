@@ -74,6 +74,39 @@ export class PrivateFileService {
   }
 }
 
+/** Separates the generated part of a storage key from the uploader's original file name. */
+const ORIGINAL_NAME_SEPARATOR = '__';
+const MAX_ORIGINAL_NAME_LENGTH = 100;
+
+/**
+ * The uploader's file name, made safe to embed in a storage key (keeps letters and combining
+ * marks in any script, digits, space, dot, dash, underscore). Multer decodes multipart names as latin1, so UTF-8
+ * names (e.g. Hindi) are re-decoded first.
+ */
+export function toKeyFileName(file: Express.Multer.File): string {
+  const decoded = Buffer.from(file.originalname, 'latin1').toString('utf8');
+  const baseName = path.basename(decoded.replace(/\\/g, '/'));
+  const safe = baseName
+    .replace(/[^\p{L}\p{M}\p{N} ._-]+/gu, '_')
+    .replace(new RegExp(ORIGINAL_NAME_SEPARATOR, 'g'), '_')
+    .trim()
+    .slice(-MAX_ORIGINAL_NAME_LENGTH);
+  return safe || 'file.pdf';
+}
+
+/** Appends the original name to a generated file name: `<generated>__<original>`. */
+export function withOriginalName(generatedName: string, originalName: string): string {
+  return `${generatedName}${ORIGINAL_NAME_SEPARATOR}${originalName}`;
+}
+
+/** Reads the original file name back out of a storage key; null for keys without one. */
+export function originalNameFromKey(key: string | null | undefined): string | null {
+  if (!key) return null;
+  const fileName = key.slice(key.lastIndexOf('/') + 1);
+  const index = fileName.indexOf(ORIGINAL_NAME_SEPARATOR);
+  return index >= 0 ? fileName.slice(index + ORIGINAL_NAME_SEPARATOR.length) || null : null;
+}
+
 function toSafeFileName(name: string): string {
   const cleaned = name.replace(/[^\w\-. ]+/g, '_').trim();
   return cleaned.length > 0 ? cleaned : 'file';

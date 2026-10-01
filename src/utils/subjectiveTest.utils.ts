@@ -10,6 +10,11 @@ export const SUBJECTIVE_TIME_TOLERANCE_MS = 1000;
 type TestWindow = { startAt: Date; deadlineAt: Date; durationMinutes: number };
 type SubmissionState = { status: number; startedAt: Date };
 
+/** The question paper is named after the paper type, e.g. "GS Paper I.pdf". */
+export function questionPaperFileName(paperType: string): string {
+  return `${paperType.trim() || 'Question paper'}.pdf`;
+}
+
 /** The earlier of `startedAt + duration` and the test deadline. */
 export function computeEffectiveEnd(test: TestWindow, startedAt: Date): Date {
   const endByDuration = new Date(startedAt.getTime() + test.durationMinutes * 60_000);
