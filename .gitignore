@@ -68,3 +68,5 @@ Thumbs.db
 # Pre-baseline migration history, kept locally for reference only (see prisma/migrations/20260807000000_baseline_init)
 prisma/migrations_archive_pre_baseline/
 /uploads/courses/
+# Private files (subjective test papers/answer sheets) - never committed or publicly served
+/private-uploads/
