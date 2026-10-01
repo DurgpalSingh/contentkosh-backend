@@ -87,3 +87,43 @@ export function toAttemptStatusLabel(v: AttemptStatus) {
   }
 }
 
+
+// ---------------------------------------------------------------------------
+// Subjective tests
+// ---------------------------------------------------------------------------
+
+/** Persisted submission status. EXPIRED is never stored; see SubjectiveDisplayStatus. */
+export const SubjectiveSubmissionStatus = {
+  IN_PROGRESS: 0,
+  SUBMITTED: 1,
+  CHECKED: 2,
+} as const;
+
+export type SubjectiveSubmissionStatus =
+  (typeof SubjectiveSubmissionStatus)[keyof typeof SubjectiveSubmissionStatus];
+
+// API-only enum (not persisted): derived from the stored status and the attempt's effective end.
+export const SubjectiveDisplayStatus = {
+  NOT_STARTED: 'NOT_STARTED',
+  IN_PROGRESS: 'IN_PROGRESS',
+  SUBMITTED: 'SUBMITTED',
+  CHECKED: 'CHECKED',
+  EXPIRED: 'EXPIRED',
+} as const;
+
+export type SubjectiveDisplayStatus =
+  (typeof SubjectiveDisplayStatus)[keyof typeof SubjectiveDisplayStatus];
+
+// API-only enum (not persisted): test window relative to now.
+export const SubjectiveAvailability = {
+  UPCOMING: 'UPCOMING',
+  OPEN: 'OPEN',
+  CLOSED: 'CLOSED',
+} as const;
+
+export type SubjectiveAvailability =
+  (typeof SubjectiveAvailability)[keyof typeof SubjectiveAvailability];
+
+export function isSubjectiveDisplayStatus(v: unknown): v is SubjectiveDisplayStatus {
+  return typeof v === 'string' && (Object.values(SubjectiveDisplayStatus) as string[]).includes(v);
+}

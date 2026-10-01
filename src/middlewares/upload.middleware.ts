@@ -2,12 +2,14 @@ import { Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import * as path from 'path';
 import * as fs from 'fs';
-import { BadRequestError } from '../errors/api.errors';
+import { ApiError, BadRequestError } from '../errors/api.errors';
 import { ContentType, UserRole } from '@prisma/client';
 import { AuthRequest } from '../dtos/auth.dto';
 import logger from '../utils/logger';
 
 import { EDITOR_IMAGE_UPLOAD_CONFIG, FILE_TYPE_CONFIG, IMAGE_UPLOAD_CONFIG } from '../config/file-type';
+import { SUBJECTIVE_TEST_CONFIG } from '../config/subjectiveTest.config';
+import { requestContext } from '../contexts/request-context';
 
 const BYTES_IN_MB = 1024 * 1024;
 
@@ -473,3 +475,61 @@ export const uploadBulkFile = (req: Request, res: Response, next: NextFunction):
     next(error);
   });
 };
+
+// ---------------------------------------------------------------------------
+// Private PDF upload (subjective tests) — never stored under public `uploads/`
+// ---------------------------------------------------------------------------
+const privateTempDir = path.join(SUBJECTIVE_TEST_CONFIG.privateRootDir, SUBJECTIVE_TEST_CONFIG.tempSubDir);
+ensureDirExists(privateTempDir);
+
+const privatePdfUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, privateTempDir),
+    filename: (_req, _file, cb) => {
+      cb(null, `tmp-${Date.now()}-${Math.round(Math.random() * 1e9)}${SUBJECTIVE_TEST_CONFIG.pdfExtension}`);
+    },
+  }),
+  limits: { fileSize: SUBJECTIVE_TEST_CONFIG.maxPdfSizeBytes },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (ext !== SUBJECTIVE_TEST_CONFIG.pdfExtension || file.mimetype !== SUBJECTIVE_TEST_CONFIG.pdfMimeType) {
+      return cb(new BadRequestError('Only PDF files are allowed'));
+    }
+    cb(null, true);
+  },
+});
+
+/**
+ * Accepts one optional PDF in `fieldName` plus an optional `data` JSON string field.
+ * The temp file is removed when the response finishes unless the service has already
+ * moved it to its final storage key — this covers DTO validation and service failures
+ * without each caller having to clean up.
+ */
+export const createPrivatePdfUpload = (fieldName: string) =>
+  (req: Request, res: Response, next: NextFunction) => {
+    // Re-enter the request context: multer can call back outside it, which would send
+    // tenant-scoped queries to the public schema.
+    privatePdfUpload.single(fieldName)(req, res, requestContext.bind((error: any) => {
+      const tempPath = req.file?.path;
+      if (tempPath) {
+        res.on('finish', () => {
+          fs.promises.rm(tempPath, { force: true }).catch((cleanupError) => {
+            logger.error(`[upload-middleware] temp cleanup failed path=${tempPath}`, cleanupError);
+          });
+        });
+      }
+
+      if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
+        return next(new BadRequestError(`File size cannot exceed ${SUBJECTIVE_TEST_CONFIG.maxPdfSizeMb}MB`));
+      }
+      if (error instanceof ApiError) return next(error);
+      if (error) return normalizeUploadError(error, next);
+
+      try {
+        parseMultipartData(req);
+      } catch (parseError) {
+        return next(parseError);
+      }
+      next();
+    }));
+  };
