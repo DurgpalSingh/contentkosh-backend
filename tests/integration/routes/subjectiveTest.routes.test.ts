@@ -22,6 +22,7 @@ jest.mock('../../../src/repositories/batch.repo');
 jest.mock('../../../src/repositories/subject.repo');
 jest.mock('../../../src/repositories/user.repo');
 jest.mock('../../../src/services/privateFile.service', () => ({
+  ...jest.requireActual('../../../src/services/privateFile.service'),
   privateFileService: {
     buildKey: (...segments: Array<string | number>) => segments.join('/'),
     moveIntoPlace: jest.fn(),

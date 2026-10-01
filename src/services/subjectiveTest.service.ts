@@ -18,14 +18,19 @@ import {
   UpdateSubjectiveTestDto,
 } from '../dtos/subjectiveTest.dto';
 import { SubjectiveTestMapper } from '../mappers/subjectiveTest.mapper';
-import { privateFileService } from './privateFile.service';
+import { originalNameFromKey, privateFileService, toKeyFileName, withOriginalName } from './privateFile.service';
 import { hasPdfSignature } from '../utils/fileSignature.util';
 import {
   assertBatchBelongsToBusiness,
   assertSubjectForBatch,
   assertTestBatchAccess,
 } from '../utils/test.utils';
-import { computeEffectiveEnd, deriveAvailability, deriveDisplayStatus } from '../utils/subjectiveTest.utils';
+import {
+  computeEffectiveEnd,
+  deriveAvailability,
+  deriveDisplayStatus,
+  questionPaperFileName,
+} from '../utils/subjectiveTest.utils';
 import logger from '../utils/logger';
 
 type ActingUser = { id: number; role: UserRole };
@@ -108,9 +113,21 @@ export class SubjectiveTestService {
     return privateFileService.buildKey(SUBJECTIVE_TEST_CONFIG.storagePrefix, businessId, subjectiveTestId);
   }
 
-  /** A new, never-reused key so replacing a file never overwrites the previous version. */
-  private newFileKey(businessId: number, subjectiveTestId: string, baseName: string | number, folder?: string) {
-    const fileName = `${baseName}-${Date.now()}-${Math.round(Math.random() * 1e9)}${SUBJECTIVE_TEST_CONFIG.pdfExtension}`;
+  /**
+   * A new, never-reused key so replacing a file never overwrites the previous version.
+   * `originalName` (already key-safe) is kept at the end of the key so it can be shown later.
+   */
+  private newFileKey(
+    businessId: number,
+    subjectiveTestId: string,
+    baseName: string | number,
+    folder?: string,
+    originalName?: string,
+  ) {
+    const generated = `${baseName}-${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    const fileName = originalName
+      ? withOriginalName(generated, originalName)
+      : `${generated}${SUBJECTIVE_TEST_CONFIG.pdfExtension}`;
     const testFolder = this.testFolderKey(businessId, subjectiveTestId);
     return folder
       ? privateFileService.buildKey(testFolder, folder, fileName)
@@ -473,7 +490,7 @@ export class SubjectiveTestService {
     this.assertResumable(test, submission, now);
     await this.assertPdfUpload(file);
 
-    const key = this.newFileKey(businessId, test.id, user.id, 'answers');
+    const key = this.newFileKey(businessId, test.id, user.id, 'answers', toKeyFileName(file));
     await this.storeThenPersist(file, key, async () => {
       const changed = await subjectiveRepo.markSubmissionSubmitted(submission.id, { answerSheetPath: key, submittedAt: now });
       if (!changed) throw new BadRequestError('You have already submitted this test');
@@ -510,12 +527,15 @@ export class SubjectiveTestService {
 
   private questionPaperRef(test: SubjectiveTestRecord): PrivateFileRef {
     if (!test.questionPaperPath) throw new NotFoundError('Question paper');
-    return { key: test.questionPaperPath, downloadName: `${test.name} - question paper.pdf` };
+    return { key: test.questionPaperPath, downloadName: questionPaperFileName(test.paperType) };
   }
 
   private answerSheetRef(test: SubjectiveTestRecord, submission: SubjectiveSubmissionRecord): PrivateFileRef {
     if (!submission.answerSheetPath) throw new NotFoundError('Answer sheet');
-    return { key: submission.answerSheetPath, downloadName: `${test.name} - answer sheet.pdf` };
+    return {
+      key: submission.answerSheetPath,
+      downloadName: originalNameFromKey(submission.answerSheetPath) ?? `${test.name} - answer sheet.pdf`,
+    };
   }
 
   private checkedAnswerSheetRef(test: SubjectiveTestRecord, submission: SubjectiveSubmissionRecord): PrivateFileRef {

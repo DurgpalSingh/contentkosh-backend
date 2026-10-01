@@ -8,7 +8,13 @@ import type {
   SubjectiveSubmissionRecord,
   SubjectiveTestRecord,
 } from '../repositories/subjectiveTest.repo';
-import { computeEffectiveEnd, deriveAvailability, deriveDisplayStatus } from '../utils/subjectiveTest.utils';
+import {
+  computeEffectiveEnd,
+  deriveAvailability,
+  deriveDisplayStatus,
+  questionPaperFileName,
+} from '../utils/subjectiveTest.utils';
+import { originalNameFromKey } from '../services/privateFile.service';
 
 // Storage keys (questionPaperPath, answerSheetPath, checkedAnswerSheetPath) are never
 // returned; clients only get `has*` flags and download through the file endpoints.
@@ -31,6 +37,8 @@ export type SubjectiveTestResponse = {
   startAt: Date;
   deadlineAt: Date;
   hasQuestionPaper: boolean;
+  /** Display/download name, derived from the paper type. */
+  questionPaperName: string | null;
   createdBy: number;
   updatedBy: number | null;
   createdAt: Date;
@@ -63,6 +71,8 @@ export type SubjectiveStudentSubmissionResponse = {
   effectiveDeadlineAt: Date;
   submittedAt: Date | null;
   hasAnswerSheet: boolean;
+  /** The student's original PDF name. */
+  answerSheetName: string | null;
   /** Present only once the submission is CHECKED. */
   result: SubjectiveResultResponse | null;
 };
@@ -76,6 +86,7 @@ export type SubjectiveStaffSubmissionResponse = {
   effectiveDeadlineAt: Date;
   submittedAt: Date | null;
   hasAnswerSheet: boolean;
+  answerSheetName: string | null;
   marksAwarded: number | null;
   remarks: string | null;
   hasCheckedAnswerSheet: boolean;
@@ -91,9 +102,14 @@ export type SubjectiveRosterRowResponse = {
   displayStatus: SubjectiveDisplayStatus;
   startedAt: Date | null;
   submittedAt: Date | null;
+  answerSheetName: string | null;
   marksAwarded: number | null;
+  remarks: string | null;
+  hasCheckedAnswerSheet: boolean;
   checkedAt: Date | null;
 };
+
+const paperName = (t: SubjectiveTestRecord) => (t.questionPaperPath ? questionPaperFileName(t.paperType) : null);
 
 export const SubjectiveTestMapper = {
   test(t: SubjectiveTestRecord): SubjectiveTestResponse {
@@ -115,6 +131,7 @@ export const SubjectiveTestMapper = {
       startAt: t.startAt,
       deadlineAt: t.deadlineAt,
       hasQuestionPaper: Boolean(t.questionPaperPath),
+      questionPaperName: paperName(t),
       createdBy: t.createdBy,
       updatedBy: t.updatedBy ?? null,
       createdAt: t.createdAt,
@@ -142,6 +159,7 @@ export const SubjectiveTestMapper = {
       startAt: t.startAt,
       deadlineAt: t.deadlineAt,
       hasQuestionPaper: Boolean(t.questionPaperPath),
+      questionPaperName: paperName(t),
       availability: deriveAvailability(t, now),
       displayStatus: deriveDisplayStatus(t, submission, now),
       submissionId: submission?.id ?? null,
@@ -164,6 +182,7 @@ export const SubjectiveTestMapper = {
       effectiveDeadlineAt: computeEffectiveEnd(t, s.startedAt),
       submittedAt: s.submittedAt ?? null,
       hasAnswerSheet: Boolean(s.answerSheetPath),
+      answerSheetName: originalNameFromKey(s.answerSheetPath),
       result: isChecked
         ? {
             marksAwarded: s.marksAwarded ?? 0,
@@ -191,6 +210,7 @@ export const SubjectiveTestMapper = {
       effectiveDeadlineAt: computeEffectiveEnd(t, s.startedAt),
       submittedAt: s.submittedAt ?? null,
       hasAnswerSheet: Boolean(s.answerSheetPath),
+      answerSheetName: originalNameFromKey(s.answerSheetPath),
       marksAwarded: s.marksAwarded ?? null,
       remarks: s.remarks ?? null,
       hasCheckedAnswerSheet: Boolean(s.checkedAnswerSheetPath),
@@ -211,7 +231,10 @@ export const SubjectiveTestMapper = {
       displayStatus: deriveDisplayStatus(t, submission, now),
       startedAt: row.startedAt,
       submittedAt: row.submittedAt,
+      answerSheetName: originalNameFromKey(row.answerSheetPath),
       marksAwarded: row.marksAwarded,
+      remarks: row.remarks,
+      hasCheckedAnswerSheet: row.hasCheckedAnswerSheet,
       checkedAt: row.checkedAt,
     };
   },
