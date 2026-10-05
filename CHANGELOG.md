@@ -1,5 +1,11 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.43] - subjective test paper
+**P.R Raised by** : shubh404-SE on **Date** : 2026-10-06
+
+### Added
+  - added new subjective test table and api end points for admin/teacher/student to create and attempt subjective test and get result of subjective test.
+---
 ## Version [1.2.42] - Single Session Login
 **P.R Raised by** : shubh404-SE on **Date** : 2026-09-27
 
