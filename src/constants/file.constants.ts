@@ -71,3 +71,6 @@ export const FILE_PATH_REGEX = {
   /** Anything except letters (any language), digits, space, `.`, `_` and `-`. */
   UNSAFE_FILE_NAME_CHARACTERS: /[^\p{L}\p{M}\p{N} ._-]+/gu,
 } as const;
+
+// Max number of files accepted in a single multi-file content upload
+export const CONTENT_BULK_UPLOAD_MAX_FILES = 10;
