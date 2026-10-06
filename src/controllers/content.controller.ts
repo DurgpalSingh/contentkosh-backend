@@ -3,7 +3,7 @@ import { ApiResponseHandler } from '../utils/apiResponse';
 import logger from '../utils/logger';
 import { ValidationUtils } from '../utils/validation';
 import { plainToInstance } from 'class-transformer';
-import { CreateContentDto, UpdateContentDto, ContentQueryDto } from '../dtos/content.dto';
+import { CreateContentDto, CreateBulkContentDto, UpdateContentDto, ContentQueryDto } from '../dtos/content.dto';
 import { ContentService } from '../services/content.service';
 import { AuthRequest } from '../dtos/auth.dto';
 import { handleControllerError } from '../utils/controllerErrorHandler';
@@ -33,6 +33,20 @@ export class ContentController {
       ApiResponseHandler.success(res, content, 'Content created successfully', 201);
     } catch (error) {
       handleControllerError(res, error, 'Failed to create content', 'Error creating content');
+    }
+  };
+
+  public createContentsBulk = async (req: AuthRequest, res: Response) => {
+    try {
+      const batchId = ValidationUtils.validateId(req.params.batchId, 'Batch ID');
+      const contentData = plainToInstance(CreateBulkContentDto, req.body);
+      const user = req.user!;
+
+      const contents = await this.contentService.createContentsBulk(batchId, contentData, user);
+
+      ApiResponseHandler.success(res, contents, `${contents.length} content(s) created successfully`, 201);
+    } catch (error) {
+      handleControllerError(res, error, 'Failed to create contents', 'Error creating contents');
     }
   };
 

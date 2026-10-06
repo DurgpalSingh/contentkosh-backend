@@ -2,7 +2,7 @@ import { Prisma, Content, ContentType, ContentStatus, UserRole, SubjectStatus } 
 import * as contentRepo from '../repositories/content.repo';
 import * as batchRepo from '../repositories/batch.repo';
 import * as subjectRepo from '../repositories/subject.repo';
-import { CreateContentDto, UpdateContentDto, ContentQueryDto } from '../dtos/content.dto';
+import { CreateContentDto, CreateBulkContentDto, UpdateContentDto, ContentQueryDto } from '../dtos/content.dto';
 import { NotFoundError, BadRequestError, ForbiddenError } from '../errors/api.errors';
 import { IUser } from '../dtos/auth.dto';
 import logger from '../utils/logger';
@@ -65,6 +65,57 @@ export class ContentService {
       throw error;
     }
 
+  }
+
+  /**
+   * Creates one content record per uploaded file in a single transaction.
+   * Uploaded files are removed by the upload middleware if this request fails.
+   */
+  async createContentsBulk(
+    batchId: number,
+    data: CreateBulkContentDto,
+    user: IUser
+  ): Promise<Content[]> {
+    logger.info('ContentService: Creating multiple contents', {
+      batchId,
+      count: data.items.length,
+      userId: user.id
+    });
+
+    for (const item of data.items) {
+      this.validateFileUpload(item.type, item.fileSize);
+      this.validateFilePath(item.filePath, item.type);
+    }
+
+    const createDataList: Prisma.ContentCreateInput[] = data.items.map((item) => ({
+      title: item.title,
+      type: item.type,
+      filePath: item.filePath,
+      fileSize: item.fileSize,
+      status: data.status || ContentStatus.ACTIVE,
+      batch: {
+        connect: { id: batchId }
+      },
+      uploader: {
+        connect: { id: user.id }
+      },
+      ...(data.subjectId !== undefined
+        ? {
+            subject: {
+              connect: { id: data.subjectId }
+            }
+          }
+        : {})
+    }));
+
+    const contents = await contentRepo.createContents(createDataList, user.businessId!);
+    logger.info('ContentService: Multiple contents created', {
+      contentIds: contents.map((content) => content.id),
+      batchId,
+      userId: user.id,
+      subjectId: data.subjectId
+    });
+    return contents.map((content) => ContentMapper.toResponse(content));
   }
 
   async getContent(id: number, user: IUser): Promise<Content> {

@@ -8,6 +8,7 @@ import { AuthRequest } from '../dtos/auth.dto';
 import logger from '../utils/logger';
 
 import { EDITOR_IMAGE_UPLOAD_CONFIG, FILE_TYPE_CONFIG, IMAGE_UPLOAD_CONFIG } from '../config/file-type';
+import { CONTENT_BULK_UPLOAD_MAX_FILES } from '../constants/file.constants';
 
 const BYTES_IN_MB = 1024 * 1024;
 
@@ -205,6 +206,90 @@ export const validateFileSize = (req: Request, res: Response, next: NextFunction
   req.body.type = rule.contentType;
   req.body.filePath = req.file.path;
   req.body.fileSize = req.file.size;
+  next();
+};
+
+// ─── Multi-file content upload ────────────────────────────────────────────────
+
+const getUploadedFileList = (req: Request): Express.Multer.File[] =>
+  Array.isArray(req.files) ? req.files : [];
+
+const removeUploadedFiles = (req: Request): void => {
+  for (const file of getUploadedFileList(req)) removeUploadedFile(file.path);
+};
+
+/**
+ * Deletes every file saved by multer for this request if the response ends
+ * with an error status. Covers failures in later middlewares (e.g. validateDto,
+ * which responds directly) as well as service/DB errors in the controller.
+ */
+const removeUploadedFilesOnErrorResponse = (req: Request, res: Response): void => {
+  res.on('finish', () => {
+    if (res.statusCode >= 400) removeUploadedFiles(req);
+  });
+};
+
+// Middleware to handle multiple file uploads (field name: "files")
+export const uploadMultipleFiles = (req: Request, res: Response, next: NextFunction) => {
+  removeUploadedFilesOnErrorResponse(req, res);
+  upload.array('files', CONTENT_BULK_UPLOAD_MAX_FILES)(req, res, (error: any) => {
+    if (error instanceof multer.MulterError && error.code === 'LIMIT_UNEXPECTED_FILE') {
+      return next(new BadRequestError(`You can upload up to ${CONTENT_BULK_UPLOAD_MAX_FILES} files at once.`));
+    }
+    if (error) return normalizeUploadError(error, next);
+    const msg = getRejectedUploadMessage(req);
+    if (msg) return next(new BadRequestError(msg));
+    next();
+  });
+};
+
+const parseTitles = (value: unknown): unknown[] => {
+  if (Array.isArray(value)) return value;
+  if (typeof value !== 'string') return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [value];
+  } catch {
+    return [value];
+  }
+};
+
+/**
+ * Validates type/size of every uploaded file and maps them, together with the
+ * `titles` field (JSON array in the same order as `files`), to `req.body.items`.
+ */
+export const validateMultipleFileSizes = (req: Request, res: Response, next: NextFunction) => {
+  const files = getUploadedFileList(req);
+  if (files.length === 0) return next(new BadRequestError('No file uploaded'));
+
+  const titles = parseTitles(req.body.titles);
+  if (titles.length !== files.length) {
+    return next(new BadRequestError('Each uploaded file must have a title'));
+  }
+
+  const items = [];
+  for (const [index, file] of files.entries()) {
+    const rule = getRuleByOriginalName(file.originalname);
+    if (!rule) {
+      return next(new BadRequestError(
+        `"${file.originalname}": file type is not accepted. Allowed types: ${acceptedExtensionsLabel}.`
+      ));
+    }
+    if (file.size > rule.maxSizeBytes) {
+      return next(new BadRequestError(
+        `"${file.originalname}": file size cannot exceed ${formatSizeInMb(rule.maxSizeBytes)} for ${rule.contentType} files.`
+      ));
+    }
+    items.push({
+      title: typeof titles[index] === 'string' ? (titles[index] as string).trim() : titles[index],
+      type: rule.contentType,
+      filePath: file.path,
+      fileSize: file.size,
+    });
+  }
+
+  req.body.items = items;
+  delete req.body.titles;
   next();
 };
 

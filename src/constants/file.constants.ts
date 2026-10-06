@@ -46,3 +46,6 @@ export const MIME_TYPES = {
 
   DEFAULT: 'application/octet-stream'
 };
+
+// Max number of files accepted in a single multi-file content upload
+export const CONTENT_BULK_UPLOAD_MAX_FILES = 10;

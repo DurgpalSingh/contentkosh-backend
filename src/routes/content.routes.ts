@@ -3,9 +3,9 @@ import { UserRole } from '@prisma/client';
 import { authenticate, authorize } from '../middlewares/auth.middleware';
 import { validateIdParam, authorizeContentAccess, authorizeContentCreation } from '../middlewares/validation.middleware';
 import { validateDto } from '../middlewares/validation/dto.middleware';
-import { CreateContentDto, UpdateContentDto } from '../dtos/content.dto';
+import { CreateContentDto, CreateBulkContentDto, UpdateContentDto } from '../dtos/content.dto';
 import { contentController } from '../controllers/content.controller';
-import { uploadSingleFile, validateFileSize } from '../middlewares/upload.middleware';
+import { uploadSingleFile, validateFileSize, uploadMultipleFiles, validateMultipleFileSizes } from '../middlewares/upload.middleware';
 
 const router = Router();
 
@@ -69,6 +69,70 @@ router.post(
   validateFileSize,
   validateDto(CreateContentDto),
   contentController.createContent
+);
+
+/**
+ * @swagger
+ * /api/batches/{batchId}/contents/bulk:
+ *   post:
+ *     summary: Create multiple contents for a batch (one content per uploaded file)
+ *     tags: [Content]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: batchId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Batch ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required: ['files', 'titles']
+ *             properties:
+ *               files:
+ *                 type: array
+ *                 maxItems: 10
+ *                 items:
+ *                   type: string
+ *                   format: binary
+ *                 description: Files to upload (PDF, Image, DOC/DOCX or Excel)
+ *               titles:
+ *                 type: string
+ *                 description: JSON array of titles, in the same order as files
+ *                 example: '["Chapter 1 Notes", "Chapter 2 Notes"]'
+ *               subjectId:
+ *                 type: integer
+ *                 description: Subject applied to all created contents
+ *               status:
+ *                 type: string
+ *                 enum: [ACTIVE, INACTIVE]
+ *                 description: Status applied to all created contents
+ *     responses:
+ *       201:
+ *         description: Contents created successfully (all or nothing)
+ *       400:
+ *         description: Invalid input data or file validation failed
+ *       403:
+ *         description: Insufficient permissions
+ *       404:
+ *         description: Batch not found
+ *       500:
+ *         description: Internal server error
+ */
+router.post(
+  '/batches/:batchId/contents/bulk',
+  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  validateIdParam('batchId'),
+  authorizeContentCreation,
+  uploadMultipleFiles,
+  validateMultipleFileSizes,
+  validateDto(CreateBulkContentDto),
+  contentController.createContentsBulk
 );
 
 /**
