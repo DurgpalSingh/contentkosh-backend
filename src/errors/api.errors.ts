@@ -81,6 +81,23 @@ export class ForbiddenError extends ApiError {
   }
 }
 
+export class SessionAlreadyActiveError extends ApiError {
+  constructor(
+    message: string = 'You are already logged in on another device or browser. Please log out from there first, or wait for that session to expire before logging in again.',
+  ) {
+    super(message, HTTP_STATUS.CONFLICT);
+    this.name = 'SessionAlreadyActiveError';
+  }
+
+  override respond(res: Response): void {
+    res.status(this.statusCode).json({
+      success: false,
+      apiCode: ApiCode.ERR_SESSION_ALREADY_ACTIVE,
+      message: this.message,
+    });
+  }
+}
+
 export class BusinessSuspendedError extends ApiError {
   action: string;
   reason: string | null | undefined;
