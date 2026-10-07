@@ -20,14 +20,23 @@ type UploadedFileRequest = {
 type FolderAccessRule = (request: UploadedFileRequest) => Promise<boolean>;
 
 /**
+ * Folders that are never served by URL to anyone (super admins included). Their features stream the
+ * files after their own checks: content via GET /api/contents/:id/file (batch access), subjective
+ * test papers/answer sheets via the subjective-test endpoints, `tmp` holds unvalidated uploads.
+ */
+const API_ONLY_FOLDERS = new Set<string>([
+  uploadFolders.content,
+  uploadFolders.subjectiveTests,
+  uploadFolders.temporaryUploads,
+]);
+
+/**
  * Who may load a file under `/uploads/<folder>/...` (email assets are public and never reach this).
+ * Folders without a rule are refused.
  * Images are shared inside a business (logos, profile pictures in member lists, course thumbnails,
  * images in questions), so the rule is "logged in and the file belongs to your business".
  */
 const FOLDER_ACCESS_RULES: Record<string, FolderAccessRule> = {
-  // Batch content is downloaded only through GET /api/contents/:id/file, which checks batch access.
-  [uploadFolders.content]: async () => false,
-
   [uploadFolders.profilePictures]: async ({ viewer, storedPublicPath }) => {
     const owner = await userRepo.findProfilePictureOwner(storedPublicPath);
     return Boolean(owner) && (owner!.id === viewer.id || owner!.businessId === viewer.businessId);
@@ -67,9 +76,8 @@ function parseUploadRequestPath(requestPath: string): { folder: string; segments
 export async function canViewUploadedFile(viewer: IUser, requestPath: string): Promise<boolean> {
   const parsedPath = parseUploadRequestPath(requestPath);
   const accessRule = parsedPath ? FOLDER_ACCESS_RULES[parsedPath.folder] : undefined;
-  if (!parsedPath || !accessRule) return false;
-  const isContentFile = parsedPath.folder === uploadFolders.content;
-  if (viewer.role === UserRole.SUPERADMIN && !isContentFile) return true;
+  if (!parsedPath || !accessRule || API_ONLY_FOLDERS.has(parsedPath.folder)) return false;
+  if (viewer.role === UserRole.SUPERADMIN) return true;
 
   const isAllowed = await accessRule({
     viewer,

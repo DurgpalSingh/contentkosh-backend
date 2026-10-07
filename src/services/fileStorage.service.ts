@@ -123,6 +123,27 @@ export function toStorageSafeFileName(uploadedFile: Express.Multer.File): string
   return safeName || 'file.pdf';
 }
 
+/** `<prefix>-<timestamp>-<random>`: unique, so a new upload never overwrites an existing file. */
+export function createUniqueFileStem(prefix: string | number): string {
+  return `${prefix}-${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+}
+
+/** `<prefix>-<timestamp>-<random><extension>`, e.g. `file-1700000000000-123.pdf`. */
+export function createUniqueFileName(prefix: string | number, extension: string): string {
+  return `${createUniqueFileStem(prefix)}${extension}`;
+}
+
+/**
+ * Converts a path stored in the DB into a key under `uploads/`. Accepts the multer form
+ * (`uploads/content/x.pdf`, `uploads\content\x.pdf` on Windows) and the public form (`/uploads/profile/x.png`).
+ * Paths outside `uploads/` give a `../` key, which `resolveStoragePath` refuses.
+ */
+export function toUploadsStorageKey(storedFilePath: string): string {
+  const pathRelativeToCwd = storedFilePath.replace(/\\/g, '/').replace(/^\/+/, '');
+  const absolutePath = path.resolve(process.cwd(), pathRelativeToCwd);
+  return path.relative(FILE_STORAGE_CONFIG.uploadsRootDir, absolutePath).split(path.sep).join('/');
+}
+
 /** `<generatedName>__<originalFileName>` — keeps the uploader's name without a DB column. */
 export function appendOriginalFileName(generatedName: string, originalFileName: string): string {
   return `${generatedName}${ORIGINAL_FILE_NAME_SEPARATOR}${originalFileName}`;
@@ -141,8 +162,5 @@ function toHeaderSafeFileName(fileName: string): string {
   return safeName.length > 0 ? safeName : 'file';
 }
 
-/** Subjective test question papers, answer sheets and checked copies. Never served by URL. */
-export const privateFileStorage = new FileStorageService(FILE_STORAGE_CONFIG.privateUploadsRootDir);
-
-/** Batch content files (PDF/image/doc). Served only through the content file endpoint. */
-export const contentFileStorage = new FileStorageService(FILE_STORAGE_CONFIG.contentUploadDir);
+/** The one storage for every feature: keys are relative to `uploads/` (e.g. `content/x.pdf`, `subjective/1/st-1/...`). */
+export const uploadsFileStorage = new FileStorageService(FILE_STORAGE_CONFIG.uploadsRootDir);

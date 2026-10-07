@@ -11,7 +11,8 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import { FILE_TYPE_CONFIG } from '../config/file-type';
 import { MIME_TYPES } from '../constants/file.constants';
-import type { StoredFileDownload } from './fileStorage.service';
+import { toUploadsStorageKey, type StoredFileDownload } from './fileStorage.service';
+import { UPLOAD_FOLDERS, uploadFolderDir } from '../config/fileStorage.config';
 
 export class ContentService {
 
@@ -188,7 +189,7 @@ export class ContentService {
 
     const storedFileName = path.basename(content.filePath);
     return {
-      storageKey: storedFileName,
+      storageKey: toUploadsStorageKey(content.filePath),
       downloadFileName: `${content.title}${path.extname(storedFileName)}`,
       contentType: this.getMimeType(content.type, storedFileName),
     };
@@ -219,7 +220,7 @@ export class ContentService {
       throw new BadRequestError('File path is required');
     }
 
-    const uploadDir = path.resolve(process.env.UPLOAD_DIR || 'uploads/content');
+    const uploadDir = path.resolve(uploadFolderDir(UPLOAD_FOLDERS.content));
     const resolvedPath = path.resolve(filePath);
 
     if (!resolvedPath.startsWith(uploadDir + path.sep)) {

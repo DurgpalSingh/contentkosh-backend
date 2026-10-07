@@ -9,7 +9,8 @@ import logger from '../utils/logger';
 
 import { EDITOR_IMAGE_UPLOAD_CONFIG, FILE_TYPE_CONFIG, IMAGE_UPLOAD_CONFIG } from '../config/file-type';
 import { SUBJECTIVE_TEST_CONFIG } from '../config/subjectiveTest.config';
-import { FILE_STORAGE_CONFIG } from '../config/fileStorage.config';
+import { FILE_STORAGE_CONFIG, UPLOAD_FOLDERS, uploadFolderDir } from '../config/fileStorage.config';
+import { createUniqueFileName } from '../services/fileStorage.service';
 import { hasPdfSignature } from '../utils/fileSignature.util';
 import { requestContext } from '../contexts/request-context';
 
@@ -117,15 +118,12 @@ export const parseMultipartData = (req: Request) => {
 
 // ─── General content upload ───────────────────────────────────────────────────
 
-const uploadDir = process.env.UPLOAD_DIR || 'uploads/content';
-ensureDirExists(uploadDir);
+const contentUploadDir = uploadFolderDir(UPLOAD_FOLDERS.content);
+ensureDirExists(contentUploadDir);
 
 const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadDir),
-  filename: (_req, file, cb) => {
-    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    cb(null, `${file.fieldname}-${uniqueSuffix}${path.extname(file.originalname)}`);
-  },
+  destination: (_req, _file, cb) => cb(null, contentUploadDir),
+  filename: (_req, file, cb) => cb(null, createUniqueFileName(file.fieldname, path.extname(file.originalname))),
 });
 
 const fileFilter: multer.Options['fileFilter'] = (
@@ -219,8 +217,8 @@ ensureDirExists(EDITOR_IMAGE_UPLOAD_CONFIG.tempDir);
 const editorImageStorage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, EDITOR_IMAGE_UPLOAD_CONFIG.tempDir),
   filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase() || EDITOR_IMAGE_UPLOAD_CONFIG.defaultExtension;
-    cb(null, `tmp-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
+    const extension = path.extname(file.originalname).toLowerCase() || EDITOR_IMAGE_UPLOAD_CONFIG.defaultExtension;
+    cb(null, createUniqueFileName('tmp', extension));
   },
 });
 
@@ -273,10 +271,7 @@ const profileStorage = multer.diskStorage({
     if (!config) return cb(new BadRequestError('Unexpected image field'), '');
     cb(null, config.uploadDir);
   },
-  filename: (_req, file, cb) => {
-    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    cb(null, `${file.fieldname}-${uniqueSuffix}${path.extname(file.originalname)}`);
-  },
+  filename: (_req, file, cb) => cb(null, createUniqueFileName(file.fieldname, path.extname(file.originalname))),
 });
 
 const profileUpload = multer({
@@ -381,10 +376,8 @@ ensureDirExists(courseThumbnailConfig.uploadDir);
 
 const courseThumbnailStorage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, courseThumbnailConfig.uploadDir),
-  filename: (_req, file, cb) => {
-    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    cb(null, `${courseThumbnailConfig.fieldName}-${uniqueSuffix}${path.extname(file.originalname)}`);
-  },
+  filename: (_req, file, cb) =>
+    cb(null, createUniqueFileName(courseThumbnailConfig.fieldName, path.extname(file.originalname))),
 });
 
 const courseThumbnailUpload = multer({
@@ -479,17 +472,14 @@ export const uploadBulkFile = (req: Request, res: Response, next: NextFunction):
 };
 
 // ---------------------------------------------------------------------------
-// Private PDF upload (subjective tests) — stored in private storage, never under public `uploads/`
+// Private PDF upload (subjective tests) — stored in `uploads/subjective`, which is never served by URL
 // ---------------------------------------------------------------------------
-const privateUploadTempDir = path.join(FILE_STORAGE_CONFIG.privateUploadsRootDir, FILE_STORAGE_CONFIG.privateTempSubDir);
-ensureDirExists(privateUploadTempDir);
+ensureDirExists(FILE_STORAGE_CONFIG.uploadsTempDir);
 
 const privatePdfUpload = multer({
   storage: multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, privateUploadTempDir),
-    filename: (_req, _file, cb) => {
-      cb(null, `tmp-${Date.now()}-${Math.round(Math.random() * 1e9)}${SUBJECTIVE_TEST_CONFIG.pdfExtension}`);
-    },
+    destination: (_req, _file, cb) => cb(null, FILE_STORAGE_CONFIG.uploadsTempDir),
+    filename: (_req, _file, cb) => cb(null, createUniqueFileName('tmp', SUBJECTIVE_TEST_CONFIG.pdfExtension)),
   }),
   limits: { fileSize: SUBJECTIVE_TEST_CONFIG.maxPdfSizeBytes },
   fileFilter: (_req, file, cb) => {

@@ -6,7 +6,6 @@
  */
 
 import * as fs from 'fs';
-import * as path from 'path';
 import request from 'supertest';
 import express from 'express';
 import { UserRole } from '@prisma/client';
@@ -17,13 +16,20 @@ import { FILE_STORAGE_CONFIG } from '../../../src/config/fileStorage.config';
 import { SubjectiveSubmissionStatus, TestStatus } from '../../../src/constants/test-enums';
 import * as subjectiveTestRepo from '../../../src/repositories/subjectiveTest.repo';
 import * as batchRepo from '../../../src/repositories/batch.repo';
-import { privateFileStorage } from '../../../src/services/fileStorage.service';
+import { uploadsFileStorage } from '../../../src/services/fileStorage.service';
 
-// An isolated private-storage root, so temp-file counts aren't affected by other test files running in parallel.
+// An isolated uploads root, so temp-file counts aren't affected by other test files running in parallel.
 jest.mock('../../../src/config/fileStorage.config', () => {
   const actualConfig = jest.requireActual('../../../src/config/fileStorage.config');
-  const isolatedRoot = require('fs').mkdtempSync(require('path').join(require('os').tmpdir(), 'subjective-routes-'));
-  return { FILE_STORAGE_CONFIG: { ...actualConfig.FILE_STORAGE_CONFIG, privateUploadsRootDir: isolatedRoot } };
+  const isolatedUploadsRoot = require('fs').mkdtempSync(require('path').join(require('os').tmpdir(), 'subjective-routes-'));
+  return {
+    ...actualConfig,
+    FILE_STORAGE_CONFIG: {
+      ...actualConfig.FILE_STORAGE_CONFIG,
+      uploadsRootDir: isolatedUploadsRoot,
+      uploadsTempDir: require('path').join(isolatedUploadsRoot, 'tmp'),
+    },
+  };
 });
 jest.mock('../../../src/repositories/subjectiveTest.repo');
 jest.mock('../../../src/repositories/batch.repo');
@@ -31,7 +37,7 @@ jest.mock('../../../src/repositories/subject.repo');
 jest.mock('../../../src/repositories/user.repo');
 jest.mock('../../../src/services/fileStorage.service', () => ({
   ...jest.requireActual('../../../src/services/fileStorage.service'),
-  privateFileStorage: {
+  uploadsFileStorage: {
     joinStorageKey: (...keyParts: Array<string | number>) => keyParts.join('/'),
     saveUploadThenCommit: jest.fn(),
     deleteFolderIfExists: jest.fn(),
@@ -69,10 +75,10 @@ app.use('/api/business', subjectiveTestRouter);
 app.use(errorHandler);
 
 const repo = subjectiveTestRepo as jest.Mocked<typeof subjectiveTestRepo>;
-const fileStorage = privateFileStorage as jest.Mocked<typeof privateFileStorage>;
+const fileStorage = uploadsFileStorage as jest.Mocked<typeof uploadsFileStorage>;
 const HOUR = 3_600_000;
 const BASE = '/api/business/1/subjective-tests';
-const TEMP_DIR = path.join(FILE_STORAGE_CONFIG.privateUploadsRootDir, FILE_STORAGE_CONFIG.privateTempSubDir);
+const TEMP_DIR = FILE_STORAGE_CONFIG.uploadsTempDir;
 const REAL_PDF = Buffer.from('%PDF-1.4\n%fake but valid header\n');
 const FAKE_PDF = Buffer.from('MZ this is not a pdf');
 const PDF_ATTACHMENT = { filename: 'paper.pdf', contentType: 'application/pdf' };

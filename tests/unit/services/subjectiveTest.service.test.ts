@@ -5,14 +5,14 @@ import { SubjectiveDisplayStatus, SubjectiveSubmissionStatus, TestStatus } from 
 import * as subjectiveTestRepo from '../../../src/repositories/subjectiveTest.repo';
 import * as userRepo from '../../../src/repositories/user.repo';
 import * as testUtils from '../../../src/utils/test.utils';
-import { privateFileStorage } from '../../../src/services/fileStorage.service';
+import { uploadsFileStorage } from '../../../src/services/fileStorage.service';
 
 jest.mock('../../../src/repositories/subjectiveTest.repo');
 jest.mock('../../../src/repositories/user.repo');
 jest.mock('../../../src/utils/test.utils');
 jest.mock('../../../src/services/fileStorage.service', () => ({
   ...jest.requireActual('../../../src/services/fileStorage.service'),
-  privateFileStorage: {
+  uploadsFileStorage: {
     joinStorageKey: (...keyParts: Array<string | number>) => keyParts.join('/'),
     saveUploadThenCommit: jest.fn(),
     deleteFolderIfExists: jest.fn(),
@@ -20,7 +20,7 @@ jest.mock('../../../src/services/fileStorage.service', () => ({
 }));
 
 const repo = subjectiveTestRepo as jest.Mocked<typeof subjectiveTestRepo>;
-const fileStorage = privateFileStorage as jest.Mocked<typeof privateFileStorage>;
+const fileStorage = uploadsFileStorage as jest.Mocked<typeof uploadsFileStorage>;
 
 const HOUR = 3_600_000;
 const BUSINESS_ID = 1;
@@ -78,7 +78,7 @@ const testWithOwnAttempt = (
   ownAttempt: subjectiveTestRepo.SubjectiveSubmissionRecord | null = null,
 ) => ({ ...buildTest(testOverrides), submissions: ownAttempt ? [ownAttempt] : [] });
 
-const uploadedPdf = { path: 'private-uploads/tmp/tmp-1.pdf', originalname: 'rahul-gs1-mock3.pdf' } as Express.Multer.File;
+const uploadedPdf = { path: 'uploads/tmp/tmp-1.pdf', originalname: 'rahul-gs1-mock3.pdf' } as Express.Multer.File;
 const prismaError = (code: string) => Object.assign(new Error(code), { code });
 
 describe('SubjectiveTestService', () => {

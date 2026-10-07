@@ -10,7 +10,7 @@ import {
 import { ValidationUtils } from '../../../src/utils/validation';
 import { ContentType, ContentStatus } from '@prisma/client';
 import { AuthRequest } from '../../../src/dtos/auth.dto';
-import { contentFileStorage } from '../../../src/services/fileStorage.service';
+import { uploadsFileStorage } from '../../../src/services/fileStorage.service';
 
 jest.mock('../../../src/utils/apiResponse');
 jest.mock('../../../src/utils/logger');
@@ -332,7 +332,7 @@ describe('Content Controller (Comprehensive)', () => {
 
   describe('getContentFile', () => {
     const contentFileDownload = {
-      storageKey: 'file-1.pdf',
+      storageKey: 'content/file-1.pdf',
       downloadFileName: 'Polity Notes.pdf',
       contentType: 'application/pdf',
     };
@@ -340,7 +340,7 @@ describe('Content Controller (Comprehensive)', () => {
     it('streams the file through content file storage', async () => {
       req.params = { contentId: '1' };
       jest.spyOn(ContentService.prototype, 'getContentFileDownload').mockResolvedValue(contentFileDownload);
-      const streamToResponse = jest.spyOn(contentFileStorage, 'streamToResponse').mockResolvedValue();
+      const streamToResponse = jest.spyOn(uploadsFileStorage, 'streamToResponse').mockResolvedValue();
 
       await contentController.getContentFile(req as any, res as any);
 
@@ -350,7 +350,7 @@ describe('Content Controller (Comprehensive)', () => {
     it('returns not found when the file is missing on disk', async () => {
       req.params = { contentId: '1' };
       jest.spyOn(ContentService.prototype, 'getContentFileDownload').mockResolvedValue(contentFileDownload);
-      jest.spyOn(contentFileStorage, 'streamToResponse').mockRejectedValue(new NotFoundError('File'));
+      jest.spyOn(uploadsFileStorage, 'streamToResponse').mockRejectedValue(new NotFoundError('File'));
 
       await contentController.getContentFile(req as any, res as any);
 

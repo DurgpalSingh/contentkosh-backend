@@ -4,8 +4,11 @@ import * as path from 'path';
 import {
   FileStorageService,
   appendOriginalFileName,
+  createUniqueFileName,
   extractOriginalFileName,
   toStorageSafeFileName,
+  toUploadsStorageKey,
+  uploadsFileStorage,
 } from '../../../src/services/fileStorage.service';
 import { NotFoundError } from '../../../src/errors/api.errors';
 
@@ -78,6 +81,25 @@ describe('FileStorageService', () => {
     expect(fs.existsSync(path.join(rootDir, 'a/new.pdf'))).toBe(false);
     expect(fs.existsSync(path.join(rootDir, 'a/old.pdf'))).toBe(true);
   });
+});
+
+describe('toUploadsStorageKey', () => {
+  it.each([
+    ['uploads/content/file-1.pdf', 'content/file-1.pdf'],
+    ['uploads\\content\\file-1.pdf', 'content/file-1.pdf'],
+    ['/uploads/profile/profilePicture-1.png', 'profile/profilePicture-1.png'],
+  ])('turns the stored path %s into the key %s', (storedFilePath, expectedKey) => {
+    expect(toUploadsStorageKey(storedFilePath)).toBe(expectedKey);
+  });
+
+  it('gives a key the storage refuses when the path is outside uploads/', () => {
+    expect(() => uploadsFileStorage.resolveStoragePath(toUploadsStorageKey('secrets/.env'))).toThrow(NotFoundError);
+  });
+});
+
+it('creates unique file names with the given prefix and extension', () => {
+  expect(createUniqueFileName('file', '.pdf')).toMatch(/^file-\d+-\d+\.pdf$/);
+  expect(createUniqueFileName('file', '.pdf')).not.toBe(createUniqueFileName('file', '.pdf'));
 });
 
 describe('original file names', () => {

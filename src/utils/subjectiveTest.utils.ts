@@ -8,8 +8,10 @@ import {
 import { SUBJECTIVE_TEST_CONFIG } from '../config/subjectiveTest.config';
 import {
   appendOriginalFileName,
+  createUniqueFileName,
+  createUniqueFileStem,
   extractOriginalFileName,
-  privateFileStorage,
+  uploadsFileStorage,
   toStorageSafeFileName,
   type StoredFileDownload,
 } from '../services/fileStorage.service';
@@ -64,16 +66,14 @@ export function assertDeadlineAfterStart(startAt: Date, deadlineAt: Date): void 
 // Storage keys: subjective/<businessId>/<testId>/...  (a new key per upload, never overwritten)
 // ---------------------------------------------------------------------------
 
-const uniqueFileStem = (prefix: string | number) => `${prefix}-${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-
 export function subjectiveTestStorageFolder(businessId: number, subjectiveTestId: string): string {
-  return privateFileStorage.joinStorageKey(SUBJECTIVE_TEST_CONFIG.storageFolder, businessId, subjectiveTestId);
+  return uploadsFileStorage.joinStorageKey(SUBJECTIVE_TEST_CONFIG.storageFolder, businessId, subjectiveTestId);
 }
 
 export function buildQuestionPaperStorageKey(businessId: number, subjectiveTestId: string): string {
-  return privateFileStorage.joinStorageKey(
+  return uploadsFileStorage.joinStorageKey(
     subjectiveTestStorageFolder(businessId, subjectiveTestId),
-    `${uniqueFileStem('question-paper')}${SUBJECTIVE_TEST_CONFIG.pdfExtension}`,
+    createUniqueFileName('question-paper', SUBJECTIVE_TEST_CONFIG.pdfExtension),
   );
 }
 
@@ -84,18 +84,18 @@ export function buildAnswerSheetStorageKey(
   studentId: number,
   uploadedFile: Express.Multer.File,
 ): string {
-  return privateFileStorage.joinStorageKey(
+  return uploadsFileStorage.joinStorageKey(
     subjectiveTestStorageFolder(businessId, subjectiveTestId),
     'answers',
-    appendOriginalFileName(uniqueFileStem(studentId), toStorageSafeFileName(uploadedFile)),
+    appendOriginalFileName(createUniqueFileStem(studentId), toStorageSafeFileName(uploadedFile)),
   );
 }
 
 export function buildCheckedCopyStorageKey(businessId: number, subjectiveTestId: string, submissionId: string): string {
-  return privateFileStorage.joinStorageKey(
+  return uploadsFileStorage.joinStorageKey(
     subjectiveTestStorageFolder(businessId, subjectiveTestId),
     'checked',
-    `${uniqueFileStem(submissionId)}${SUBJECTIVE_TEST_CONFIG.pdfExtension}`,
+    createUniqueFileName(submissionId, SUBJECTIVE_TEST_CONFIG.pdfExtension),
   );
 }
 

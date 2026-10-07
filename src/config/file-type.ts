@@ -5,6 +5,7 @@ import {
     FILE_FORMATS,
     MIME_TYPES
 } from '../constants/file.constants';
+import { FILE_STORAGE_CONFIG, UPLOAD_FOLDERS, uploadFolderDir } from './fileStorage.config';
 
 const BYTES_IN_MB = 1024 * 1024;
 const DEFAULT_MAX_IMAGE_SIZE_BYTES = Number(process.env.MAX_IMAGE_SIZE_MB || 5) * BYTES_IN_MB;
@@ -71,21 +72,21 @@ export const IMAGE_UPLOAD_POLICY = {
 export const IMAGE_UPLOAD_CONFIG = {
     profilePicture: {
         fieldName: 'profilePicture',
-        uploadDir: process.env.PROFILE_UPLOAD_DIR || 'uploads/profile',
+        uploadDir: uploadFolderDir(UPLOAD_FOLDERS.profilePictures),
         maxSizeBytes: IMAGE_UPLOAD_POLICY.maxSizeBytes,
         extensions: IMAGE_UPLOAD_POLICY.extensions,
         mimeTypes: IMAGE_UPLOAD_POLICY.mimeTypes
     },
     businessLogo: {
         fieldName: 'businessLogo',
-        uploadDir: process.env.BUSINESS_UPLOAD_DIR || 'uploads/business',
+        uploadDir: uploadFolderDir(UPLOAD_FOLDERS.businessLogos),
         maxSizeBytes: IMAGE_UPLOAD_POLICY.maxSizeBytes,
         extensions: IMAGE_UPLOAD_POLICY.extensions,
         mimeTypes: IMAGE_UPLOAD_POLICY.mimeTypes
     },
     courseThumbnail: {
         fieldName: 'thumbnail',
-        uploadDir: process.env.COURSE_THUMBNAIL_UPLOAD_DIR || 'uploads/courses',
+        uploadDir: uploadFolderDir(UPLOAD_FOLDERS.courseThumbnails),
         maxSizeBytes: IMAGE_UPLOAD_POLICY.maxSizeBytes,
         extensions: IMAGE_UPLOAD_POLICY.extensions,
         mimeTypes: IMAGE_UPLOAD_POLICY.mimeTypes
@@ -93,7 +94,7 @@ export const IMAGE_UPLOAD_CONFIG = {
 } as const;
 
 export const EDITOR_IMAGE_UPLOAD_CONFIG = {
-    tempDir: process.env.EDITOR_IMAGE_TEMP_DIR || 'uploads/editor/tmp',
+    tempDir: FILE_STORAGE_CONFIG.uploadsTempDir,
     allowedMimeTypes: [
         MIME_TYPES.JPEG,
         MIME_TYPES.PNG,

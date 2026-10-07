@@ -8,7 +8,7 @@ import {
   type StaffSubmissionContext,
   type StudentOpenAttemptContext,
 } from '../services/subjectiveTest.service';
-import { privateFileStorage } from '../services/fileStorage.service';
+import { uploadsFileStorage } from '../services/fileStorage.service';
 import type { SubjectiveTestRecord } from '../repositories/subjectiveTest.repo';
 import { getLoadedAccessContext } from '../middlewares/subjectiveTestAccess.middleware';
 import { parseSubmissionListFilters } from '../utils/subjectiveTest.utils';
@@ -120,7 +120,7 @@ export const subjectiveTestController = {
       const businessId = getBusinessId(req);
       const subjectiveTestId = req.params.subjectiveTestId!;
       const questionPaperDownload = await subjectiveTestService.getQuestionPaperDownload(businessId, subjectiveTestId, getRequestActor(req));
-      return await privateFileStorage.streamToResponse(res, questionPaperDownload);
+      return await uploadsFileStorage.streamToResponse(res, questionPaperDownload);
     } catch (e: unknown) {
       return handleTestControllerError({ res, error: e, endpoint: 'downloadQuestionPaper', serverErrorMessage: 'Failed to download question paper' });
     }
@@ -170,7 +170,7 @@ export const subjectiveTestController = {
         submissionId,
         getRequestActor(req),
       );
-      return await privateFileStorage.streamToResponse(res, answerSheetDownload);
+      return await uploadsFileStorage.streamToResponse(res, answerSheetDownload);
     } catch (e: unknown) {
       return handleTestControllerError({ res, error: e, endpoint: 'downloadAnswerSheetForStaff', serverErrorMessage: 'Failed to download answer sheet' });
     }
@@ -187,7 +187,7 @@ export const subjectiveTestController = {
         submissionId,
         getRequestActor(req),
       );
-      return await privateFileStorage.streamToResponse(res, checkedCopyDownload);
+      return await uploadsFileStorage.streamToResponse(res, checkedCopyDownload);
     } catch (e: unknown) {
       return handleTestControllerError({ res, error: e, endpoint: 'downloadCheckedCopyForStaff', serverErrorMessage: 'Failed to download checked answer sheet' });
     }
@@ -256,7 +256,7 @@ export const subjectiveTestController = {
       const businessId = getBusinessId(req);
       const submissionId = req.params.submissionId!;
       const answerSheetDownload = await subjectiveTestService.getOwnAnswerSheetDownload(businessId, submissionId, getRequestActor(req));
-      return await privateFileStorage.streamToResponse(res, answerSheetDownload);
+      return await uploadsFileStorage.streamToResponse(res, answerSheetDownload);
     } catch (e: unknown) {
       return handleTestControllerError({ res, error: e, endpoint: 'downloadOwnAnswerSheet', serverErrorMessage: 'Failed to download answer sheet' });
     }
@@ -267,7 +267,7 @@ export const subjectiveTestController = {
       const businessId = getBusinessId(req);
       const submissionId = req.params.submissionId!;
       const checkedCopyDownload = await subjectiveTestService.getOwnCheckedCopyDownload(businessId, submissionId, getRequestActor(req));
-      return await privateFileStorage.streamToResponse(res, checkedCopyDownload);
+      return await uploadsFileStorage.streamToResponse(res, checkedCopyDownload);
     } catch (e: unknown) {
       return handleTestControllerError({ res, error: e, endpoint: 'downloadOwnCheckedCopy', serverErrorMessage: 'Failed to download checked answer sheet' });
     }

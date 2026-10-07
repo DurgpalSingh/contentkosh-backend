@@ -4,9 +4,11 @@ import sharp from 'sharp';
 import { UserRole } from '@prisma/client';
 import { BadRequestError } from '../errors/api.errors';
 import { IUser } from '../dtos/auth.dto';
+import { UPLOAD_FOLDERS, uploadFolderDir } from '../config/fileStorage.config';
+import { createUniqueFileName } from './fileStorage.service';
 import logger from '../utils/logger';
 
-const EDITOR_IMAGE_DIR = process.env.EDITOR_IMAGE_UPLOAD_DIR || 'uploads/editor';
+const EDITOR_IMAGE_DIR = uploadFolderDir(UPLOAD_FOLDERS.editorImages);
 
 // Ensure the output directory exists at startup
 try {
@@ -28,7 +30,7 @@ export class EditorImageService {
     const businessFolder = this.editorFolderFor(businessId);
     await fs.promises.mkdir(businessFolder, { recursive: true });
     const outputPath = path
-      .join(businessFolder, `editor-${Date.now()}-${Math.round(Math.random() * 1e9)}.webp`)
+      .join(businessFolder, createUniqueFileName('editor', '.webp'))
       .replace(/\\/g, '/');
 
     await sharp(tempFilePath).webp({ quality: 80 }).toFile(outputPath);

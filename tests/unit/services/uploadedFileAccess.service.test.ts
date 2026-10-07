@@ -14,9 +14,13 @@ const viewerInBusiness1 = { id: 5, email: 'a@x.com', role: UserRole.TEACHER, bus
 const superAdmin = { id: 99, email: 's@x.com', role: UserRole.SUPERADMIN };
 
 describe('canViewUploadedFile', () => {
-  it('never serves content files directly (only via the content API)', async () => {
-    expect(await canViewUploadedFile(viewerInBusiness1, '/content/file-1.pdf')).toBe(false);
-  });
+  it.each(['/content/file-1.pdf', '/subjective/1/st-1/answers/42-1__sheet.pdf', '/tmp/tmp-1.pdf'])(
+    'never serves API-only file %s by URL, not even to a super admin',
+    async (apiOnlyPath) => {
+      expect(await canViewUploadedFile(viewerInBusiness1, apiOnlyPath)).toBe(false);
+      expect(await canViewUploadedFile(superAdmin, apiOnlyPath)).toBe(false);
+    },
+  );
 
   it('allows profile pictures of the same business and blocks other businesses', async () => {
     (userRepo.findProfilePictureOwner as jest.Mock).mockResolvedValueOnce({ id: 7, businessId: 1 });

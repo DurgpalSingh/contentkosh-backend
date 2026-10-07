@@ -17,7 +17,7 @@ import {
   UpdateSubjectiveTestDto,
 } from '../dtos/subjectiveTest.dto';
 import { SubjectiveTestMapper } from '../mappers/subjectiveTest.mapper';
-import { privateFileStorage, type StoredFileDownload } from './fileStorage.service';
+import { uploadsFileStorage, type StoredFileDownload } from './fileStorage.service';
 import { assertBatchBelongsToBusiness, assertSubjectForBatch, assertTestBatchAccess } from '../utils/test.utils';
 import { hasPrismaErrorCode, translatePrismaError } from '../utils/prismaError';
 import type { TestRequestActor } from '../utils/testController.utils';
@@ -249,7 +249,7 @@ export class SubjectiveTestService {
   async replaceQuestionPaper(draftTest: SubjectiveTestRecord, uploadedFile: Express.Multer.File, actor: TestRequestActor) {
     logger.info(`[subjective-test] replaceQuestionPaper subjectiveTestId=${draftTest.id} userId=${actor.id}`);
     const questionPaperPath = buildQuestionPaperStorageKey(draftTest.businessId, draftTest.id);
-    return privateFileStorage.saveUploadThenCommit({
+    return uploadsFileStorage.saveUploadThenCommit({
       uploadedFile,
       storageKey: questionPaperPath,
       replacedStorageKey: draftTest.questionPaperPath,
@@ -278,7 +278,7 @@ export class SubjectiveTestService {
     logger.info(`[subjective-test] deleteDraftTest businessId=${businessId} subjectiveTestId=${subjectiveTestId} userId=${actor.id}`);
     await this.findDraftTestForStaff(businessId, subjectiveTestId, actor);
     await subjectiveTestRepo.deleteTest(businessId, subjectiveTestId);
-    await privateFileStorage.deleteFolderIfExists(subjectiveTestStorageFolder(businessId, subjectiveTestId));
+    await uploadsFileStorage.deleteFolderIfExists(subjectiveTestStorageFolder(businessId, subjectiveTestId));
   }
 
   /** Staff can always download; students only after they started the test. */
@@ -388,7 +388,7 @@ export class SubjectiveTestService {
     const saveGradeAndCheckedCopy = async () => {
       if (!uploadedCheckedCopy) return saveGradeWithCheckedCopy(currentCheckedCopyPath!);
       const newCheckedCopyPath = buildCheckedCopyStorageKey(test.businessId, test.id, submission.id);
-      return privateFileStorage.saveUploadThenCommit({
+      return uploadsFileStorage.saveUploadThenCommit({
         uploadedFile: uploadedCheckedCopy,
         storageKey: newCheckedCopyPath,
         replacedStorageKey: currentCheckedCopyPath,
@@ -457,7 +457,7 @@ export class SubjectiveTestService {
     const submittedAt = new Date();
     const answerSheetPath = buildAnswerSheetStorageKey(test.businessId, test.id, actor.id, uploadedAnswerSheet);
 
-    await privateFileStorage.saveUploadThenCommit({
+    await uploadsFileStorage.saveUploadThenCommit({
       uploadedFile: uploadedAnswerSheet,
       storageKey: answerSheetPath,
       commitToDatabase: () =>

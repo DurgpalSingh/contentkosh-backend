@@ -6,7 +6,7 @@ import { CreateContentDto, UpdateContentDto, ContentQueryDto } from '../dtos/con
 import { ContentService } from '../services/content.service';
 import { AuthRequest } from '../dtos/auth.dto';
 import { handleControllerError } from '../utils/controllerErrorHandler';
-import { contentFileStorage } from '../services/fileStorage.service';
+import { uploadsFileStorage } from '../services/fileStorage.service';
 
 export class ContentController {
   private contentService: ContentService;
@@ -96,7 +96,7 @@ export class ContentController {
       const user = req.user!;
 
       const contentFileDownload = await this.contentService.getContentFileDownload(id, user);
-      await contentFileStorage.streamToResponse(res, contentFileDownload);
+      await uploadsFileStorage.streamToResponse(res, contentFileDownload);
 
     } catch (error) {
       handleControllerError(res, error, 'Failed to get content file', 'Error getting content file');
