@@ -1,8 +1,16 @@
-import { Response } from 'express';
+import { Request, Response } from 'express';
+import { UserRole } from '@prisma/client';
 import logger from './logger';
 import { ApiResponseHandler } from './apiResponse';
 import { ApiError, BadRequestError } from '../errors/api.errors';
-import { Request } from 'express';
+import { AuthRequest } from '../dtos/auth.dto';
+
+/** The logged-in user acting on a test endpoint. */
+export type TestRequestActor = { id: number; role: UserRole };
+
+export function getRequestActor(req: AuthRequest): TestRequestActor {
+  return { id: req.user!.id, role: req.user!.role };
+}
 
 export function getBusinessId(req: Request): number {
   const businessId = Number(req.params.businessId);
@@ -23,6 +31,12 @@ export function parseOptionalIntQueryParam(value: unknown, paramName: string): n
   return parsed;
 }
 
+export function parseOptionalStringQueryParam(value: unknown, paramName: string): string | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (typeof value !== 'string') throw new BadRequestError(`Invalid ${paramName}`);
+  return value;
+}
+
 export function handleTestControllerError(params: {
   res: Response;
   error: unknown;
@@ -40,4 +54,3 @@ export function handleTestControllerError(params: {
   logger.error(`[test-controller] ${endpoint}: ${message}`);
   ApiResponseHandler.serverError(res, serverErrorMessage);
 }
-

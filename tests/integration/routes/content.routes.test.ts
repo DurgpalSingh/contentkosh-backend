@@ -25,10 +25,10 @@ jest.mock('../../../src/services/content.service', () => {
             getContentsByBatch: jest.fn().mockResolvedValue([mockContent]),
             updateContent: jest.fn().mockResolvedValue({ ...mockContent, title: 'Updated Title' }),
             deleteContent: jest.fn().mockResolvedValue(undefined),
-            getContentFile: jest.fn().mockResolvedValue({
-                filePath: 'uploads/test.pdf',
-                fileName: 'test.pdf',
-                mimeType: 'application/pdf'
+            getContentFileDownload: jest.fn().mockResolvedValue({
+                storageKey: 'test.pdf',
+                downloadFileName: 'test.pdf',
+                contentType: 'application/pdf'
             }),
             authorizeContentCreation: jest.fn().mockResolvedValue(undefined),
             validateContentAccess: jest.fn().mockResolvedValue(undefined)

@@ -1,42 +1,35 @@
-import { Prisma, UserRole } from '@prisma/client';
+import { UserRole } from '@prisma/client';
 import { SubjectiveTestService } from '../../../src/services/subjectiveTest.service';
 import { ApiError, BadRequestError, NotFoundError } from '../../../src/errors/api.errors';
-import {
-  SubjectiveDisplayStatus,
-  SubjectiveSubmissionStatus,
-  TestStatus,
-} from '../../../src/constants/test-enums';
-import * as subjectiveRepo from '../../../src/repositories/subjectiveTest.repo';
+import { SubjectiveDisplayStatus, SubjectiveSubmissionStatus, TestStatus } from '../../../src/constants/test-enums';
+import * as subjectiveTestRepo from '../../../src/repositories/subjectiveTest.repo';
 import * as userRepo from '../../../src/repositories/user.repo';
-import { privateFileService } from '../../../src/services/privateFile.service';
-import { hasPdfSignature } from '../../../src/utils/fileSignature.util';
+import * as testUtils from '../../../src/utils/test.utils';
+import { privateFileStorage } from '../../../src/services/fileStorage.service';
 
 jest.mock('../../../src/repositories/subjectiveTest.repo');
 jest.mock('../../../src/repositories/user.repo');
 jest.mock('../../../src/utils/test.utils');
-jest.mock('../../../src/utils/fileSignature.util');
-jest.mock('../../../src/services/privateFile.service', () => ({
-  ...jest.requireActual('../../../src/services/privateFile.service'),
-  privateFileService: {
-    buildKey: (...segments: Array<string | number>) => segments.join('/'),
-    moveIntoPlace: jest.fn(),
-    deleteQuietly: jest.fn(),
-    deleteFolderQuietly: jest.fn(),
+jest.mock('../../../src/services/fileStorage.service', () => ({
+  ...jest.requireActual('../../../src/services/fileStorage.service'),
+  privateFileStorage: {
+    joinStorageKey: (...keyParts: Array<string | number>) => keyParts.join('/'),
+    saveUploadThenCommit: jest.fn(),
+    deleteFolderIfExists: jest.fn(),
   },
 }));
 
-const repo = subjectiveRepo as jest.Mocked<typeof subjectiveRepo>;
-const files = privateFileService as jest.Mocked<typeof privateFileService>;
-const mockHasPdfSignature = hasPdfSignature as jest.MockedFunction<typeof hasPdfSignature>;
+const repo = subjectiveTestRepo as jest.Mocked<typeof subjectiveTestRepo>;
+const fileStorage = privateFileStorage as jest.Mocked<typeof privateFileStorage>;
 
 const HOUR = 3_600_000;
 const BUSINESS_ID = 1;
 const ADMIN = { id: 1, role: UserRole.ADMIN };
 const TEACHER = { id: 7, role: UserRole.TEACHER };
 const STUDENT = { id: 42, role: UserRole.STUDENT };
-const PAPER_KEY = 'subjective/1/st-1/question-paper-old.pdf';
+const QUESTION_PAPER_PATH = 'subjective/1/st-1/question-paper-old.pdf';
 
-const buildTest = (overrides: Partial<subjectiveRepo.SubjectiveTestRecord> = {}): subjectiveRepo.SubjectiveTestRecord => ({
+const buildTest = (overrides: Partial<subjectiveTestRepo.SubjectiveTestRecord> = {}): subjectiveTestRepo.SubjectiveTestRecord => ({
   id: 'st-1',
   businessId: BUSINESS_ID,
   batchId: 3,
@@ -52,7 +45,7 @@ const buildTest = (overrides: Partial<subjectiveRepo.SubjectiveTestRecord> = {})
   durationMinutes: 180,
   startAt: new Date(Date.now() - HOUR),
   deadlineAt: new Date(Date.now() + 5 * HOUR),
-  questionPaperPath: PAPER_KEY,
+  questionPaperPath: QUESTION_PAPER_PATH,
   createdBy: TEACHER.id,
   updatedBy: null,
   createdAt: new Date(),
@@ -60,9 +53,9 @@ const buildTest = (overrides: Partial<subjectiveRepo.SubjectiveTestRecord> = {})
   ...overrides,
 });
 
-const buildSubmission = (
-  overrides: Partial<subjectiveRepo.SubjectiveSubmissionRecord> = {},
-): subjectiveRepo.SubjectiveSubmissionRecord => ({
+const buildAttempt = (
+  overrides: Partial<subjectiveTestRepo.SubjectiveSubmissionRecord> = {},
+): subjectiveTestRepo.SubjectiveSubmissionRecord => ({
   id: 'sub-1',
   subjectiveTestId: 'st-1',
   studentId: STUDENT.id,
@@ -80,36 +73,40 @@ const buildSubmission = (
   ...overrides,
 });
 
-const uploadedFile = { path: 'private-uploads/tmp/tmp-1.pdf', originalname: 'rahul-gs1-mock3.pdf' } as Express.Multer.File;
+const testWithOwnAttempt = (
+  testOverrides: Partial<subjectiveTestRepo.SubjectiveTestRecord> = {},
+  ownAttempt: subjectiveTestRepo.SubjectiveSubmissionRecord | null = null,
+) => ({ ...buildTest(testOverrides), submissions: ownAttempt ? [ownAttempt] : [] });
 
-const uniqueViolation = () =>
-  new Prisma.PrismaClientKnownRequestError('Unique constraint failed', { code: 'P2002', clientVersion: 'test' });
+const uploadedPdf = { path: 'private-uploads/tmp/tmp-1.pdf', originalname: 'rahul-gs1-mock3.pdf' } as Express.Multer.File;
+const prismaError = (code: string) => Object.assign(new Error(code), { code });
 
 describe('SubjectiveTestService', () => {
   let service: SubjectiveTestService;
 
   beforeEach(() => {
     service = new SubjectiveTestService();
-    mockHasPdfSignature.mockResolvedValue(true);
+    fileStorage.saveUploadThenCommit.mockImplementation(async ({ commitToDatabase }) => commitToDatabase());
   });
 
   describe('staff access', () => {
     it('hides a test from a teacher who did not create it', async () => {
-      repo.findSubjectiveTestById.mockResolvedValue(buildTest({ createdBy: 999 }));
-      await expect(service.get(BUSINESS_ID, 'st-1', TEACHER)).rejects.toThrow(NotFoundError);
+      repo.findTestInBusiness.mockResolvedValue(buildTest({ createdBy: 999 }));
+      await expect(service.getTestDetailForStaff(BUSINESS_ID, 'st-1', TEACHER)).rejects.toThrow(NotFoundError);
     });
 
-    it('rejects updates once a test is published', async () => {
-      repo.findSubjectiveTestById.mockResolvedValue(buildTest());
-      await expect(service.update(BUSINESS_ID, 'st-1', { name: 'x' }, undefined, ADMIN)).rejects.toThrow(
+    it('refuses to change a published test', async () => {
+      repo.findTestInBusiness.mockResolvedValue(buildTest());
+      await expect(service.updateDraftTest(BUSINESS_ID, 'st-1', { name: 'x' }, ADMIN)).rejects.toThrow(
         'A published test cannot be changed',
       );
     });
   });
 
-  describe('create', () => {
-    const dto = {
+  describe('createDraftTest', () => {
+    const createDto = {
       batchId: 3,
+      subjectId: 8,
       name: ' Mock ',
       paperType: 'GS Paper I',
       totalMarks: 250,
@@ -118,318 +115,109 @@ describe('SubjectiveTestService', () => {
       deadlineAt: new Date(Date.now() + 4 * HOUR).toISOString(),
     };
 
-    it('rejects a deadline before the start', async () => {
-      await expect(
-        service.create(BUSINESS_ID, { ...dto, deadlineAt: dto.startAt }, undefined, ADMIN),
-      ).rejects.toThrow('Deadline must be after the start time');
-      expect(repo.createSubjectiveTest).not.toHaveBeenCalled();
+    it('rejects a deadline before the start without touching the database', async () => {
+      await expect(service.createDraftTest(BUSINESS_ID, { ...createDto, deadlineAt: createDto.startAt }, ADMIN)).rejects.toThrow(
+        'Deadline must be after the start time',
+      );
+      expect(testUtils.assertBatchBelongsToBusiness).not.toHaveBeenCalled();
+      expect(repo.insertDraftTest).not.toHaveBeenCalled();
     });
 
-    it('rejects a non-PDF upload before creating anything', async () => {
-      mockHasPdfSignature.mockResolvedValue(false);
-      await expect(service.create(BUSINESS_ID, dto, uploadedFile, ADMIN)).rejects.toThrow('not a valid PDF');
-      expect(repo.createSubjectiveTest).not.toHaveBeenCalled();
-    });
+    it('checks batch, teacher access and subject, then inserts a trimmed draft', async () => {
+      repo.insertDraftTest.mockResolvedValue(buildTest({ status: TestStatus.DRAFT }));
+      await service.createDraftTest(BUSINESS_ID, createDto, ADMIN);
 
-    it('creates a draft and stores the paper under the new test id', async () => {
-      repo.createSubjectiveTest.mockResolvedValue(buildTest({ status: TestStatus.DRAFT, questionPaperPath: null }));
-      repo.updateSubjectiveTest.mockResolvedValue(buildTest({ status: TestStatus.DRAFT }));
-
-      await service.create(BUSINESS_ID, dto, uploadedFile, ADMIN);
-
-      expect(repo.createSubjectiveTest).toHaveBeenCalledWith(
+      expect(testUtils.assertBatchBelongsToBusiness).toHaveBeenCalledWith(BUSINESS_ID, 3);
+      expect(testUtils.assertSubjectForBatch).toHaveBeenCalledWith(expect.objectContaining({ batchId: 3, subjectId: 8 }));
+      expect(repo.insertDraftTest).toHaveBeenCalledWith(
         expect.objectContaining({ name: 'Mock', status: TestStatus.DRAFT, createdBy: ADMIN.id }),
       );
-      const key = files.moveIntoPlace.mock.calls[0]![1];
-      expect(key).toMatch(/^subjective\/1\/st-1\/question-paper-.*\.pdf$/);
-      expect(repo.updateSubjectiveTest).toHaveBeenCalledWith(BUSINESS_ID, 'st-1', { questionPaperPath: key });
-    });
-
-    it('removes the new draft and file if saving the paper fails', async () => {
-      repo.createSubjectiveTest.mockResolvedValue(buildTest({ status: TestStatus.DRAFT, questionPaperPath: null }));
-      repo.updateSubjectiveTest.mockRejectedValue(new Error('db down'));
-
-      await expect(service.create(BUSINESS_ID, dto, uploadedFile, ADMIN)).rejects.toThrow('db down');
-      expect(files.deleteQuietly).toHaveBeenCalledWith(files.moveIntoPlace.mock.calls[0]![1]);
-      expect(repo.deleteSubjectiveTest).toHaveBeenCalledWith(BUSINESS_ID, 'st-1');
     });
   });
 
-  describe('publish', () => {
+  describe('updateDraftTest', () => {
+    it('saves only known fields, so an extra `status` in the body cannot publish the test', async () => {
+      repo.findTestInBusiness.mockResolvedValue(buildTest({ status: TestStatus.DRAFT }));
+      repo.updateTest.mockResolvedValue(buildTest({ status: TestStatus.DRAFT }));
+
+      await service.updateDraftTest(BUSINESS_ID, 'st-1', { name: ' New name ', status: TestStatus.PUBLISHED } as never, ADMIN);
+
+      const savedFields = repo.updateTest.mock.calls[0]![2];
+      expect(savedFields).toEqual(expect.objectContaining({ name: 'New name', updatedBy: ADMIN.id }));
+      expect(savedFields).not.toHaveProperty('status');
+    });
+  });
+
+  describe('replaceQuestionPaper', () => {
+    it('saves the new paper and replaces the old one', async () => {
+      const draftTest = buildTest({ status: TestStatus.DRAFT });
+      repo.updateTest.mockResolvedValue(draftTest);
+
+      await service.replaceQuestionPaper(draftTest, uploadedPdf, ADMIN);
+
+      const { storageKey, replacedStorageKey } = fileStorage.saveUploadThenCommit.mock.calls[0]![0];
+      expect(storageKey).toMatch(/^subjective\/1\/st-1\/question-paper-\d+-\d+\.pdf$/);
+      expect(replacedStorageKey).toBe(QUESTION_PAPER_PATH);
+      expect(repo.updateTest).toHaveBeenCalledWith(BUSINESS_ID, 'st-1', { questionPaperPath: storageKey, updatedBy: ADMIN.id });
+    });
+  });
+
+  describe('publishDraftTest', () => {
     it('requires a question paper', async () => {
-      repo.findSubjectiveTestById.mockResolvedValue(buildTest({ status: TestStatus.DRAFT, questionPaperPath: null }));
-      await expect(service.publish(BUSINESS_ID, 'st-1', ADMIN)).rejects.toThrow('Upload the question paper before publishing');
+      repo.findTestInBusiness.mockResolvedValue(buildTest({ status: TestStatus.DRAFT, questionPaperPath: null }));
+      await expect(service.publishDraftTest(BUSINESS_ID, 'st-1', ADMIN)).rejects.toThrow('Upload the question paper before publishing');
     });
 
     it('rejects a deadline that has already passed', async () => {
-      repo.findSubjectiveTestById.mockResolvedValue(
-        buildTest({
-          status: TestStatus.DRAFT,
-          startAt: new Date(Date.now() - 3 * HOUR),
-          deadlineAt: new Date(Date.now() - HOUR),
-        }),
+      repo.findTestInBusiness.mockResolvedValue(
+        buildTest({ status: TestStatus.DRAFT, startAt: new Date(Date.now() - 3 * HOUR), deadlineAt: new Date(Date.now() - HOUR) }),
       );
-      await expect(service.publish(BUSINESS_ID, 'st-1', ADMIN)).rejects.toThrow('deadline has already passed');
+      await expect(service.publishDraftTest(BUSINESS_ID, 'st-1', ADMIN)).rejects.toThrow('deadline has already passed');
     });
 
     it('publishes a valid draft', async () => {
-      repo.findSubjectiveTestById.mockResolvedValue(buildTest({ status: TestStatus.DRAFT }));
-      repo.updateSubjectiveTest.mockResolvedValue(buildTest());
-      await service.publish(BUSINESS_ID, 'st-1', ADMIN);
-      expect(repo.updateSubjectiveTest).toHaveBeenCalledWith(BUSINESS_ID, 'st-1', {
-        status: TestStatus.PUBLISHED,
-        updatedBy: ADMIN.id,
-      });
+      repo.findTestInBusiness.mockResolvedValue(buildTest({ status: TestStatus.DRAFT }));
+      repo.updateTest.mockResolvedValue(buildTest());
+      await service.publishDraftTest(BUSINESS_ID, 'st-1', ADMIN);
+      expect(repo.updateTest).toHaveBeenCalledWith(BUSINESS_ID, 'st-1', { status: TestStatus.PUBLISHED, updatedBy: ADMIN.id });
     });
   });
 
-  describe('remove', () => {
+  describe('deleteDraftTest', () => {
     it('blocks deleting a published test', async () => {
-      repo.findSubjectiveTestById.mockResolvedValue(buildTest());
-      await expect(service.remove(BUSINESS_ID, 'st-1', ADMIN)).rejects.toThrow(BadRequestError);
-      expect(repo.deleteSubjectiveTest).not.toHaveBeenCalled();
+      repo.findTestInBusiness.mockResolvedValue(buildTest());
+      await expect(service.deleteDraftTest(BUSINESS_ID, 'st-1', ADMIN)).rejects.toThrow(BadRequestError);
+      expect(repo.deleteTest).not.toHaveBeenCalled();
     });
 
     it('deletes a draft and its files', async () => {
-      repo.findSubjectiveTestById.mockResolvedValue(buildTest({ status: TestStatus.DRAFT }));
-      repo.countSubmissionsForTest.mockResolvedValue(0);
-      repo.deleteSubjectiveTest.mockResolvedValue({ count: 1 });
-      await service.remove(BUSINESS_ID, 'st-1', ADMIN);
-      expect(files.deleteFolderQuietly).toHaveBeenCalledWith('subjective/1/st-1');
+      repo.findTestInBusiness.mockResolvedValue(buildTest({ status: TestStatus.DRAFT }));
+      await service.deleteDraftTest(BUSINESS_ID, 'st-1', ADMIN);
+      expect(repo.deleteTest).toHaveBeenCalledWith(BUSINESS_ID, 'st-1');
+      expect(fileStorage.deleteFolderIfExists).toHaveBeenCalledWith('subjective/1/st-1');
     });
   });
 
-  describe('start', () => {
-    beforeEach(() => repo.findSubmissionByTestAndStudent.mockResolvedValue(null));
+  describe('getTestDetailForStaff', () => {
+    it('counts students per display status from two light queries', async () => {
+      repo.findTestInBusiness.mockResolvedValue(buildTest({ durationMinutes: 5 }));
+      repo.countStudentsNotStarted.mockResolvedValue(2);
+      repo.findAttemptTimingsForTest.mockResolvedValue([
+        { status: SubjectiveSubmissionStatus.SUBMITTED, startedAt: new Date() },
+        { status: SubjectiveSubmissionStatus.CHECKED, startedAt: new Date() },
+        { status: SubjectiveSubmissionStatus.IN_PROGRESS, startedAt: new Date(Date.now() - 10 * 60_000) },
+      ]);
 
-    it('rejects before the window opens', async () => {
-      repo.findPublishedSubjectiveTestForStudent.mockResolvedValue(
-        buildTest({ startAt: new Date(Date.now() + HOUR), deadlineAt: new Date(Date.now() + 4 * HOUR) }),
-      );
-      await expect(service.start(BUSINESS_ID, 'st-1', STUDENT)).rejects.toThrow('has not started yet');
-    });
-
-    it('rejects after the deadline', async () => {
-      repo.findPublishedSubjectiveTestForStudent.mockResolvedValue(
-        buildTest({ startAt: new Date(Date.now() - 4 * HOUR), deadlineAt: new Date(Date.now() - HOUR) }),
-      );
-      await expect(service.start(BUSINESS_ID, 'st-1', STUDENT)).rejects.toThrow('deadline for this test has passed');
-    });
-
-    it('returns 404 when the student is not an active batch member', async () => {
-      repo.findPublishedSubjectiveTestForStudent.mockResolvedValue(null);
-      await expect(service.start(BUSINESS_ID, 'st-1', STUDENT)).rejects.toThrow(NotFoundError);
-    });
-
-    it('creates the attempt when open', async () => {
-      const test = buildTest();
-      const created = buildSubmission();
-      repo.findPublishedSubjectiveTestForStudent.mockResolvedValue(test);
-      repo.createSubmission.mockResolvedValue(created);
-
-      const result = await service.start(BUSINESS_ID, 'st-1', STUDENT);
-
-      expect(result).toEqual({
-        submissionId: created.id,
-        displayStatus: SubjectiveDisplayStatus.IN_PROGRESS,
-        startedAt: created.startedAt,
-        effectiveDeadlineAt: new Date(created.startedAt.getTime() + 180 * 60_000),
-      });
-    });
-
-    it('resumes an in-progress attempt', async () => {
-      repo.findPublishedSubjectiveTestForStudent.mockResolvedValue(buildTest());
-      repo.findSubmissionByTestAndStudent.mockResolvedValue(buildSubmission());
-      const result = await service.start(BUSINESS_ID, 'st-1', STUDENT);
-      expect(result.submissionId).toBe('sub-1');
-      expect(repo.createSubmission).not.toHaveBeenCalled();
-    });
-
-    it('resumes the row created by a concurrent start', async () => {
-      repo.findPublishedSubjectiveTestForStudent.mockResolvedValue(buildTest());
-      repo.findSubmissionByTestAndStudent.mockResolvedValueOnce(null).mockResolvedValueOnce(buildSubmission());
-      repo.createSubmission.mockRejectedValue(uniqueViolation());
-      const result = await service.start(BUSINESS_ID, 'st-1', STUDENT);
-      expect(result.submissionId).toBe('sub-1');
-    });
-
-    it('rejects an expired attempt', async () => {
-      repo.findPublishedSubjectiveTestForStudent.mockResolvedValue(buildTest({ durationMinutes: 5 }));
-      repo.findSubmissionByTestAndStudent.mockResolvedValue(buildSubmission());
-      await expect(service.start(BUSINESS_ID, 'st-1', STUDENT)).rejects.toThrow('Your time for this test is over');
-    });
-
-    it('rejects an already submitted attempt', async () => {
-      repo.findPublishedSubjectiveTestForStudent.mockResolvedValue(buildTest());
-      repo.findSubmissionByTestAndStudent.mockResolvedValue(
-        buildSubmission({ status: SubjectiveSubmissionStatus.SUBMITTED }),
-      );
-      await expect(service.start(BUSINESS_ID, 'st-1', STUDENT)).rejects.toThrow('already submitted');
+      const { submissionCounts } = await service.getTestDetailForStaff(BUSINESS_ID, 'st-1', ADMIN);
+      expect(submissionCounts).toEqual({ NOT_STARTED: 2, IN_PROGRESS: 0, SUBMITTED: 1, CHECKED: 1, EXPIRED: 1 });
     });
   });
 
-  describe('question paper for students', () => {
-    it('requires the student to have started', async () => {
-      repo.findPublishedSubjectiveTestForStudent.mockResolvedValue(buildTest());
-      repo.findSubmissionByTestAndStudent.mockResolvedValue(null);
-      await expect(service.getQuestionPaperForStudent(BUSINESS_ID, 'st-1', STUDENT)).rejects.toThrow(
-        'Start the test to view the question paper',
-      );
-    });
-
-    it('returns the paper once started', async () => {
-      repo.findPublishedSubjectiveTestForStudent.mockResolvedValue(buildTest());
-      repo.findSubmissionByTestAndStudent.mockResolvedValue(buildSubmission());
-      const ref = await service.getQuestionPaperForStudent(BUSINESS_ID, 'st-1', STUDENT);
-      expect(ref.key).toBe(PAPER_KEY);
-    });
-  });
-
-  describe('submit', () => {
-    beforeEach(() => {
-      repo.findPublishedSubjectiveTestForStudent.mockResolvedValue(buildTest());
-      repo.findSubmissionByTestAndStudent.mockResolvedValue(buildSubmission());
-    });
-
-    it('requires a file', async () => {
-      await expect(service.submit(BUSINESS_ID, 'st-1', undefined, STUDENT)).rejects.toThrow('Upload your answer sheet');
-    });
-
-    it('rejects a file that is not a real PDF', async () => {
-      mockHasPdfSignature.mockResolvedValue(false);
-      await expect(service.submit(BUSINESS_ID, 'st-1', uploadedFile, STUDENT)).rejects.toThrow('not a valid PDF');
-      expect(files.moveIntoPlace).not.toHaveBeenCalled();
-    });
-
-    it('rejects after the effective end time', async () => {
-      repo.findPublishedSubjectiveTestForStudent.mockResolvedValue(buildTest({ durationMinutes: 5 }));
-      await expect(service.submit(BUSINESS_ID, 'st-1', uploadedFile, STUDENT)).rejects.toThrow('time for this test is over');
-      expect(files.moveIntoPlace).not.toHaveBeenCalled();
-    });
-
-    it('cleans up the file when a concurrent submit already won', async () => {
-      repo.markSubmissionSubmitted.mockResolvedValue(0);
-      await expect(service.submit(BUSINESS_ID, 'st-1', uploadedFile, STUDENT)).rejects.toThrow('already submitted');
-      expect(files.deleteQuietly).toHaveBeenCalledWith(files.moveIntoPlace.mock.calls[0]![1]);
-    });
-
-    it('stores the answer sheet and marks the attempt submitted', async () => {
-      repo.markSubmissionSubmitted.mockResolvedValue(1);
-      const result = await service.submit(BUSINESS_ID, 'st-1', uploadedFile, STUDENT);
-      const key = files.moveIntoPlace.mock.calls[0]![1];
-      expect(key).toMatch(/^subjective\/1\/st-1\/answers\/42-\d+-\d+__rahul-gs1-mock3\.pdf$/);
-      expect(repo.markSubmissionSubmitted).toHaveBeenCalledWith('sub-1', { answerSheetPath: key, submittedAt: result.submittedAt });
-      expect(result.displayStatus).toBe(SubjectiveDisplayStatus.SUBMITTED);
-    });
-  });
-
-  describe('grade', () => {
-    const submitted = buildSubmission({ status: SubjectiveSubmissionStatus.SUBMITTED, answerSheetPath: 'a.pdf' });
-    const checked = buildSubmission({
-      status: SubjectiveSubmissionStatus.CHECKED,
-      answerSheetPath: 'a.pdf',
-      checkedAnswerSheetPath: 'old-checked.pdf',
-    });
-
-    beforeEach(() => {
-      repo.findSubjectiveTestById.mockResolvedValue(buildTest());
-      (userRepo.findBasicProfileById as jest.Mock).mockResolvedValue({ id: STUDENT.id, name: 'S', email: 's@x.com' });
-    });
-
-    it('rejects grading an in-progress attempt', async () => {
-      repo.findSubmissionForTest.mockResolvedValue(buildSubmission());
-      await expect(service.grade(BUSINESS_ID, 'st-1', 'sub-1', { marksAwarded: 10 }, uploadedFile, ADMIN)).rejects.toThrow(
-        'Only submitted answer sheets can be graded',
-      );
-    });
-
-    it('rejects marks above the total', async () => {
-      repo.findSubmissionForTest.mockResolvedValue(submitted);
-      await expect(service.grade(BUSINESS_ID, 'st-1', 'sub-1', { marksAwarded: 251 }, uploadedFile, ADMIN)).rejects.toThrow(
-        'Marks cannot be more than 250',
-      );
-    });
-
-    it('requires the checked PDF on the first grade', async () => {
-      repo.findSubmissionForTest.mockResolvedValue(submitted);
-      await expect(service.grade(BUSINESS_ID, 'st-1', 'sub-1', { marksAwarded: 100 }, undefined, ADMIN)).rejects.toThrow(
-        'Upload the checked answer sheet',
-      );
-    });
-
-    it('allows changing marks without re-uploading', async () => {
-      repo.findSubmissionForTest.mockResolvedValue(checked);
-      repo.updateSubmissionGrade.mockResolvedValue(1);
-      await service.grade(BUSINESS_ID, 'st-1', 'sub-1', { marksAwarded: 120, remarks: ' Good ' }, undefined, ADMIN);
-      expect(repo.updateSubmissionGrade).toHaveBeenCalledWith(
-        'sub-1',
-        'old-checked.pdf',
-        expect.objectContaining({ marksAwarded: 120, remarks: 'Good', checkedAnswerSheetPath: 'old-checked.pdf', checkedBy: ADMIN.id }),
-      );
-      expect(files.deleteQuietly).not.toHaveBeenCalled();
-    });
-
-    it('replaces the checked copy and removes the old one after saving', async () => {
-      repo.findSubmissionForTest.mockResolvedValue(checked);
-      repo.updateSubmissionGrade.mockResolvedValue(1);
-      await service.grade(BUSINESS_ID, 'st-1', 'sub-1', { marksAwarded: 120 }, uploadedFile, ADMIN);
-      const newKey = files.moveIntoPlace.mock.calls[0]![1];
-      expect(newKey).toMatch(/^subjective\/1\/st-1\/checked\/sub-1-.*\.pdf$/);
-      expect(files.deleteQuietly).toHaveBeenCalledWith('old-checked.pdf');
-      expect(files.deleteQuietly).not.toHaveBeenCalledWith(newKey);
-    });
-
-    it('returns 409 and keeps the old file when someone else graded first', async () => {
-      repo.findSubmissionForTest.mockResolvedValue(checked);
-      repo.updateSubmissionGrade.mockResolvedValue(0);
-      const error = await service
-        .grade(BUSINESS_ID, 'st-1', 'sub-1', { marksAwarded: 120 }, uploadedFile, ADMIN)
-        .catch((e: unknown) => e);
-      expect(error).toBeInstanceOf(ApiError);
-      expect((error as ApiError).statusCode).toBe(409);
-      expect(files.deleteQuietly).toHaveBeenCalledWith(files.moveIntoPlace.mock.calls[0]![1]);
-      expect(files.deleteQuietly).not.toHaveBeenCalledWith('old-checked.pdf');
-    });
-  });
-
-  describe('student result visibility', () => {
-    it('hides marks until the submission is checked', async () => {
-      repo.findStudentSubmissionWithTest.mockResolvedValue({
-        ...buildSubmission({ status: SubjectiveSubmissionStatus.SUBMITTED, marksAwarded: 99, answerSheetPath: 'a.pdf' }),
-        test: buildTest(),
-      });
-      const detail = await service.getOwnSubmissionDetail(BUSINESS_ID, 'sub-1', STUDENT);
-      expect(detail.result).toBeNull();
-      await expect(service.getOwnCheckedAnswerSheet(BUSINESS_ID, 'sub-1', STUDENT)).rejects.toThrow(NotFoundError);
-    });
-
-    it('shows marks, remarks and the checked copy once checked', async () => {
-      repo.findStudentSubmissionWithTest.mockResolvedValue({
-        ...buildSubmission({
-          status: SubjectiveSubmissionStatus.CHECKED,
-          answerSheetPath: 'a.pdf',
-          marksAwarded: 118,
-          remarks: 'Good',
-          checkedAnswerSheetPath: 'c.pdf',
-        }),
-        test: buildTest(),
-      });
-      const detail = await service.getOwnSubmissionDetail(BUSINESS_ID, 'sub-1', STUDENT);
-      expect(detail.result).toEqual(expect.objectContaining({ marksAwarded: 118, totalMarks: 250, remarks: 'Good', hasCheckedAnswerSheet: true }));
-      expect((await service.getOwnCheckedAnswerSheet(BUSINESS_ID, 'sub-1', STUDENT)).key).toBe('c.pdf');
-    });
-
-    it("returns 404 for another student's submission", async () => {
-      repo.findStudentSubmissionWithTest.mockResolvedValue(null);
-      await expect(service.getOwnSubmissionDetail(BUSINESS_ID, 'sub-other', STUDENT)).rejects.toThrow(NotFoundError);
-    });
-  });
-
-  describe('listSubmissions', () => {
-    const rosterRow = (studentId: number, name: string, status: number | null): subjectiveRepo.SubjectiveRosterRow => ({
+  describe('listRosterForStaff', () => {
+    const rosterEntry = (studentId: number, studentName: string, status: number | null): subjectiveTestRepo.RosterEntryRecord => ({
       studentId,
-      studentName: name,
-      studentEmail: `${name.toLowerCase()}@x.com`,
+      studentName,
+      studentEmail: `${studentName.toLowerCase()}@x.com`,
       submissionId: status === null ? null : `sub-${studentId}`,
       status,
       startedAt: status === null ? null : new Date(Date.now() - 10 * 60_000),
@@ -442,33 +230,236 @@ describe('SubjectiveTestService', () => {
     });
 
     beforeEach(() => {
-      repo.findSubjectiveTestById.mockResolvedValue(buildTest());
-      repo.findSubmissionRoster.mockResolvedValue([
-        rosterRow(1, 'Asha', null),
-        rosterRow(2, 'Bala', SubjectiveSubmissionStatus.SUBMITTED),
-        rosterRow(3, 'Chitra', SubjectiveSubmissionStatus.CHECKED),
-        rosterRow(4, 'Dev', null),
+      repo.findTestInBusiness.mockResolvedValue(buildTest());
+      repo.findRosterWithSubmissions.mockResolvedValue([
+        rosterEntry(1, 'Asha', null),
+        rosterEntry(2, 'Bala', SubjectiveSubmissionStatus.SUBMITTED),
+        rosterEntry(3, 'Chitra', SubjectiveSubmissionStatus.CHECKED),
+        rosterEntry(4, 'Dev', null),
       ]);
     });
 
     it('includes students who never started', async () => {
-      const result = await service.listSubmissions(BUSINESS_ID, 'st-1', { status: SubjectiveDisplayStatus.NOT_STARTED }, ADMIN);
-      expect(result.items.map((r) => r.studentName)).toEqual(['Asha', 'Dev']);
-      expect(result.total).toBe(2);
+      const rosterPage = await service.listRosterForStaff(
+        BUSINESS_ID,
+        'st-1',
+        { displayStatus: SubjectiveDisplayStatus.NOT_STARTED, page: 1, pageSize: 20 },
+        ADMIN,
+      );
+      expect(rosterPage.items.map((entry) => entry.studentName)).toEqual(['Asha', 'Dev']);
     });
 
     it('searches by name or email and pages the result', async () => {
-      const searched = await service.listSubmissions(BUSINESS_ID, 'st-1', { search: 'CHITRA@' }, ADMIN);
-      expect(searched.items.map((r) => r.studentId)).toEqual([3]);
+      const searched = await service.listRosterForStaff(BUSINESS_ID, 'st-1', { searchText: 'chitra@', page: 1, pageSize: 20 }, ADMIN);
+      expect(searched.items.map((entry) => entry.studentId)).toEqual([3]);
 
-      const paged = await service.listSubmissions(BUSINESS_ID, 'st-1', { page: 2, limit: 3 }, ADMIN);
-      expect(paged.items.map((r) => r.studentId)).toEqual([4]);
-      expect(paged.total).toBe(4);
+      const secondPage = await service.listRosterForStaff(BUSINESS_ID, 'st-1', { page: 2, pageSize: 3 }, ADMIN);
+      expect(secondPage.items.map((entry) => entry.studentId)).toEqual([4]);
+      expect(secondPage.total).toBe(4);
+    });
+  });
+
+  describe('getQuestionPaperDownload', () => {
+    it('lets staff download any time', async () => {
+      repo.findTestInBusiness.mockResolvedValue(buildTest());
+      const download = await service.getQuestionPaperDownload(BUSINESS_ID, 'st-1', ADMIN);
+      expect(download).toEqual({ storageKey: QUESTION_PAPER_PATH, downloadFileName: 'GS Paper I.pdf', contentType: 'application/pdf' });
     });
 
-    it('counts each display status on the detail view', async () => {
-      const { submissionCounts } = await service.get(BUSINESS_ID, 'st-1', ADMIN);
-      expect(submissionCounts).toEqual({ NOT_STARTED: 2, IN_PROGRESS: 0, SUBMITTED: 1, CHECKED: 1, EXPIRED: 0 });
+    it('requires a student to have started the test', async () => {
+      repo.findPublishedTestWithOwnAttempt.mockResolvedValue(testWithOwnAttempt());
+      await expect(service.getQuestionPaperDownload(BUSINESS_ID, 'st-1', STUDENT)).rejects.toThrow(
+        'Start the test to view the question paper',
+      );
+
+      repo.findPublishedTestWithOwnAttempt.mockResolvedValue(testWithOwnAttempt({}, buildAttempt()));
+      expect((await service.getQuestionPaperDownload(BUSINESS_ID, 'st-1', STUDENT)).storageKey).toBe(QUESTION_PAPER_PATH);
+    });
+  });
+
+  describe('startOrResumeAttempt', () => {
+    it('rejects before the window opens and after it closes', async () => {
+      repo.findPublishedTestWithOwnAttempt.mockResolvedValue(
+        testWithOwnAttempt({ startAt: new Date(Date.now() + HOUR), deadlineAt: new Date(Date.now() + 4 * HOUR) }),
+      );
+      await expect(service.startOrResumeAttempt(BUSINESS_ID, 'st-1', STUDENT)).rejects.toThrow('has not started yet');
+
+      repo.findPublishedTestWithOwnAttempt.mockResolvedValue(
+        testWithOwnAttempt({ startAt: new Date(Date.now() - 4 * HOUR), deadlineAt: new Date(Date.now() - HOUR) }),
+      );
+      await expect(service.startOrResumeAttempt(BUSINESS_ID, 'st-1', STUDENT)).rejects.toThrow('deadline for this test has passed');
+    });
+
+    it('returns 404 when the student is not enrolled in the batch', async () => {
+      repo.findPublishedTestWithOwnAttempt.mockResolvedValue(null);
+      await expect(service.startOrResumeAttempt(BUSINESS_ID, 'st-1', STUDENT)).rejects.toThrow(NotFoundError);
+    });
+
+    it('creates the attempt when the window is open', async () => {
+      const createdAttempt = buildAttempt();
+      repo.findPublishedTestWithOwnAttempt.mockResolvedValue(testWithOwnAttempt());
+      repo.insertInProgressAttempt.mockResolvedValue(createdAttempt);
+
+      const startedAttempt = await service.startOrResumeAttempt(BUSINESS_ID, 'st-1', STUDENT);
+      expect(startedAttempt).toEqual({
+        submissionId: createdAttempt.id,
+        displayStatus: SubjectiveDisplayStatus.IN_PROGRESS,
+        startedAt: createdAttempt.startedAt,
+        effectiveDeadlineAt: new Date(createdAttempt.startedAt.getTime() + 180 * 60_000),
+      });
+    });
+
+    it('resumes an existing attempt without inserting', async () => {
+      repo.findPublishedTestWithOwnAttempt.mockResolvedValue(testWithOwnAttempt({}, buildAttempt()));
+      expect((await service.startOrResumeAttempt(BUSINESS_ID, 'st-1', STUDENT)).submissionId).toBe('sub-1');
+      expect(repo.insertInProgressAttempt).not.toHaveBeenCalled();
+    });
+
+    it('resumes the attempt created by a concurrent start (double click)', async () => {
+      repo.findPublishedTestWithOwnAttempt.mockResolvedValue(testWithOwnAttempt());
+      repo.insertInProgressAttempt.mockRejectedValue(prismaError('P2002'));
+      repo.findAttemptByTestAndStudent.mockResolvedValue(buildAttempt());
+      expect((await service.startOrResumeAttempt(BUSINESS_ID, 'st-1', STUDENT)).submissionId).toBe('sub-1');
+    });
+
+    it('rejects an expired or already submitted attempt', async () => {
+      repo.findPublishedTestWithOwnAttempt.mockResolvedValue(testWithOwnAttempt({ durationMinutes: 5 }, buildAttempt()));
+      await expect(service.startOrResumeAttempt(BUSINESS_ID, 'st-1', STUDENT)).rejects.toThrow('Your time for this test is over');
+
+      repo.findPublishedTestWithOwnAttempt.mockResolvedValue(
+        testWithOwnAttempt({}, buildAttempt({ status: SubjectiveSubmissionStatus.SUBMITTED })),
+      );
+      await expect(service.startOrResumeAttempt(BUSINESS_ID, 'st-1', STUDENT)).rejects.toThrow('already submitted');
+    });
+  });
+
+  describe('findOpenAttemptForStudent (runs before the upload)', () => {
+    it('requires a started, still-open attempt', async () => {
+      repo.findPublishedTestWithOwnAttempt.mockResolvedValue(testWithOwnAttempt());
+      await expect(service.findOpenAttemptForStudent(BUSINESS_ID, 'st-1', STUDENT)).rejects.toThrow('Start the test before submitting');
+
+      repo.findPublishedTestWithOwnAttempt.mockResolvedValue(testWithOwnAttempt({ durationMinutes: 5 }, buildAttempt()));
+      await expect(service.findOpenAttemptForStudent(BUSINESS_ID, 'st-1', STUDENT)).rejects.toThrow('time for this test is over');
+
+      repo.findPublishedTestWithOwnAttempt.mockResolvedValue(testWithOwnAttempt({}, buildAttempt()));
+      expect((await service.findOpenAttemptForStudent(BUSINESS_ID, 'st-1', STUDENT)).attempt.id).toBe('sub-1');
+    });
+  });
+
+  describe('submitAnswerSheet', () => {
+    const openAttempt = () => ({ test: buildTest(), attempt: buildAttempt() });
+
+    it("stores the sheet under a key with the student's file name and marks it submitted", async () => {
+      repo.markAttemptSubmitted.mockResolvedValue(buildAttempt({ status: SubjectiveSubmissionStatus.SUBMITTED }));
+      const submittedAttempt = await service.submitAnswerSheet(openAttempt(), uploadedPdf, STUDENT);
+
+      const { storageKey } = fileStorage.saveUploadThenCommit.mock.calls[0]![0];
+      expect(storageKey).toMatch(/^subjective\/1\/st-1\/answers\/42-\d+-\d+__rahul-gs1-mock3\.pdf$/);
+      expect(repo.markAttemptSubmitted).toHaveBeenCalledWith('sub-1', storageKey, submittedAttempt.submittedAt);
+      expect(submittedAttempt.displayStatus).toBe(SubjectiveDisplayStatus.SUBMITTED);
+    });
+
+    it('reports a concurrent second submit as already submitted', async () => {
+      repo.markAttemptSubmitted.mockRejectedValue(prismaError('P2025'));
+      await expect(service.submitAnswerSheet(openAttempt(), uploadedPdf, STUDENT)).rejects.toThrow('already submitted');
+    });
+  });
+
+  describe('grading', () => {
+    const submittedSheet = buildAttempt({ status: SubjectiveSubmissionStatus.SUBMITTED, answerSheetPath: 'a.pdf' });
+    const checkedSheet = buildAttempt({
+      status: SubjectiveSubmissionStatus.CHECKED,
+      answerSheetPath: 'a.pdf',
+      checkedAnswerSheetPath: 'old-checked.pdf',
+    });
+
+    beforeEach(() => {
+      (userRepo.findBasicProfileById as jest.Mock).mockResolvedValue({ id: STUDENT.id, name: 'S', email: 's@x.com' });
+      repo.saveGrade.mockResolvedValue(checkedSheet);
+    });
+
+    it('refuses to grade an attempt that is still in progress (checked before the upload)', async () => {
+      repo.findSubmissionWithTest.mockResolvedValue({ ...buildAttempt(), test: buildTest() });
+      await expect(service.findGradableSubmissionForStaff(BUSINESS_ID, 'st-1', 'sub-1', ADMIN)).rejects.toThrow(
+        'Only submitted answer sheets can be graded',
+      );
+    });
+
+    it('rejects marks above the total and a first grade without a checked copy', async () => {
+      const gradable = { test: buildTest(), submission: submittedSheet };
+      await expect(service.gradeSubmission(gradable, { marksAwarded: 251 }, uploadedPdf, ADMIN)).rejects.toThrow(
+        'Marks cannot be more than 250',
+      );
+      await expect(service.gradeSubmission(gradable, { marksAwarded: 100 }, undefined, ADMIN)).rejects.toThrow(
+        'Upload the checked answer sheet',
+      );
+    });
+
+    it('updates marks without re-uploading by keeping the current checked copy', async () => {
+      await service.gradeSubmission({ test: buildTest(), submission: checkedSheet }, { marksAwarded: 120, remarks: ' Good ' }, undefined, ADMIN);
+      expect(fileStorage.saveUploadThenCommit).not.toHaveBeenCalled();
+      expect(repo.saveGrade).toHaveBeenCalledWith(
+        'sub-1',
+        'old-checked.pdf',
+        expect.objectContaining({ marksAwarded: 120, remarks: 'Good', checkedAnswerSheetPath: 'old-checked.pdf', checkedBy: ADMIN.id }),
+      );
+    });
+
+    it('replaces the checked copy when a new one is uploaded', async () => {
+      await service.gradeSubmission({ test: buildTest(), submission: checkedSheet }, { marksAwarded: 120 }, uploadedPdf, ADMIN);
+      const { storageKey, replacedStorageKey } = fileStorage.saveUploadThenCommit.mock.calls[0]![0];
+      expect(storageKey).toMatch(/^subjective\/1\/st-1\/checked\/sub-1-\d+-\d+\.pdf$/);
+      expect(replacedStorageKey).toBe('old-checked.pdf');
+    });
+
+    it('returns 409 when someone else graded at the same time', async () => {
+      repo.saveGrade.mockRejectedValue(prismaError('P2025'));
+      const gradeError = await service
+        .gradeSubmission({ test: buildTest(), submission: checkedSheet }, { marksAwarded: 120 }, undefined, ADMIN)
+        .catch((error: unknown) => error);
+      expect(gradeError).toBeInstanceOf(ApiError);
+      expect((gradeError as ApiError).statusCode).toBe(409);
+    });
+  });
+
+  describe('student views', () => {
+    it('lists published tests with the student own attempt in one query', async () => {
+      repo.findPublishedTestsWithOwnAttempt.mockResolvedValue([testWithOwnAttempt({}, buildAttempt()), testWithOwnAttempt({ id: 'st-2' })]);
+      const testCards = await service.listTestsForStudent(BUSINESS_ID, STUDENT);
+      expect(testCards.map((testCard) => testCard.displayStatus)).toEqual([
+        SubjectiveDisplayStatus.IN_PROGRESS,
+        SubjectiveDisplayStatus.NOT_STARTED,
+      ]);
+    });
+
+    it('hides marks and the checked copy until the submission is checked', async () => {
+      repo.findOwnSubmissionWithTest.mockResolvedValue({
+        ...buildAttempt({ status: SubjectiveSubmissionStatus.SUBMITTED, marksAwarded: 99, answerSheetPath: 'a.pdf' }),
+        test: buildTest(),
+      });
+      expect((await service.getOwnAttemptDetail(BUSINESS_ID, 'sub-1', STUDENT)).result).toBeNull();
+      await expect(service.getOwnCheckedCopyDownload(BUSINESS_ID, 'sub-1', STUDENT)).rejects.toThrow(NotFoundError);
+    });
+
+    it('shows marks, remarks and the checked copy once checked', async () => {
+      repo.findOwnSubmissionWithTest.mockResolvedValue({
+        ...buildAttempt({
+          status: SubjectiveSubmissionStatus.CHECKED,
+          answerSheetPath: 'a.pdf',
+          marksAwarded: 118,
+          remarks: 'Good',
+          checkedAnswerSheetPath: 'c.pdf',
+        }),
+        test: buildTest(),
+      });
+      const ownAttempt = await service.getOwnAttemptDetail(BUSINESS_ID, 'sub-1', STUDENT);
+      expect(ownAttempt.result).toEqual(expect.objectContaining({ marksAwarded: 118, remarks: 'Good', hasCheckedAnswerSheet: true }));
+      expect((await service.getOwnCheckedCopyDownload(BUSINESS_ID, 'sub-1', STUDENT)).storageKey).toBe('c.pdf');
+    });
+
+    it("returns 404 for another student's submission", async () => {
+      repo.findOwnSubmissionWithTest.mockResolvedValue(null);
+      await expect(service.getOwnAttemptDetail(BUSINESS_ID, 'sub-other', STUDENT)).rejects.toThrow(NotFoundError);
     });
   });
 });

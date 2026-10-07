@@ -4,24 +4,23 @@ import {
   TestStatus,
 } from '../constants/test-enums';
 import type {
-  SubjectiveRosterRow,
+  RosterEntryRecord,
   SubjectiveSubmissionRecord,
   SubjectiveTestRecord,
 } from '../repositories/subjectiveTest.repo';
 import {
-  computeEffectiveEnd,
-  deriveAvailability,
-  deriveDisplayStatus,
-  questionPaperFileName,
+  answerSheetDisplayName,
+  computeAttemptDeadline,
+  getSubmissionDisplayStatus,
+  getTestAvailability,
+  questionPaperDisplayName,
 } from '../utils/subjectiveTest.utils';
-import { originalNameFromKey } from '../services/privateFile.service';
 
-// Storage keys (questionPaperPath, answerSheetPath, checkedAnswerSheetPath) are never
-// returned; clients only get `has*` flags and download through the file endpoints.
+// Storage keys (questionPaperPath, answerSheetPath, checkedAnswerSheetPath) are never returned;
+// clients get `has*` flags and display names, and download through the file endpoints.
 
-export type SubjectiveTestResponse = {
+type TestSummaryResponse = {
   id: string;
-  businessId: number;
   batchId: number;
   batchName: string;
   subjectId: number | null;
@@ -30,25 +29,25 @@ export type SubjectiveTestResponse = {
   paperType: string;
   description: string | null;
   instructions: string | null;
-  status: number;
-  isPublished: boolean;
   totalMarks: number;
   durationMinutes: number;
   startAt: Date;
   deadlineAt: Date;
   hasQuestionPaper: boolean;
-  /** Display/download name, derived from the paper type. */
   questionPaperName: string | null;
+};
+
+export type SubjectiveTestResponse = TestSummaryResponse & {
+  businessId: number;
+  status: number;
+  isPublished: boolean;
   createdBy: number;
   updatedBy: number | null;
   createdAt: Date;
   updatedAt: Date;
 };
 
-export type SubjectiveAvailableTestResponse = Omit<
-  SubjectiveTestResponse,
-  'businessId' | 'status' | 'isPublished' | 'createdBy' | 'updatedBy' | 'createdAt' | 'updatedAt'
-> & {
+export type SubjectiveAvailableTestResponse = TestSummaryResponse & {
   availability: SubjectiveAvailability;
   displayStatus: SubjectiveDisplayStatus;
   submissionId: string | null;
@@ -71,7 +70,6 @@ export type SubjectiveStudentSubmissionResponse = {
   effectiveDeadlineAt: Date;
   submittedAt: Date | null;
   hasAnswerSheet: boolean;
-  /** The student's original PDF name. */
   answerSheetName: string | null;
   /** Present only once the submission is CHECKED. */
   result: SubjectiveResultResponse | null;
@@ -109,133 +107,124 @@ export type SubjectiveRosterRowResponse = {
   checkedAt: Date | null;
 };
 
-const paperName = (t: SubjectiveTestRecord) => (t.questionPaperPath ? questionPaperFileName(t.paperType) : null);
+function toTestSummary(test: SubjectiveTestRecord): TestSummaryResponse {
+  return {
+    id: test.id,
+    batchId: test.batchId,
+    batchName: test.batch.displayName,
+    subjectId: test.subjectId ?? null,
+    subjectName: test.subject?.name ?? null,
+    name: test.name,
+    paperType: test.paperType,
+    description: test.description ?? null,
+    instructions: test.instructions ?? null,
+    totalMarks: test.totalMarks,
+    durationMinutes: test.durationMinutes,
+    startAt: test.startAt,
+    deadlineAt: test.deadlineAt,
+    hasQuestionPaper: Boolean(test.questionPaperPath),
+    questionPaperName: questionPaperDisplayName(test),
+  };
+}
 
 export const SubjectiveTestMapper = {
-  test(t: SubjectiveTestRecord): SubjectiveTestResponse {
+  toStaffTestResponse(test: SubjectiveTestRecord): SubjectiveTestResponse {
     return {
-      id: t.id,
-      businessId: t.businessId,
-      batchId: t.batchId,
-      batchName: t.batch.displayName,
-      subjectId: t.subjectId ?? null,
-      subjectName: t.subject?.name ?? null,
-      name: t.name,
-      paperType: t.paperType,
-      description: t.description ?? null,
-      instructions: t.instructions ?? null,
-      status: t.status,
-      isPublished: t.status === TestStatus.PUBLISHED,
-      totalMarks: t.totalMarks,
-      durationMinutes: t.durationMinutes,
-      startAt: t.startAt,
-      deadlineAt: t.deadlineAt,
-      hasQuestionPaper: Boolean(t.questionPaperPath),
-      questionPaperName: paperName(t),
-      createdBy: t.createdBy,
-      updatedBy: t.updatedBy ?? null,
-      createdAt: t.createdAt,
-      updatedAt: t.updatedAt,
+      ...toTestSummary(test),
+      businessId: test.businessId,
+      status: test.status,
+      isPublished: test.status === TestStatus.PUBLISHED,
+      createdBy: test.createdBy,
+      updatedBy: test.updatedBy ?? null,
+      createdAt: test.createdAt,
+      updatedAt: test.updatedAt,
     };
   },
 
-  availableTest(
-    t: SubjectiveTestRecord,
-    submission: SubjectiveSubmissionRecord | null,
+  toStudentTestCardResponse(
+    test: SubjectiveTestRecord,
+    ownAttempt: SubjectiveSubmissionRecord | null,
     now: Date,
   ): SubjectiveAvailableTestResponse {
     return {
-      id: t.id,
-      batchId: t.batchId,
-      batchName: t.batch.displayName,
-      subjectId: t.subjectId ?? null,
-      subjectName: t.subject?.name ?? null,
-      name: t.name,
-      paperType: t.paperType,
-      description: t.description ?? null,
-      instructions: t.instructions ?? null,
-      totalMarks: t.totalMarks,
-      durationMinutes: t.durationMinutes,
-      startAt: t.startAt,
-      deadlineAt: t.deadlineAt,
-      hasQuestionPaper: Boolean(t.questionPaperPath),
-      questionPaperName: paperName(t),
-      availability: deriveAvailability(t, now),
-      displayStatus: deriveDisplayStatus(t, submission, now),
-      submissionId: submission?.id ?? null,
-      effectiveDeadlineAt: submission ? computeEffectiveEnd(t, submission.startedAt) : null,
+      ...toTestSummary(test),
+      availability: getTestAvailability(test, now),
+      displayStatus: getSubmissionDisplayStatus(test, ownAttempt, now),
+      submissionId: ownAttempt?.id ?? null,
+      effectiveDeadlineAt: ownAttempt ? computeAttemptDeadline(test, ownAttempt.startedAt) : null,
     };
   },
 
-  studentSubmission(
-    t: SubjectiveTestRecord,
-    s: SubjectiveSubmissionRecord,
+  toStudentAttemptResponse(
+    test: SubjectiveTestRecord,
+    attempt: SubjectiveSubmissionRecord,
     now: Date,
   ): SubjectiveStudentSubmissionResponse {
-    const displayStatus = deriveDisplayStatus(t, s, now);
-    const isChecked = displayStatus === SubjectiveDisplayStatus.CHECKED;
+    const testCard = SubjectiveTestMapper.toStudentTestCardResponse(test, attempt, now);
     return {
-      submissionId: s.id,
-      test: SubjectiveTestMapper.availableTest(t, s, now),
-      displayStatus,
-      startedAt: s.startedAt,
-      effectiveDeadlineAt: computeEffectiveEnd(t, s.startedAt),
-      submittedAt: s.submittedAt ?? null,
-      hasAnswerSheet: Boolean(s.answerSheetPath),
-      answerSheetName: originalNameFromKey(s.answerSheetPath),
-      result: isChecked
-        ? {
-            marksAwarded: s.marksAwarded ?? 0,
-            totalMarks: t.totalMarks,
-            remarks: s.remarks ?? null,
-            checkedAt: s.checkedAt ?? null,
-            hasCheckedAnswerSheet: Boolean(s.checkedAnswerSheetPath),
-          }
-        : null,
+      submissionId: attempt.id,
+      test: testCard,
+      displayStatus: testCard.displayStatus,
+      startedAt: attempt.startedAt,
+      effectiveDeadlineAt: testCard.effectiveDeadlineAt!,
+      submittedAt: attempt.submittedAt ?? null,
+      hasAnswerSheet: Boolean(attempt.answerSheetPath),
+      answerSheetName: answerSheetDisplayName(attempt.answerSheetPath),
+      result:
+        testCard.displayStatus === SubjectiveDisplayStatus.CHECKED
+          ? {
+              marksAwarded: attempt.marksAwarded ?? 0,
+              totalMarks: test.totalMarks,
+              remarks: attempt.remarks ?? null,
+              checkedAt: attempt.checkedAt ?? null,
+              hasCheckedAnswerSheet: Boolean(attempt.checkedAnswerSheetPath),
+            }
+          : null,
     };
   },
 
-  staffSubmission(
-    t: SubjectiveTestRecord,
-    s: SubjectiveSubmissionRecord,
+  toStaffSubmissionResponse(
+    test: SubjectiveTestRecord,
+    submission: SubjectiveSubmissionRecord,
     student: { id: number; name: string; email: string } | null,
     now: Date,
   ): SubjectiveStaffSubmissionResponse {
     return {
-      id: s.id,
-      subjectiveTestId: s.subjectiveTestId,
+      id: submission.id,
+      subjectiveTestId: submission.subjectiveTestId,
       student,
-      displayStatus: deriveDisplayStatus(t, s, now),
-      startedAt: s.startedAt,
-      effectiveDeadlineAt: computeEffectiveEnd(t, s.startedAt),
-      submittedAt: s.submittedAt ?? null,
-      hasAnswerSheet: Boolean(s.answerSheetPath),
-      answerSheetName: originalNameFromKey(s.answerSheetPath),
-      marksAwarded: s.marksAwarded ?? null,
-      remarks: s.remarks ?? null,
-      hasCheckedAnswerSheet: Boolean(s.checkedAnswerSheetPath),
-      checkedBy: s.checkedBy ?? null,
-      checkedAt: s.checkedAt ?? null,
+      displayStatus: getSubmissionDisplayStatus(test, submission, now),
+      startedAt: submission.startedAt,
+      effectiveDeadlineAt: computeAttemptDeadline(test, submission.startedAt),
+      submittedAt: submission.submittedAt ?? null,
+      hasAnswerSheet: Boolean(submission.answerSheetPath),
+      answerSheetName: answerSheetDisplayName(submission.answerSheetPath),
+      marksAwarded: submission.marksAwarded ?? null,
+      remarks: submission.remarks ?? null,
+      hasCheckedAnswerSheet: Boolean(submission.checkedAnswerSheetPath),
+      checkedBy: submission.checkedBy ?? null,
+      checkedAt: submission.checkedAt ?? null,
     };
   },
 
-  rosterRow(t: SubjectiveTestRecord, row: SubjectiveRosterRow, now: Date): SubjectiveRosterRowResponse {
-    const submission = row.submissionId && row.status !== null && row.startedAt
-      ? { status: row.status, startedAt: row.startedAt }
-      : null;
+  toRosterEntryResponse(test: SubjectiveTestRecord, entry: RosterEntryRecord, now: Date): SubjectiveRosterRowResponse {
+    const attempt =
+      entry.submissionId && entry.status !== null && entry.startedAt
+        ? { status: entry.status, startedAt: entry.startedAt }
+        : null;
     return {
-      studentId: row.studentId,
-      studentName: row.studentName,
-      studentEmail: row.studentEmail,
-      submissionId: row.submissionId,
-      displayStatus: deriveDisplayStatus(t, submission, now),
-      startedAt: row.startedAt,
-      submittedAt: row.submittedAt,
-      answerSheetName: originalNameFromKey(row.answerSheetPath),
-      marksAwarded: row.marksAwarded,
-      remarks: row.remarks,
-      hasCheckedAnswerSheet: row.hasCheckedAnswerSheet,
-      checkedAt: row.checkedAt,
+      studentId: entry.studentId,
+      studentName: entry.studentName,
+      studentEmail: entry.studentEmail,
+      submissionId: entry.submissionId,
+      displayStatus: getSubmissionDisplayStatus(test, attempt, now),
+      startedAt: entry.startedAt,
+      submittedAt: entry.submittedAt,
+      answerSheetName: answerSheetDisplayName(entry.answerSheetPath),
+      marksAwarded: entry.marksAwarded,
+      remarks: entry.remarks,
+      hasCheckedAnswerSheet: entry.hasCheckedAnswerSheet,
+      checkedAt: entry.checkedAt,
     };
   },
 };

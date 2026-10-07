@@ -1,4 +1,4 @@
-import { Prisma, UserRole } from '@prisma/client';
+import { UserRole } from '@prisma/client';
 import { ApiError, BadRequestError, NotFoundError } from '../errors/api.errors';
 import { HTTP_STATUS } from '../constants/httpStatus.constants';
 import { PRISMA_ERROR_CODES } from '../constants/prismaErrorCodes.constants';
@@ -8,8 +8,7 @@ import {
   SubjectiveSubmissionStatus,
   TestStatus,
 } from '../constants/test-enums';
-import { SUBJECTIVE_TEST_CONFIG } from '../config/subjectiveTest.config';
-import * as subjectiveRepo from '../repositories/subjectiveTest.repo';
+import * as subjectiveTestRepo from '../repositories/subjectiveTest.repo';
 import type { SubjectiveSubmissionRecord, SubjectiveTestRecord } from '../repositories/subjectiveTest.repo';
 import * as userRepo from '../repositories/user.repo';
 import {
@@ -18,157 +17,159 @@ import {
   UpdateSubjectiveTestDto,
 } from '../dtos/subjectiveTest.dto';
 import { SubjectiveTestMapper } from '../mappers/subjectiveTest.mapper';
-import { originalNameFromKey, privateFileService, toKeyFileName, withOriginalName } from './privateFile.service';
-import { hasPdfSignature } from '../utils/fileSignature.util';
+import { privateFileStorage, type StoredFileDownload } from './fileStorage.service';
+import { assertBatchBelongsToBusiness, assertSubjectForBatch, assertTestBatchAccess } from '../utils/test.utils';
+import { hasPrismaErrorCode, translatePrismaError } from '../utils/prismaError';
+import type { TestRequestActor } from '../utils/testController.utils';
 import {
-  assertBatchBelongsToBusiness,
-  assertSubjectForBatch,
-  assertTestBatchAccess,
-} from '../utils/test.utils';
-import {
-  computeEffectiveEnd,
-  deriveAvailability,
-  deriveDisplayStatus,
-  questionPaperFileName,
+  answerSheetDownload,
+  assertDeadlineAfterStart,
+  buildAnswerSheetStorageKey,
+  buildCheckedCopyStorageKey,
+  buildQuestionPaperStorageKey,
+  checkedCopyDownload,
+  computeAttemptDeadline,
+  getSubmissionDisplayStatus,
+  getTestAvailability,
+  questionPaperDownload,
+  subjectiveTestStorageFolder,
+  type SubmissionListFilters,
 } from '../utils/subjectiveTest.utils';
 import logger from '../utils/logger';
 
-type ActingUser = { id: number; role: UserRole };
-type UploadedFile = Express.Multer.File | undefined;
+const TEST_LABEL = 'Subjective test';
 
-/** What a controller needs to stream a private file. */
-export type PrivateFileRef = { key: string; downloadName: string };
+/** A submission and its test, loaded and access-checked for a staff member. */
+export type StaffSubmissionContext = { test: SubjectiveTestRecord; submission: SubjectiveSubmissionRecord };
+/** A student's open (in progress, not timed out) attempt and its test. */
+export type StudentOpenAttemptContext = { test: SubjectiveTestRecord; attempt: SubjectiveSubmissionRecord };
 
-export type SubmissionListQuery = {
-  status?: SubjectiveDisplayStatus;
-  search?: string;
-  page?: number;
-  limit?: number;
-};
-
-const ENTITY_LABEL = 'Subjective test';
+const isAdminRole = (role: UserRole) => role === UserRole.ADMIN || role === UserRole.SUPERADMIN;
 
 export class SubjectiveTestService {
-  private isElevated(role: UserRole) {
-    return role === UserRole.ADMIN || role === UserRole.SUPERADMIN;
-  }
+  // ---------------------------------------------------------------------------
+  // Access checks (also used by subjectiveTestAccess.middleware before multer runs)
+  // ---------------------------------------------------------------------------
 
-  /** Staff access: admins see every test in the business; teachers only tests they created. */
-  private async getWithAccess(businessId: number, subjectiveTestId: string, user: ActingUser) {
-    const test = await subjectiveRepo.findSubjectiveTestById(businessId, subjectiveTestId);
-    if (!test || (!this.isElevated(user.role) && test.createdBy !== user.id)) {
-      throw new NotFoundError(ENTITY_LABEL);
+  /** Admins manage every test in the business; teachers only tests they created in their batches. */
+  private async assertStaffCanManageTest(test: SubjectiveTestRecord | null, subjectiveTestId: string, actor: TestRequestActor) {
+    if (!test || (!isAdminRole(actor.role) && test.createdBy !== actor.id)) {
+      logger.warn(`[subjective-test] staff access denied subjectiveTestId=${subjectiveTestId} userId=${actor.id} role=${actor.role}`);
+      throw new NotFoundError(TEST_LABEL);
     }
     await assertTestBatchAccess({
-      user,
+      user: actor,
       batchId: test.batchId,
-      businessId,
-      entityLabel: ENTITY_LABEL,
-      entityId: subjectiveTestId,
+      businessId: test.businessId,
+      entityLabel: TEST_LABEL,
+      entityId: test.id,
     });
     return test;
   }
 
-  private async getDraftWithAccess(businessId: number, subjectiveTestId: string, user: ActingUser) {
-    const test = await this.getWithAccess(businessId, subjectiveTestId, user);
+  async findTestForStaff(businessId: number, subjectiveTestId: string, actor: TestRequestActor) {
+    const test = await subjectiveTestRepo.findTestInBusiness(businessId, subjectiveTestId);
+    return this.assertStaffCanManageTest(test, subjectiveTestId, actor);
+  }
+
+  async findDraftTestForStaff(businessId: number, subjectiveTestId: string, actor: TestRequestActor) {
+    const test = await this.findTestForStaff(businessId, subjectiveTestId, actor);
     if (test.status !== TestStatus.DRAFT) {
+      logger.warn(`[subjective-test] change blocked: test is published subjectiveTestId=${subjectiveTestId} userId=${actor.id}`);
       throw new BadRequestError('A published test cannot be changed');
     }
     return test;
   }
 
-  private async getPublishedForStudent(businessId: number, subjectiveTestId: string, user: ActingUser) {
-    const test = await subjectiveRepo.findPublishedSubjectiveTestForStudent(businessId, subjectiveTestId, user.id);
-    if (!test) throw new NotFoundError(ENTITY_LABEL);
-    return test;
+  async findSubmissionForStaff(
+    businessId: number,
+    subjectiveTestId: string,
+    submissionId: string,
+    actor: TestRequestActor,
+  ): Promise<StaffSubmissionContext> {
+    const submissionWithTest = await subjectiveTestRepo.findSubmissionWithTest(businessId, subjectiveTestId, submissionId);
+    if (!submissionWithTest) {
+      logger.warn(`[subjective-test] submission not found subjectiveTestId=${subjectiveTestId} submissionId=${submissionId}`);
+      throw new NotFoundError('Submission');
+    }
+    const { test, ...submission } = submissionWithTest;
+    await this.assertStaffCanManageTest(test, subjectiveTestId, actor);
+    return { test, submission };
   }
 
-  private async assertBatchAndSubject(
+  async findGradableSubmissionForStaff(
+    businessId: number,
+    subjectiveTestId: string,
+    submissionId: string,
+    actor: TestRequestActor,
+  ): Promise<StaffSubmissionContext> {
+    const gradable = await this.findSubmissionForStaff(businessId, subjectiveTestId, submissionId, actor);
+    if (gradable.submission.status === SubjectiveSubmissionStatus.IN_PROGRESS) {
+      logger.warn(`[subjective-test] grade blocked: not submitted yet submissionId=${submissionId} userId=${actor.id}`);
+      throw new BadRequestError('Only submitted answer sheets can be graded');
+    }
+    return gradable;
+  }
+
+  async findOpenAttemptForStudent(
+    businessId: number,
+    subjectiveTestId: string,
+    actor: TestRequestActor,
+  ): Promise<StudentOpenAttemptContext> {
+    const { test, ownAttempt } = await this.findPublishedTestForStudent(businessId, subjectiveTestId, actor);
+    if (!ownAttempt) {
+      logger.warn(`[subjective-test] submit blocked: test not started subjectiveTestId=${subjectiveTestId} userId=${actor.id}`);
+      throw new BadRequestError('Start the test before submitting');
+    }
+    this.assertAttemptStillOpen(test, ownAttempt, actor);
+    return { test, attempt: ownAttempt };
+  }
+
+  private async findPublishedTestForStudent(businessId: number, subjectiveTestId: string, actor: TestRequestActor) {
+    const testWithOwnAttempt = await subjectiveTestRepo.findPublishedTestWithOwnAttempt(businessId, subjectiveTestId, actor.id);
+    if (!testWithOwnAttempt) {
+      logger.warn(`[subjective-test] student test not found subjectiveTestId=${subjectiveTestId} userId=${actor.id}`);
+      throw new NotFoundError(TEST_LABEL);
+    }
+    const { submissions, ...test } = testWithOwnAttempt;
+    return { test, ownAttempt: submissions[0] ?? null };
+  }
+
+  private assertAttemptStillOpen(test: SubjectiveTestRecord, attempt: SubjectiveSubmissionRecord, actor: TestRequestActor) {
+    const displayStatus = getSubmissionDisplayStatus(test, attempt, new Date());
+    if (displayStatus === SubjectiveDisplayStatus.IN_PROGRESS) return;
+
+    logger.warn(`[subjective-test] attempt not open submissionId=${attempt.id} userId=${actor.id} status=${displayStatus}`);
+    throw new BadRequestError(
+      displayStatus === SubjectiveDisplayStatus.EXPIRED ? 'Your time for this test is over' : 'You have already submitted this test',
+    );
+  }
+
+  private async assertBatchAndSubjectAllowed(
     businessId: number,
     batchId: number,
     subjectId: number | null | undefined,
-    user: ActingUser,
-    entityId: string,
+    actor: TestRequestActor,
   ) {
-    await assertBatchBelongsToBusiness(businessId, batchId);
-    await assertTestBatchAccess({ user, batchId, businessId, entityLabel: ENTITY_LABEL, entityId });
-    if (subjectId !== undefined && subjectId !== null) {
-      await assertSubjectForBatch({ batchId, subjectId, businessId, userId: user.id });
-    }
-  }
-
-  private assertWindow(startAt: Date, deadlineAt: Date) {
-    if (!(deadlineAt > startAt)) {
-      throw new BadRequestError('Deadline must be after the start time');
-    }
-  }
-
-  private async assertPdfUpload(file: Express.Multer.File) {
-    if (!(await hasPdfSignature(file.path))) {
-      throw new BadRequestError('The uploaded file is not a valid PDF');
-    }
-  }
-
-  private testFolderKey(businessId: number, subjectiveTestId: string) {
-    return privateFileService.buildKey(SUBJECTIVE_TEST_CONFIG.storagePrefix, businessId, subjectiveTestId);
-  }
-
-  /**
-   * A new, never-reused key so replacing a file never overwrites the previous version.
-   * `originalName` (already key-safe) is kept at the end of the key so it can be shown later.
-   */
-  private newFileKey(
-    businessId: number,
-    subjectiveTestId: string,
-    baseName: string | number,
-    folder?: string,
-    originalName?: string,
-  ) {
-    const generated = `${baseName}-${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    const fileName = originalName
-      ? withOriginalName(generated, originalName)
-      : `${generated}${SUBJECTIVE_TEST_CONFIG.pdfExtension}`;
-    const testFolder = this.testFolderKey(businessId, subjectiveTestId);
-    return folder
-      ? privateFileService.buildKey(testFolder, folder, fileName)
-      : privateFileService.buildKey(testFolder, fileName);
-  }
-
-  /**
-   * Moves an already-validated upload into place and runs `persist`. If persisting fails the
-   * new file is removed; the caller's previous file (if any) is only removed after success.
-   */
-  private async storeThenPersist<T>(
-    file: Express.Multer.File,
-    key: string,
-    persist: () => Promise<T>,
-    previousKey?: string | null,
-  ): Promise<T> {
-    await privateFileService.moveIntoPlace(file.path, key);
-    let result: T;
-    try {
-      result = await persist();
-    } catch (error) {
-      await privateFileService.deleteQuietly(key);
-      throw error;
-    }
-    if (previousKey && previousKey !== key) await privateFileService.deleteQuietly(previousKey);
-    return result;
+    await Promise.all([
+      assertBatchBelongsToBusiness(businessId, batchId),
+      assertTestBatchAccess({ user: actor, batchId, businessId, entityLabel: TEST_LABEL, entityId: String(batchId) }),
+      subjectId ? assertSubjectForBatch({ batchId, subjectId, businessId, userId: actor.id }) : undefined,
+    ]);
   }
 
   // ---------------------------------------------------------------------------
   // Staff: manage tests
   // ---------------------------------------------------------------------------
 
-  async create(businessId: number, dto: CreateSubjectiveTestDto, file: UploadedFile, user: ActingUser) {
-    logger.info(`[subjective-test] create businessId=${businessId} userId=${user.id} batchId=${dto.batchId} hasPaper=${Boolean(file)}`);
-    await this.assertBatchAndSubject(businessId, dto.batchId, dto.subjectId, user, 'create');
+  async createDraftTest(businessId: number, dto: CreateSubjectiveTestDto, actor: TestRequestActor) {
+    logger.info(`[subjective-test] createDraftTest businessId=${businessId} userId=${actor.id} batchId=${dto.batchId}`);
     const startAt = new Date(dto.startAt);
     const deadlineAt = new Date(dto.deadlineAt);
-    this.assertWindow(startAt, deadlineAt);
-    if (file) await this.assertPdfUpload(file);
+    assertDeadlineAfterStart(startAt, deadlineAt);
+    await this.assertBatchAndSubjectAllowed(businessId, dto.batchId, dto.subjectId, actor);
 
-    const created = await subjectiveRepo.createSubjectiveTest({
+    return subjectiveTestRepo.insertDraftTest({
       businessId,
       batchId: dto.batchId,
       subjectId: dto.subjectId ?? null,
@@ -181,70 +182,55 @@ export class SubjectiveTestService {
       startAt,
       deadlineAt,
       status: TestStatus.DRAFT,
-      createdBy: user.id,
+      createdBy: actor.id,
     });
-    if (!file) return created;
-
-    const key = this.newFileKey(businessId, created.id, 'question-paper');
-    try {
-      return await this.storeThenPersist(file, key, () =>
-        subjectiveRepo.updateSubjectiveTest(businessId, created.id, { questionPaperPath: key }),
-      );
-    } catch (error) {
-      // The draft was created only for this request; don't leave it behind without its paper.
-      await subjectiveRepo.deleteSubjectiveTest(businessId, created.id);
-      throw error;
-    }
   }
 
-  async list(
+  async listTestsForStaff(
     businessId: number,
-    query: { status?: number; batchId?: number; paperType?: string },
-    user: ActingUser,
+    filters: { status?: number; batchId?: number; paperType?: string },
+    actor: TestRequestActor,
   ) {
-    logger.info(`[subjective-test] list businessId=${businessId} userId=${user.id} role=${user.role}`);
-    const where: Prisma.SubjectiveTestWhereInput = {
-      ...(query.status !== undefined ? { status: query.status } : {}),
-      ...(query.batchId !== undefined ? { batchId: query.batchId } : {}),
-      ...(query.paperType ? { paperType: query.paperType } : {}),
-      ...(!this.isElevated(user.role) ? { createdBy: user.id } : {}),
-    };
-    return subjectiveRepo.findSubjectiveTestsByBusinessId(businessId, where);
+    logger.info(`[subjective-test] listTestsForStaff businessId=${businessId} userId=${actor.id} role=${actor.role}`);
+    return subjectiveTestRepo.findTestsInBusiness(businessId, {
+      ...filters,
+      ...(isAdminRole(actor.role) ? {} : { createdBy: actor.id }),
+    });
   }
 
-  async get(businessId: number, subjectiveTestId: string, user: ActingUser) {
-    logger.info(`[subjective-test] get businessId=${businessId} subjectiveTestId=${subjectiveTestId} userId=${user.id}`);
-    const test = await this.getWithAccess(businessId, subjectiveTestId, user);
-    const rows = await this.buildRoster(businessId, test);
+  async getTestDetailForStaff(businessId: number, subjectiveTestId: string, actor: TestRequestActor) {
+    logger.info(`[subjective-test] getTestDetailForStaff businessId=${businessId} subjectiveTestId=${subjectiveTestId} userId=${actor.id}`);
+    const test = await this.findTestForStaff(businessId, subjectiveTestId, actor);
+    const [notStartedCount, attemptTimings] = await Promise.all([
+      subjectiveTestRepo.countStudentsNotStarted(businessId, test.id, test.batchId),
+      subjectiveTestRepo.findAttemptTimingsForTest(test.id),
+    ]);
+
     const submissionCounts = Object.fromEntries(
-      Object.values(SubjectiveDisplayStatus).map((status) => [status, 0]),
+      Object.values(SubjectiveDisplayStatus).map((displayStatus) => [displayStatus, 0]),
     ) as Record<SubjectiveDisplayStatus, number>;
-    for (const row of rows) submissionCounts[row.displayStatus] += 1;
+    submissionCounts[SubjectiveDisplayStatus.NOT_STARTED] = notStartedCount;
+    const now = new Date();
+    for (const attemptTiming of attemptTimings) {
+      submissionCounts[getSubmissionDisplayStatus(test, attemptTiming, now)] += 1;
+    }
     return { test, submissionCounts };
   }
 
-  async update(
-    businessId: number,
-    subjectiveTestId: string,
-    dto: UpdateSubjectiveTestDto,
-    file: UploadedFile,
-    user: ActingUser,
-  ) {
-    logger.info(`[subjective-test] update businessId=${businessId} subjectiveTestId=${subjectiveTestId} userId=${user.id} hasPaper=${Boolean(file)}`);
-    const existing = await this.getDraftWithAccess(businessId, subjectiveTestId, user);
-    if (file) await this.assertPdfUpload(file);
+  async updateDraftTest(businessId: number, subjectiveTestId: string, dto: UpdateSubjectiveTestDto, actor: TestRequestActor) {
+    logger.info(`[subjective-test] updateDraftTest businessId=${businessId} subjectiveTestId=${subjectiveTestId} userId=${actor.id}`);
+    const draftTest = await this.findDraftTestForStaff(businessId, subjectiveTestId, actor);
+    const startAt = dto.startAt ? new Date(dto.startAt) : draftTest.startAt;
+    const deadlineAt = dto.deadlineAt ? new Date(dto.deadlineAt) : draftTest.deadlineAt;
+    assertDeadlineAfterStart(startAt, deadlineAt);
 
     if (dto.batchId !== undefined || dto.subjectId !== undefined) {
-      const batchId = dto.batchId ?? existing.batchId;
-      const subjectId = dto.subjectId !== undefined ? dto.subjectId : existing.subjectId;
-      await this.assertBatchAndSubject(businessId, batchId, subjectId, user, subjectiveTestId);
+      const subjectId = dto.subjectId !== undefined ? dto.subjectId : draftTest.subjectId;
+      await this.assertBatchAndSubjectAllowed(businessId, dto.batchId ?? draftTest.batchId, subjectId, actor);
     }
 
-    const startAt = dto.startAt !== undefined ? new Date(dto.startAt) : existing.startAt;
-    const deadlineAt = dto.deadlineAt !== undefined ? new Date(dto.deadlineAt) : existing.deadlineAt;
-    this.assertWindow(startAt, deadlineAt);
-
-    const data: Prisma.SubjectiveTestUncheckedUpdateInput = {
+    // Fields are picked explicitly: the DTO keeps unknown body properties (e.g. `status`), which must never reach the DB.
+    return subjectiveTestRepo.updateTest(businessId, subjectiveTestId, {
       ...(dto.batchId !== undefined ? { batchId: dto.batchId } : {}),
       ...(dto.subjectId !== undefined ? { subjectId: dto.subjectId } : {}),
       ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
@@ -253,294 +239,267 @@ export class SubjectiveTestService {
       ...(dto.instructions !== undefined ? { instructions: dto.instructions } : {}),
       ...(dto.totalMarks !== undefined ? { totalMarks: dto.totalMarks } : {}),
       ...(dto.durationMinutes !== undefined ? { durationMinutes: dto.durationMinutes } : {}),
-      ...(dto.startAt !== undefined ? { startAt } : {}),
-      ...(dto.deadlineAt !== undefined ? { deadlineAt } : {}),
-      updatedBy: user.id,
-    };
-
-    if (!file) return subjectiveRepo.updateSubjectiveTest(businessId, subjectiveTestId, data);
-
-    const key = this.newFileKey(businessId, subjectiveTestId, 'question-paper');
-    return this.storeThenPersist(
-      file,
-      key,
-      () => subjectiveRepo.updateSubjectiveTest(businessId, subjectiveTestId, { ...data, questionPaperPath: key }),
-      existing.questionPaperPath,
-    );
-  }
-
-  async publish(businessId: number, subjectiveTestId: string, user: ActingUser) {
-    logger.info(`[subjective-test] publish businessId=${businessId} subjectiveTestId=${subjectiveTestId} userId=${user.id}`);
-    const existing = await this.getDraftWithAccess(businessId, subjectiveTestId, user);
-    if (!existing.questionPaperPath) {
-      throw new BadRequestError('Upload the question paper before publishing');
-    }
-    if (!(existing.totalMarks > 0)) throw new BadRequestError('Total marks must be greater than 0');
-    if (!(existing.durationMinutes >= 1)) throw new BadRequestError('Duration must be at least 1 minute');
-    this.assertWindow(existing.startAt, existing.deadlineAt);
-    if (existing.deadlineAt <= new Date()) {
-      throw new BadRequestError('The deadline has already passed. Update it before publishing');
-    }
-    return subjectiveRepo.updateSubjectiveTest(businessId, subjectiveTestId, {
-      status: TestStatus.PUBLISHED,
-      updatedBy: user.id,
+      startAt,
+      deadlineAt,
+      updatedBy: actor.id,
     });
   }
 
-  async remove(businessId: number, subjectiveTestId: string, user: ActingUser) {
-    logger.info(`[subjective-test] remove businessId=${businessId} subjectiveTestId=${subjectiveTestId} userId=${user.id}`);
-    await this.getDraftWithAccess(businessId, subjectiveTestId, user);
-    if ((await subjectiveRepo.countSubmissionsForTest(subjectiveTestId)) > 0) {
-      throw new BadRequestError('A test with submissions cannot be deleted');
-    }
-    const result = await subjectiveRepo.deleteSubjectiveTest(businessId, subjectiveTestId);
-    if (!result.count) throw new NotFoundError(ENTITY_LABEL);
-    await privateFileService.deleteFolderQuietly(this.testFolderKey(businessId, subjectiveTestId));
+  /** `draftTest` is already loaded and access-checked by the middleware that ran before the upload. */
+  async replaceQuestionPaper(draftTest: SubjectiveTestRecord, uploadedFile: Express.Multer.File, actor: TestRequestActor) {
+    logger.info(`[subjective-test] replaceQuestionPaper subjectiveTestId=${draftTest.id} userId=${actor.id}`);
+    const questionPaperPath = buildQuestionPaperStorageKey(draftTest.businessId, draftTest.id);
+    return privateFileStorage.saveUploadThenCommit({
+      uploadedFile,
+      storageKey: questionPaperPath,
+      replacedStorageKey: draftTest.questionPaperPath,
+      commitToDatabase: () =>
+        subjectiveTestRepo.updateTest(draftTest.businessId, draftTest.id, { questionPaperPath, updatedBy: actor.id }),
+    });
   }
 
-  async getQuestionPaperForStaff(businessId: number, subjectiveTestId: string, user: ActingUser): Promise<PrivateFileRef> {
-    const test = await this.getWithAccess(businessId, subjectiveTestId, user);
-    return this.questionPaperRef(test);
+  /** Marks, duration and dates are validated on create/update; publish only checks what can change after that. */
+  async publishDraftTest(businessId: number, subjectiveTestId: string, actor: TestRequestActor) {
+    logger.info(`[subjective-test] publishDraftTest businessId=${businessId} subjectiveTestId=${subjectiveTestId} userId=${actor.id}`);
+    const draftTest = await this.findDraftTestForStaff(businessId, subjectiveTestId, actor);
+    if (!draftTest.questionPaperPath) {
+      logger.warn(`[subjective-test] publish blocked: no question paper subjectiveTestId=${subjectiveTestId}`);
+      throw new BadRequestError('Upload the question paper before publishing');
+    }
+    if (draftTest.deadlineAt <= new Date()) {
+      logger.warn(`[subjective-test] publish blocked: deadline passed subjectiveTestId=${subjectiveTestId}`);
+      throw new BadRequestError('The deadline has already passed. Update it before publishing');
+    }
+    return subjectiveTestRepo.updateTest(businessId, subjectiveTestId, { status: TestStatus.PUBLISHED, updatedBy: actor.id });
+  }
+
+  /** Students can only start published tests, so a draft never has submissions to protect. */
+  async deleteDraftTest(businessId: number, subjectiveTestId: string, actor: TestRequestActor) {
+    logger.info(`[subjective-test] deleteDraftTest businessId=${businessId} subjectiveTestId=${subjectiveTestId} userId=${actor.id}`);
+    await this.findDraftTestForStaff(businessId, subjectiveTestId, actor);
+    await subjectiveTestRepo.deleteTest(businessId, subjectiveTestId);
+    await privateFileStorage.deleteFolderIfExists(subjectiveTestStorageFolder(businessId, subjectiveTestId));
+  }
+
+  /** Staff can always download; students only after they started the test. */
+  async getQuestionPaperDownload(businessId: number, subjectiveTestId: string, actor: TestRequestActor): Promise<StoredFileDownload> {
+    logger.info(`[subjective-test] getQuestionPaperDownload subjectiveTestId=${subjectiveTestId} userId=${actor.id} role=${actor.role}`);
+    if (actor.role !== UserRole.STUDENT) {
+      return questionPaperDownload(await this.findTestForStaff(businessId, subjectiveTestId, actor));
+    }
+    const { test, ownAttempt } = await this.findPublishedTestForStudent(businessId, subjectiveTestId, actor);
+    if (!ownAttempt) {
+      logger.warn(`[subjective-test] question paper blocked: test not started subjectiveTestId=${subjectiveTestId} userId=${actor.id}`);
+      throw new BadRequestError('Start the test to view the question paper');
+    }
+    return questionPaperDownload(test);
   }
 
   // ---------------------------------------------------------------------------
   // Staff: submissions and grading
   // ---------------------------------------------------------------------------
 
-  private async buildRoster(businessId: number, test: SubjectiveTestRecord) {
-    const now = new Date();
-    const rows = await subjectiveRepo.findSubmissionRoster(businessId, test.id, test.batchId);
-    return rows.map((row) => SubjectiveTestMapper.rosterRow(test, row, now));
-  }
-
-  async listSubmissions(businessId: number, subjectiveTestId: string, query: SubmissionListQuery, user: ActingUser) {
-    logger.info(`[subjective-test] listSubmissions businessId=${businessId} subjectiveTestId=${subjectiveTestId} userId=${user.id}`);
-    const test = await this.getWithAccess(businessId, subjectiveTestId, user);
-    const search = query.search?.trim().toLowerCase();
-    const filtered = (await this.buildRoster(businessId, test)).filter(
-      (row) =>
-        (!query.status || row.displayStatus === query.status) &&
-        (!search || row.studentName.toLowerCase().includes(search) || row.studentEmail.toLowerCase().includes(search)),
+  async listRosterForStaff(businessId: number, subjectiveTestId: string, filters: SubmissionListFilters, actor: TestRequestActor) {
+    logger.info(
+      `[subjective-test] listRosterForStaff subjectiveTestId=${subjectiveTestId} userId=${actor.id} status=${filters.displayStatus ?? 'any'}`,
     );
+    const test = await this.findTestForStaff(businessId, subjectiveTestId, actor);
+    const rosterEntries = await subjectiveTestRepo.findRosterWithSubmissions(businessId, test.id, test.batchId);
 
-    const limit = Math.min(query.limit ?? SUBJECTIVE_TEST_CONFIG.submissionsDefaultLimit, SUBJECTIVE_TEST_CONFIG.submissionsMaxLimit);
-    const page = query.page ?? 1;
+    const now = new Date();
+    const matchingEntries = rosterEntries
+      .map((rosterEntry) => SubjectiveTestMapper.toRosterEntryResponse(test, rosterEntry, now))
+      .filter(
+        (rosterEntry) =>
+          (!filters.displayStatus || rosterEntry.displayStatus === filters.displayStatus) &&
+          (!filters.searchText ||
+            rosterEntry.studentName.toLowerCase().includes(filters.searchText) ||
+            rosterEntry.studentEmail.toLowerCase().includes(filters.searchText)),
+      );
+
+    const firstIndexOnPage = (filters.page - 1) * filters.pageSize;
     return {
-      items: filtered.slice((page - 1) * limit, page * limit),
-      total: filtered.length,
-      page,
-      limit,
+      items: matchingEntries.slice(firstIndexOnPage, firstIndexOnPage + filters.pageSize),
+      total: matchingEntries.length,
+      page: filters.page,
+      limit: filters.pageSize,
     };
   }
 
-  private async getSubmissionForStaff(
-    businessId: number,
-    subjectiveTestId: string,
-    submissionId: string,
-    user: ActingUser,
-  ) {
-    const test = await this.getWithAccess(businessId, subjectiveTestId, user);
-    const submission = await subjectiveRepo.findSubmissionForTest(test.id, submissionId);
-    if (!submission) throw new NotFoundError('Submission');
-    return { test, submission };
-  }
-
-  private async toStaffSubmissionDetail(test: SubjectiveTestRecord, submission: SubjectiveSubmissionRecord) {
+  async getSubmissionDetailForStaff(businessId: number, subjectiveTestId: string, submissionId: string, actor: TestRequestActor) {
+    logger.info(`[subjective-test] getSubmissionDetailForStaff submissionId=${submissionId} userId=${actor.id}`);
+    const { test, submission } = await this.findSubmissionForStaff(businessId, subjectiveTestId, submissionId, actor);
     const student = await userRepo.findBasicProfileById(submission.studentId);
-    return SubjectiveTestMapper.staffSubmission(test, submission, student, new Date());
+    return SubjectiveTestMapper.toStaffSubmissionResponse(test, submission, student, new Date());
   }
 
-  async getSubmissionDetailForStaff(businessId: number, subjectiveTestId: string, submissionId: string, user: ActingUser) {
-    const { test, submission } = await this.getSubmissionForStaff(businessId, subjectiveTestId, submissionId, user);
-    return this.toStaffSubmissionDetail(test, submission);
+  async getAnswerSheetDownloadForStaff(businessId: number, subjectiveTestId: string, submissionId: string, actor: TestRequestActor) {
+    logger.info(`[subjective-test] getAnswerSheetDownloadForStaff submissionId=${submissionId} userId=${actor.id}`);
+    const { test, submission } = await this.findSubmissionForStaff(businessId, subjectiveTestId, submissionId, actor);
+    return answerSheetDownload(test, submission);
   }
 
-  async getAnswerSheetForStaff(businessId: number, subjectiveTestId: string, submissionId: string, user: ActingUser) {
-    const { test, submission } = await this.getSubmissionForStaff(businessId, subjectiveTestId, submissionId, user);
-    return this.answerSheetRef(test, submission);
+  async getCheckedCopyDownloadForStaff(businessId: number, subjectiveTestId: string, submissionId: string, actor: TestRequestActor) {
+    logger.info(`[subjective-test] getCheckedCopyDownloadForStaff submissionId=${submissionId} userId=${actor.id}`);
+    const { test, submission } = await this.findSubmissionForStaff(businessId, subjectiveTestId, submissionId, actor);
+    return checkedCopyDownload(test, submission);
   }
 
-  async getCheckedAnswerSheetForStaff(businessId: number, subjectiveTestId: string, submissionId: string, user: ActingUser) {
-    const { test, submission } = await this.getSubmissionForStaff(businessId, subjectiveTestId, submissionId, user);
-    return this.checkedAnswerSheetRef(test, submission);
-  }
-
-  async grade(
-    businessId: number,
-    subjectiveTestId: string,
-    submissionId: string,
+  /**
+   * `gradable` is loaded by the middleware before the upload. The checked copy is required on
+   * the first grade; later grades may change only marks/remarks and keep the current copy.
+   */
+  async gradeSubmission(
+    gradable: StaffSubmissionContext,
     dto: GradeSubjectiveSubmissionDto,
-    file: UploadedFile,
-    user: ActingUser,
+    uploadedCheckedCopy: Express.Multer.File | undefined,
+    actor: TestRequestActor,
   ) {
-    logger.info(`[subjective-test] grade businessId=${businessId} subjectiveTestId=${subjectiveTestId} submissionId=${submissionId} userId=${user.id} hasFile=${Boolean(file)}`);
-    const { test, submission } = await this.getSubmissionForStaff(businessId, subjectiveTestId, submissionId, user);
-
-    if (submission.status === SubjectiveSubmissionStatus.IN_PROGRESS) {
-      throw new BadRequestError('Only submitted answer sheets can be graded');
-    }
+    const { test, submission } = gradable;
+    logger.info(
+      `[subjective-test] gradeSubmission submissionId=${submission.id} userId=${actor.id} hasNewCheckedCopy=${Boolean(uploadedCheckedCopy)}`,
+    );
     if (dto.marksAwarded > test.totalMarks) {
+      logger.warn(`[subjective-test] grade blocked: marks above total submissionId=${submission.id} marks=${dto.marksAwarded}`);
       throw new BadRequestError(`Marks cannot be more than ${test.totalMarks}`);
     }
-    if (file) {
-      await this.assertPdfUpload(file);
-    } else if (!submission.checkedAnswerSheetPath) {
+    const currentCheckedCopyPath = submission.checkedAnswerSheetPath;
+    if (!uploadedCheckedCopy && !currentCheckedCopyPath) {
+      logger.warn(`[subjective-test] grade blocked: no checked copy submissionId=${submission.id}`);
       throw new BadRequestError('Upload the checked answer sheet');
     }
 
-    const previousKey = submission.checkedAnswerSheetPath;
-    const persist = async (checkedAnswerSheetPath: string) => {
-      const changed = await subjectiveRepo.updateSubmissionGrade(submission.id, previousKey, {
-        marksAwarded: dto.marksAwarded,
-        remarks: dto.remarks?.trim() || null,
-        checkedAnswerSheetPath,
-        checkedBy: user.id,
-        checkedAt: new Date(),
+    const saveGradeWithCheckedCopy = (checkedAnswerSheetPath: string) =>
+      subjectiveTestRepo
+        .saveGrade(submission.id, currentCheckedCopyPath, {
+          marksAwarded: dto.marksAwarded,
+          remarks: dto.remarks?.trim() || null,
+          checkedAnswerSheetPath,
+          checkedBy: actor.id,
+          checkedAt: new Date(),
+        })
+        .catch((error: unknown) =>
+          translatePrismaError(error, {
+            [PRISMA_ERROR_CODES.RECORD_NOT_FOUND]: () =>
+              new ApiError('This submission was just updated by someone else. Refresh and try again', HTTP_STATUS.CONFLICT),
+          }),
+        );
+
+    const saveGradeAndCheckedCopy = async () => {
+      if (!uploadedCheckedCopy) return saveGradeWithCheckedCopy(currentCheckedCopyPath!);
+      const newCheckedCopyPath = buildCheckedCopyStorageKey(test.businessId, test.id, submission.id);
+      return privateFileStorage.saveUploadThenCommit({
+        uploadedFile: uploadedCheckedCopy,
+        storageKey: newCheckedCopyPath,
+        replacedStorageKey: currentCheckedCopyPath,
+        commitToDatabase: () => saveGradeWithCheckedCopy(newCheckedCopyPath),
       });
-      if (!changed) {
-        throw new ApiError('This submission was just updated by someone else. Refresh and try again', HTTP_STATUS.CONFLICT);
-      }
     };
 
-    if (file) {
-      const key = this.newFileKey(businessId, test.id, submission.id, 'checked');
-      await this.storeThenPersist(file, key, () => persist(key), previousKey);
-    } else {
-      await persist(previousKey!);
-    }
-    const graded = await subjectiveRepo.findSubmissionForTest(test.id, submission.id);
-    if (!graded) throw new NotFoundError('Submission');
-    return this.toStaffSubmissionDetail(test, graded);
+    const [gradedSubmission, student] = await Promise.all([
+      saveGradeAndCheckedCopy(),
+      userRepo.findBasicProfileById(submission.studentId),
+    ]);
+    return SubjectiveTestMapper.toStaffSubmissionResponse(test, gradedSubmission, student, new Date());
   }
 
   // ---------------------------------------------------------------------------
   // Student
   // ---------------------------------------------------------------------------
 
-  async listAvailable(businessId: number, user: ActingUser) {
-    logger.info(`[subjective-test] listAvailable businessId=${businessId} userId=${user.id}`);
-    const tests = await subjectiveRepo.findPublishedSubjectiveTestsForStudent(businessId, user.id);
-    const submissions = await subjectiveRepo.findSubmissionsForStudent(user.id, tests.map((t) => t.id));
-    const byTestId = new Map(submissions.map((s) => [s.subjectiveTestId, s]));
+  async listTestsForStudent(businessId: number, actor: TestRequestActor) {
+    logger.info(`[subjective-test] listTestsForStudent businessId=${businessId} userId=${actor.id}`);
+    const testsWithOwnAttempt = await subjectiveTestRepo.findPublishedTestsWithOwnAttempt(businessId, actor.id);
     const now = new Date();
-    return tests.map((t) => SubjectiveTestMapper.availableTest(t, byTestId.get(t.id) ?? null, now));
+    return testsWithOwnAttempt.map(({ submissions, ...test }) =>
+      SubjectiveTestMapper.toStudentTestCardResponse(test, submissions[0] ?? null, now),
+    );
   }
 
-  /** Returns the attempt if it can still be worked on; otherwise explains why not. */
-  private assertResumable(test: SubjectiveTestRecord, submission: SubjectiveSubmissionRecord, now: Date) {
-    const status = deriveDisplayStatus(test, submission, now);
-    if (status === SubjectiveDisplayStatus.EXPIRED) throw new BadRequestError('Your time for this test is over');
-    if (status !== SubjectiveDisplayStatus.IN_PROGRESS) throw new BadRequestError('You have already submitted this test');
-    return submission;
-  }
+  async startOrResumeAttempt(businessId: number, subjectiveTestId: string, actor: TestRequestActor) {
+    logger.info(`[subjective-test] startOrResumeAttempt subjectiveTestId=${subjectiveTestId} userId=${actor.id}`);
+    const { test, ownAttempt } = await this.findPublishedTestForStudent(businessId, subjectiveTestId, actor);
 
-  private toStartResult(test: SubjectiveTestRecord, submission: SubjectiveSubmissionRecord) {
-    return {
-      submissionId: submission.id,
-      displayStatus: SubjectiveDisplayStatus.IN_PROGRESS,
-      startedAt: submission.startedAt,
-      effectiveDeadlineAt: computeEffectiveEnd(test, submission.startedAt),
+    const toStartedAttemptResponse = (attempt: SubjectiveSubmissionRecord) => {
+      this.assertAttemptStillOpen(test, attempt, actor);
+      return {
+        submissionId: attempt.id,
+        displayStatus: SubjectiveDisplayStatus.IN_PROGRESS,
+        startedAt: attempt.startedAt,
+        effectiveDeadlineAt: computeAttemptDeadline(test, attempt.startedAt),
+      };
     };
-  }
+    if (ownAttempt) return toStartedAttemptResponse(ownAttempt);
 
-  async start(businessId: number, subjectiveTestId: string, user: ActingUser) {
-    logger.info(`[subjective-test] start businessId=${businessId} subjectiveTestId=${subjectiveTestId} userId=${user.id}`);
-    const test = await this.getPublishedForStudent(businessId, subjectiveTestId, user);
     const now = new Date();
-
-    const existing = await subjectiveRepo.findSubmissionByTestAndStudent(test.id, user.id);
-    if (existing) return this.toStartResult(test, this.assertResumable(test, existing, now));
-
-    const availability = deriveAvailability(test, now);
-    if (availability === SubjectiveAvailability.UPCOMING) throw new BadRequestError('This test has not started yet');
-    if (availability === SubjectiveAvailability.CLOSED) throw new BadRequestError('The deadline for this test has passed');
+    const availability = getTestAvailability(test, now);
+    if (availability !== SubjectiveAvailability.OPEN) {
+      logger.warn(`[subjective-test] start blocked subjectiveTestId=${subjectiveTestId} userId=${actor.id} availability=${availability}`);
+      throw new BadRequestError(
+        availability === SubjectiveAvailability.UPCOMING ? 'This test has not started yet' : 'The deadline for this test has passed',
+      );
+    }
 
     try {
-      const created = await subjectiveRepo.createSubmission({
-        subjectiveTestId: test.id,
-        studentId: user.id,
-        status: SubjectiveSubmissionStatus.IN_PROGRESS,
-        startedAt: now,
-      });
-      return this.toStartResult(test, created);
+      return toStartedAttemptResponse(await subjectiveTestRepo.insertInProgressAttempt(test.id, actor.id, now));
     } catch (error) {
-      // A concurrent start (double click) already created the row: resume it.
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === PRISMA_ERROR_CODES.UNIQUE_CONSTRAINT_VIOLATION) {
-        const concurrent = await subjectiveRepo.findSubmissionByTestAndStudent(test.id, user.id);
-        if (concurrent) return this.toStartResult(test, this.assertResumable(test, concurrent, now));
-      }
-      throw error;
+      // A double click already created the attempt: resume that one instead.
+      if (!hasPrismaErrorCode(error, PRISMA_ERROR_CODES.UNIQUE_CONSTRAINT_VIOLATION)) throw error;
+      logger.info(`[subjective-test] concurrent start resumed subjectiveTestId=${subjectiveTestId} userId=${actor.id}`);
+      return toStartedAttemptResponse((await subjectiveTestRepo.findAttemptByTestAndStudent(test.id, actor.id))!);
     }
   }
 
-  async getQuestionPaperForStudent(businessId: number, subjectiveTestId: string, user: ActingUser): Promise<PrivateFileRef> {
-    const test = await this.getPublishedForStudent(businessId, subjectiveTestId, user);
-    const submission = await subjectiveRepo.findSubmissionByTestAndStudent(test.id, user.id);
-    if (!submission) throw new BadRequestError('Start the test to view the question paper');
-    return this.questionPaperRef(test);
-  }
+  /** `openAttempt` is loaded and checked (in progress, not timed out) before the upload. */
+  async submitAnswerSheet(openAttempt: StudentOpenAttemptContext, uploadedAnswerSheet: Express.Multer.File, actor: TestRequestActor) {
+    const { test, attempt } = openAttempt;
+    logger.info(`[subjective-test] submitAnswerSheet submissionId=${attempt.id} userId=${actor.id}`);
+    const submittedAt = new Date();
+    const answerSheetPath = buildAnswerSheetStorageKey(test.businessId, test.id, actor.id, uploadedAnswerSheet);
 
-  async submit(businessId: number, subjectiveTestId: string, file: UploadedFile, user: ActingUser) {
-    logger.info(`[subjective-test] submit businessId=${businessId} subjectiveTestId=${subjectiveTestId} userId=${user.id}`);
-    if (!file) throw new BadRequestError('Upload your answer sheet');
-    const test = await this.getPublishedForStudent(businessId, subjectiveTestId, user);
-    const submission = await subjectiveRepo.findSubmissionByTestAndStudent(test.id, user.id);
-    if (!submission) throw new BadRequestError('Start the test before submitting');
-    const now = new Date();
-    this.assertResumable(test, submission, now);
-    await this.assertPdfUpload(file);
-
-    const key = this.newFileKey(businessId, test.id, user.id, 'answers', toKeyFileName(file));
-    await this.storeThenPersist(file, key, async () => {
-      const changed = await subjectiveRepo.markSubmissionSubmitted(submission.id, { answerSheetPath: key, submittedAt: now });
-      if (!changed) throw new BadRequestError('You have already submitted this test');
+    await privateFileStorage.saveUploadThenCommit({
+      uploadedFile: uploadedAnswerSheet,
+      storageKey: answerSheetPath,
+      commitToDatabase: () =>
+        subjectiveTestRepo.markAttemptSubmitted(attempt.id, answerSheetPath, submittedAt).catch((error: unknown) =>
+          translatePrismaError(error, {
+            [PRISMA_ERROR_CODES.RECORD_NOT_FOUND]: () => new BadRequestError('You have already submitted this test'),
+          }),
+        ),
     });
-    return { submissionId: submission.id, displayStatus: SubjectiveDisplayStatus.SUBMITTED, submittedAt: now };
+    return { submissionId: attempt.id, displayStatus: SubjectiveDisplayStatus.SUBMITTED, submittedAt };
   }
 
-  private async getOwnSubmission(businessId: number, submissionId: string, user: ActingUser) {
-    const record = await subjectiveRepo.findStudentSubmissionWithTest(businessId, submissionId, user.id);
-    if (!record) throw new NotFoundError('Submission');
-    const { test, ...submission } = record;
+  private async findOwnSubmission(businessId: number, submissionId: string, actor: TestRequestActor) {
+    const ownSubmissionWithTest = await subjectiveTestRepo.findOwnSubmissionWithTest(businessId, submissionId, actor.id);
+    if (!ownSubmissionWithTest) {
+      logger.warn(`[subjective-test] own submission not found submissionId=${submissionId} userId=${actor.id}`);
+      throw new NotFoundError('Submission');
+    }
+    const { test, ...submission } = ownSubmissionWithTest;
     return { test, submission };
   }
 
-  async getOwnSubmissionDetail(businessId: number, submissionId: string, user: ActingUser) {
-    const { test, submission } = await this.getOwnSubmission(businessId, submissionId, user);
-    return SubjectiveTestMapper.studentSubmission(test, submission, new Date());
+  async getOwnAttemptDetail(businessId: number, submissionId: string, actor: TestRequestActor) {
+    logger.info(`[subjective-test] getOwnAttemptDetail submissionId=${submissionId} userId=${actor.id}`);
+    const { test, submission } = await this.findOwnSubmission(businessId, submissionId, actor);
+    return SubjectiveTestMapper.toStudentAttemptResponse(test, submission, new Date());
   }
 
-  async getOwnAnswerSheet(businessId: number, submissionId: string, user: ActingUser) {
-    const { test, submission } = await this.getOwnSubmission(businessId, submissionId, user);
-    return this.answerSheetRef(test, submission);
+  async getOwnAnswerSheetDownload(businessId: number, submissionId: string, actor: TestRequestActor) {
+    logger.info(`[subjective-test] getOwnAnswerSheetDownload submissionId=${submissionId} userId=${actor.id}`);
+    const { test, submission } = await this.findOwnSubmission(businessId, submissionId, actor);
+    return answerSheetDownload(test, submission);
   }
 
-  async getOwnCheckedAnswerSheet(businessId: number, submissionId: string, user: ActingUser) {
-    const { test, submission } = await this.getOwnSubmission(businessId, submissionId, user);
-    if (submission.status !== SubjectiveSubmissionStatus.CHECKED) throw new NotFoundError('Checked answer sheet');
-    return this.checkedAnswerSheetRef(test, submission);
-  }
-
-  // ---------------------------------------------------------------------------
-  // File refs
-  // ---------------------------------------------------------------------------
-
-  private questionPaperRef(test: SubjectiveTestRecord): PrivateFileRef {
-    if (!test.questionPaperPath) throw new NotFoundError('Question paper');
-    return { key: test.questionPaperPath, downloadName: questionPaperFileName(test.paperType) };
-  }
-
-  private answerSheetRef(test: SubjectiveTestRecord, submission: SubjectiveSubmissionRecord): PrivateFileRef {
-    if (!submission.answerSheetPath) throw new NotFoundError('Answer sheet');
-    return {
-      key: submission.answerSheetPath,
-      downloadName: originalNameFromKey(submission.answerSheetPath) ?? `${test.name} - answer sheet.pdf`,
-    };
-  }
-
-  private checkedAnswerSheetRef(test: SubjectiveTestRecord, submission: SubjectiveSubmissionRecord): PrivateFileRef {
-    if (!submission.checkedAnswerSheetPath) throw new NotFoundError('Checked answer sheet');
-    return { key: submission.checkedAnswerSheetPath, downloadName: `${test.name} - checked copy.pdf` };
+  /** Students see the checked copy only once their submission is CHECKED. */
+  async getOwnCheckedCopyDownload(businessId: number, submissionId: string, actor: TestRequestActor) {
+    logger.info(`[subjective-test] getOwnCheckedCopyDownload submissionId=${submissionId} userId=${actor.id}`);
+    const { test, submission } = await this.findOwnSubmission(businessId, submissionId, actor);
+    if (submission.status !== SubjectiveSubmissionStatus.CHECKED) {
+      throw new NotFoundError('Checked answer sheet');
+    }
+    return checkedCopyDownload(test, submission);
   }
 }
 

@@ -54,11 +54,18 @@ const submissionSelect = {
   updatedAt: true,
 } satisfies Prisma.SubjectiveTestSubmissionSelect;
 
+const submissionWithTestSelect = { ...submissionSelect, test: { select: subjectiveTestSelect } };
+
 export type SubjectiveTestRecord = Prisma.SubjectiveTestGetPayload<{ select: typeof subjectiveTestSelect }>;
 export type SubjectiveSubmissionRecord = Prisma.SubjectiveTestSubmissionGetPayload<{ select: typeof submissionSelect }>;
+export type SubjectiveSubmissionWithTestRecord = Prisma.SubjectiveTestSubmissionGetPayload<{
+  select: typeof submissionWithTestSelect;
+}>;
+/** A published test plus the requesting student's own attempt (empty array if not started). */
+export type StudentTestWithOwnAttemptRecord = SubjectiveTestRecord & { submissions: SubjectiveSubmissionRecord[] };
 
-/** Batch roster merged with submissions; a null `submissionId` means the student never started. */
-export type SubjectiveRosterRow = {
+/** One batch student and their submission; `submissionId` null means they never started. */
+export type RosterEntryRecord = {
   studentId: number;
   studentName: string;
   studentEmail: string;
@@ -73,163 +80,155 @@ export type SubjectiveRosterRow = {
   checkedAt: Date | null;
 };
 
-const studentMembershipWhere = (userId: number): Prisma.BatchWhereInput => ({
+const enrolledStudentBatchWhere = (studentId: number): Prisma.BatchWhereInput => ({
   ...ACTIVE_BATCH_WHERE,
-  batchUsers: { some: { userId, isActive: true } },
+  batchUsers: { some: { userId: studentId, isActive: true } },
+});
+
+const publishedTestForStudentWhere = (businessId: number, studentId: number): Prisma.SubjectiveTestWhereInput => ({
+  businessId,
+  status: TestStatus.PUBLISHED,
+  batch: enrolledStudentBatchWhere(studentId),
+});
+
+const testWithOwnAttemptSelect = (studentId: number) => ({
+  ...subjectiveTestSelect,
+  submissions: { where: { studentId }, select: submissionSelect, take: 1 },
 });
 
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
-export function createSubjectiveTest(data: Prisma.SubjectiveTestUncheckedCreateInput) {
-  return prisma.subjectiveTest.create({
-    data,
-    select: subjectiveTestSelect,
-  });
+export function insertDraftTest(data: Prisma.SubjectiveTestUncheckedCreateInput) {
+  return prisma.subjectiveTest.create({ data, select: subjectiveTestSelect });
 }
 
-export function findSubjectiveTestById(businessId: number, id: string) {
+export function findTestInBusiness(businessId: number, subjectiveTestId: string) {
   return prisma.subjectiveTest.findFirst({
-    where: { id, businessId, batch: ACTIVE_BATCH_WHERE },
+    where: { id: subjectiveTestId, businessId, batch: ACTIVE_BATCH_WHERE },
     select: subjectiveTestSelect,
   });
 }
 
-export function findSubjectiveTestsByBusinessId(businessId: number, where: Prisma.SubjectiveTestWhereInput = {}) {
+export function findTestsInBusiness(businessId: number, filters: Prisma.SubjectiveTestWhereInput) {
   return prisma.subjectiveTest.findMany({
-    where: { businessId, batch: ACTIVE_BATCH_WHERE, ...where },
+    where: { businessId, batch: ACTIVE_BATCH_WHERE, ...filters },
     select: subjectiveTestSelect,
     orderBy: { createdAt: 'desc' },
   });
 }
 
-export function updateSubjectiveTest(
-  businessId: number,
-  id: string,
-  data: Prisma.SubjectiveTestUncheckedUpdateInput,
-) {
+export function updateTest(businessId: number, subjectiveTestId: string, data: Prisma.SubjectiveTestUncheckedUpdateInput) {
   return prisma.subjectiveTest.update({
-    where: { id, businessId },
+    where: { id: subjectiveTestId, businessId },
     data,
     select: subjectiveTestSelect,
   });
 }
 
-export function deleteSubjectiveTest(businessId: number, id: string) {
-  return prisma.subjectiveTest.deleteMany({
-    where: { id, businessId },
-  });
+export function deleteTest(businessId: number, subjectiveTestId: string) {
+  return prisma.subjectiveTest.deleteMany({ where: { id: subjectiveTestId, businessId } });
 }
 
-export function findPublishedSubjectiveTestForStudent(businessId: number, id: string, userId: number) {
-  return prisma.subjectiveTest.findFirst({
-    where: { id, businessId, status: TestStatus.PUBLISHED, batch: studentMembershipWhere(userId) },
-    select: subjectiveTestSelect,
-  });
-}
-
-export function findPublishedSubjectiveTestsForStudent(businessId: number, userId: number) {
+export function findPublishedTestsWithOwnAttempt(businessId: number, studentId: number) {
   return prisma.subjectiveTest.findMany({
-    where: { businessId, status: TestStatus.PUBLISHED, batch: studentMembershipWhere(userId) },
-    select: subjectiveTestSelect,
+    where: publishedTestForStudentWhere(businessId, studentId),
+    select: testWithOwnAttemptSelect(studentId),
     orderBy: { startAt: 'desc' },
-  });
+  }) as Promise<StudentTestWithOwnAttemptRecord[]>;
+}
+
+export function findPublishedTestWithOwnAttempt(businessId: number, subjectiveTestId: string, studentId: number) {
+  return prisma.subjectiveTest.findFirst({
+    where: { id: subjectiveTestId, ...publishedTestForStudentWhere(businessId, studentId) },
+    select: testWithOwnAttemptSelect(studentId),
+  }) as Promise<StudentTestWithOwnAttemptRecord | null>;
 }
 
 // ---------------------------------------------------------------------------
 // Submissions
 // ---------------------------------------------------------------------------
 
-export function countSubmissionsForTest(subjectiveTestId: string) {
-  return prisma.subjectiveTestSubmission.count({
-    where: { subjectiveTestId },
-  });
-}
-
-export function createSubmission(data: Prisma.SubjectiveTestSubmissionUncheckedCreateInput) {
+export function insertInProgressAttempt(subjectiveTestId: string, studentId: number, startedAt: Date) {
   return prisma.subjectiveTestSubmission.create({
-    data,
+    data: { subjectiveTestId, studentId, startedAt, status: SubjectiveSubmissionStatus.IN_PROGRESS },
     select: submissionSelect,
   });
 }
 
-export function findSubmissionByTestAndStudent(subjectiveTestId: string, studentId: number) {
+export function findAttemptByTestAndStudent(subjectiveTestId: string, studentId: number) {
   return prisma.subjectiveTestSubmission.findUnique({
     where: { subjectiveTestId_studentId: { subjectiveTestId, studentId } },
     select: submissionSelect,
   });
 }
 
-export function findSubmissionsForStudent(studentId: number, subjectiveTestIds: string[]) {
-  if (!subjectiveTestIds.length) return Promise.resolve([]);
-  return prisma.subjectiveTestSubmission.findMany({
-    where: { studentId, subjectiveTestId: { in: subjectiveTestIds } },
-    select: submissionSelect,
-  });
-}
-
-export function findSubmissionForTest(subjectiveTestId: string, submissionId: string) {
+/** Staff view: a submission of a test in the business (active hierarchy), with its test. */
+export function findSubmissionWithTest(businessId: number, subjectiveTestId: string, submissionId: string) {
   return prisma.subjectiveTestSubmission.findFirst({
-    where: { id: submissionId, subjectiveTestId },
-    select: submissionSelect,
+    where: { id: submissionId, subjectiveTestId, test: { businessId, batch: ACTIVE_BATCH_WHERE } },
+    select: submissionWithTestSelect,
   });
 }
 
-/** Own submission for a student, scoped to a published test in the business. */
-export function findStudentSubmissionWithTest(businessId: number, submissionId: string, studentId: number) {
+/** Student view: their own submission of a published test, with its test. */
+export function findOwnSubmissionWithTest(businessId: number, submissionId: string, studentId: number) {
   return prisma.subjectiveTestSubmission.findFirst({
-    where: {
-      id: submissionId,
-      studentId,
-      test: { businessId, status: TestStatus.PUBLISHED },
-    },
-    select: { ...submissionSelect, test: { select: subjectiveTestSelect } },
+    where: { id: submissionId, studentId, test: { businessId, status: TestStatus.PUBLISHED } },
+    select: submissionWithTestSelect,
   });
-}
-
-/** Atomically moves IN_PROGRESS → SUBMITTED. Returns the number of rows changed (0 = already submitted). */
-export async function markSubmissionSubmitted(
-  submissionId: string,
-  data: { answerSheetPath: string; submittedAt: Date },
-): Promise<number> {
-  const result = await prisma.subjectiveTestSubmission.updateMany({
-    where: { id: submissionId, status: SubjectiveSubmissionStatus.IN_PROGRESS },
-    data: { ...data, status: SubjectiveSubmissionStatus.SUBMITTED },
-  });
-  return result.count;
 }
 
 /**
- * Saves grading. `expectedCheckedPath` is the checked-file key the caller read; the
- * update only applies if it is still current, so two concurrent regrades cannot orphan a file.
- * Returns the number of rows changed (0 = changed by someone else).
+ * IN_PROGRESS → SUBMITTED. The status condition makes it atomic: a second concurrent submit
+ * matches no row and Prisma throws RECORD_NOT_FOUND (handled by the service).
  */
-export async function updateSubmissionGrade(
+export function markAttemptSubmitted(submissionId: string, answerSheetPath: string, submittedAt: Date) {
+  return prisma.subjectiveTestSubmission.update({
+    where: { id: submissionId, status: SubjectiveSubmissionStatus.IN_PROGRESS },
+    data: { answerSheetPath, submittedAt, status: SubjectiveSubmissionStatus.SUBMITTED },
+    select: submissionSelect,
+  });
+}
+
+/**
+ * Saves marks/remarks/checked copy. Only applies if the checked copy is still the one the
+ * caller read, so two concurrent regrades can't orphan a file; otherwise RECORD_NOT_FOUND.
+ */
+export function saveGrade(
   submissionId: string,
-  expectedCheckedPath: string | null,
-  data: { marksAwarded: number; remarks: string | null; checkedAnswerSheetPath: string; checkedBy: number; checkedAt: Date },
-): Promise<number> {
-  const result = await prisma.subjectiveTestSubmission.updateMany({
+  checkedAnswerSheetPathReadByCaller: string | null,
+  grade: { marksAwarded: number; remarks: string | null; checkedAnswerSheetPath: string; checkedBy: number; checkedAt: Date },
+) {
+  return prisma.subjectiveTestSubmission.update({
     where: {
       id: submissionId,
       status: { in: [SubjectiveSubmissionStatus.SUBMITTED, SubjectiveSubmissionStatus.CHECKED] },
-      checkedAnswerSheetPath: expectedCheckedPath,
+      checkedAnswerSheetPath: checkedAnswerSheetPathReadByCaller,
     },
-    data: { ...data, status: SubjectiveSubmissionStatus.CHECKED },
+    data: { ...grade, status: SubjectiveSubmissionStatus.CHECKED },
+    select: submissionSelect,
   });
-  return result.count;
 }
 
-/**
- * Active students of the batch plus anyone who already has a submission for the test
- * (so students who left the batch after submitting are still listed).
- */
-export async function findSubmissionRoster(
+export function findAttemptTimingsForTest(subjectiveTestId: string) {
+  return prisma.subjectiveTestSubmission.findMany({
+    where: { subjectiveTestId },
+    select: { status: true, startedAt: true },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Batch roster (students are in public.users, submissions in the tenant schema)
+// ---------------------------------------------------------------------------
+
+/** Active batch students, plus anyone who already submitted (even if they left the batch). */
+export async function findRosterWithSubmissions(
   businessId: number,
   subjectiveTestId: string,
   batchId: number,
-): Promise<SubjectiveRosterRow[]> {
+): Promise<RosterEntryRecord[]> {
   const rows = await queryTenantPublic<any>(
     businessId,
     (schema) => `
@@ -276,4 +275,29 @@ export async function findSubmissionRoster(
     hasCheckedAnswerSheet: row.has_checked_answer_sheet === true,
     checkedAt: row.checked_at ?? null,
   }));
+}
+
+/** Active batch students who have not started the test. */
+export async function countStudentsNotStarted(businessId: number, subjectiveTestId: string, batchId: number) {
+  const [result] = await queryTenantPublic<{ count: bigint }>(
+    businessId,
+    (schema) => `
+      SELECT COUNT(*) AS count
+      FROM ${schema}.batch_users bu
+      JOIN public.users u ON u.id = bu.user_id
+      WHERE bu.batch_id = $1
+        AND bu.is_active = true
+        AND u.role = $3::"public"."UserRole"
+        AND u.status = $4::"public"."UserStatus"
+        AND NOT EXISTS (
+          SELECT 1 FROM ${schema}.subjective_test_submissions s
+          WHERE s.student_id = bu.user_id AND s.subjective_test_id = $2
+        )
+    `,
+    batchId,
+    subjectiveTestId,
+    UserRole.STUDENT,
+    UserStatus.ACTIVE,
+  );
+  return Number(result?.count ?? 0);
 }

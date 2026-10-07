@@ -17,7 +17,7 @@ export const uploadEditorImage = async (req: AuthRequest, res: Response) => {
       throw new BadRequestError('No image file provided');
     }
 
-    const url = await editorImageService.uploadImage(req.file.path);
+    const url = await editorImageService.uploadImage(req.file.path, req.user!.businessId);
     ApiResponseHandler.success(res, { url }, 'Image uploaded successfully', 201);
   } catch (error) {
     // Clean up the temp file on any failure
@@ -30,13 +30,13 @@ export const uploadEditorImage = async (req: AuthRequest, res: Response) => {
 
 /**
  * DELETE /api/editor/image
- * Body: { url: "/uploads/editor/editor-xxx.webp" }
+ * Body: { url: "/uploads/editor/<businessId>/editor-xxx.webp" } (absolute URLs are accepted too)
  * Delegates file deletion to EditorImageService.
  */
 export const deleteEditorImage = async (req: AuthRequest, res: Response) => {
   try {
     const { url } = req.body as { url?: string };
-    editorImageService.deleteImage(url ?? '');
+    editorImageService.deleteImage(url ?? '', req.user!);
     ApiResponseHandler.success(res, null, 'Image deleted successfully');
   } catch (error) {
     handleControllerError(res, error, 'Failed to delete image', '[editorImage] Delete failed');

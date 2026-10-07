@@ -1,130 +1,126 @@
 import { Response } from 'express';
-import { UserRole } from '@prisma/client';
 import { ApiResponseHandler } from '../utils/apiResponse';
 import { AuthRequest } from '../dtos/auth.dto';
-import { BadRequestError } from '../errors/api.errors';
-import { isSubjectiveDisplayStatus } from '../constants/test-enums';
-import { SUBJECTIVE_TEST_CONFIG } from '../config/subjectiveTest.config';
 import { PublishSubjectiveTestRequestDto } from '../dtos/subjectiveTest.dto';
 import { SubjectiveTestMapper } from '../mappers/subjectiveTest.mapper';
-import { PrivateFileRef, SubmissionListQuery, subjectiveTestService } from '../services/subjectiveTest.service';
-import { privateFileService } from '../services/privateFile.service';
-import { handleTestControllerError, parseOptionalIntQueryParam, getBusinessId } from '../utils/testController.utils';
-
-const actingUser = (req: AuthRequest) => ({ id: req.user!.id, role: req.user!.role });
-
-const parseOptionalStringQueryParam = (value: unknown, paramName: string): string | undefined => {
-  if (value === undefined || value === null || value === '') return undefined;
-  if (typeof value !== 'string') throw new BadRequestError(`Invalid ${paramName}`);
-  return value;
-};
-
-const parseSubmissionListQuery = (query: AuthRequest['query']): SubmissionListQuery => {
-  const status = parseOptionalStringQueryParam(query.status, 'status');
-  if (status !== undefined && !isSubjectiveDisplayStatus(status)) throw new BadRequestError('Invalid status');
-  const search = parseOptionalStringQueryParam(query.search, 'search');
-  const page = parseOptionalIntQueryParam(query.page, 'page');
-  const limit = parseOptionalIntQueryParam(query.limit, 'limit');
-  if (page !== undefined && page < 1) throw new BadRequestError('Invalid page');
-  if (limit !== undefined && limit < 1) throw new BadRequestError('Invalid limit');
-  return {
-    ...(status !== undefined ? { status } : {}),
-    ...(search !== undefined ? { search } : {}),
-    ...(page !== undefined ? { page } : {}),
-    ...(limit !== undefined ? { limit } : {}),
-  };
-};
-
-const streamPdf = (res: Response, ref: PrivateFileRef) =>
-  privateFileService.streamFile(res, ref.key, ref.downloadName, SUBJECTIVE_TEST_CONFIG.pdfMimeType);
+import {
+  subjectiveTestService,
+  type StaffSubmissionContext,
+  type StudentOpenAttemptContext,
+} from '../services/subjectiveTest.service';
+import { privateFileStorage } from '../services/fileStorage.service';
+import type { SubjectiveTestRecord } from '../repositories/subjectiveTest.repo';
+import { getLoadedAccessContext } from '../middlewares/subjectiveTestAccess.middleware';
+import { parseSubmissionListFilters } from '../utils/subjectiveTest.utils';
+import {
+  getBusinessId,
+  getRequestActor,
+  handleTestControllerError,
+  parseOptionalIntQueryParam,
+  parseOptionalStringQueryParam,
+} from '../utils/testController.utils';
 
 export const subjectiveTestController = {
   // ---------------------------------------------------------------------------
   // Staff: manage tests
   // ---------------------------------------------------------------------------
 
-  async createSubjectiveTest(req: AuthRequest, res: Response) {
+  async createDraftTest(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      const created = await subjectiveTestService.create(businessId, req.body, req.file, actingUser(req));
-      return ApiResponseHandler.created(res, SubjectiveTestMapper.test(created), 'Subjective test created successfully');
+      const draftTest = await subjectiveTestService.createDraftTest(businessId, req.body, getRequestActor(req));
+      return ApiResponseHandler.created(res, SubjectiveTestMapper.toStaffTestResponse(draftTest), 'Subjective test created successfully');
     } catch (e: unknown) {
-      return handleTestControllerError({ res, error: e, endpoint: 'createSubjectiveTest', serverErrorMessage: 'Failed to create subjective test' });
+      return handleTestControllerError({ res, error: e, endpoint: 'createDraftTest', serverErrorMessage: 'Failed to create subjective test' });
     }
   },
 
-  async listSubjectiveTests(req: AuthRequest, res: Response) {
+  async listTestsForStaff(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
       const status = parseOptionalIntQueryParam(req.query.status, 'status');
       const batchId = parseOptionalIntQueryParam(req.query.batchId, 'batchId');
       const paperType = parseOptionalStringQueryParam(req.query.paperType, 'paperType');
-      const tests = await subjectiveTestService.list(
-        businessId,
-        {
-          ...(status !== undefined ? { status } : {}),
-          ...(batchId !== undefined ? { batchId } : {}),
-          ...(paperType !== undefined ? { paperType } : {}),
-        },
-        actingUser(req),
+
+      const filters = {
+        ...(status !== undefined ? { status } : {}),
+        ...(batchId !== undefined ? { batchId } : {}),
+        ...(paperType !== undefined ? { paperType } : {}),
+      };
+
+      const tests = await subjectiveTestService.listTestsForStaff(businessId, filters, getRequestActor(req));
+      return ApiResponseHandler.success(res, tests.map(SubjectiveTestMapper.toStaffTestResponse), 'Subjective tests fetched successfully');
+    } catch (e: unknown) {
+      return handleTestControllerError({ res, error: e, endpoint: 'listTestsForStaff', serverErrorMessage: 'Failed to fetch subjective tests' });
+    }
+  },
+
+  async getTestDetailForStaff(req: AuthRequest, res: Response) {
+    try {
+      const businessId = getBusinessId(req);
+      const subjectiveTestId = req.params.subjectiveTestId!;
+      const { test, submissionCounts } = await subjectiveTestService.getTestDetailForStaff(businessId, subjectiveTestId, getRequestActor(req));
+      return ApiResponseHandler.success(
+        res,
+        { ...SubjectiveTestMapper.toStaffTestResponse(test), submissionCounts },
+        'Subjective test fetched successfully',
       );
-      return ApiResponseHandler.success(res, tests.map(SubjectiveTestMapper.test), 'Subjective tests fetched successfully');
     } catch (e: unknown) {
-      return handleTestControllerError({ res, error: e, endpoint: 'listSubjectiveTests', serverErrorMessage: 'Failed to fetch subjective tests' });
+      return handleTestControllerError({ res, error: e, endpoint: 'getTestDetailForStaff', serverErrorMessage: 'Failed to fetch subjective test' });
     }
   },
 
-  async getSubjectiveTest(req: AuthRequest, res: Response) {
+  async updateDraftTest(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      const { test, submissionCounts } = await subjectiveTestService.get(businessId, req.params.subjectiveTestId!, actingUser(req));
-      return ApiResponseHandler.success(res, { ...SubjectiveTestMapper.test(test), submissionCounts }, 'Subjective test fetched successfully');
+      const subjectiveTestId = req.params.subjectiveTestId!;
+      const updatedTest = await subjectiveTestService.updateDraftTest(businessId, subjectiveTestId, req.body, getRequestActor(req));
+      return ApiResponseHandler.success(res, SubjectiveTestMapper.toStaffTestResponse(updatedTest), 'Subjective test updated successfully');
     } catch (e: unknown) {
-      return handleTestControllerError({ res, error: e, endpoint: 'getSubjectiveTest', serverErrorMessage: 'Failed to fetch subjective test' });
+      return handleTestControllerError({ res, error: e, endpoint: 'updateDraftTest', serverErrorMessage: 'Failed to update subjective test' });
     }
   },
 
-  async updateSubjectiveTest(req: AuthRequest, res: Response) {
+  /** The draft test was loaded and access-checked before the upload (requireDraftTestBeforeUpload). */
+  async replaceQuestionPaper(req: AuthRequest, res: Response) {
     try {
-      const businessId = getBusinessId(req);
-      const updated = await subjectiveTestService.update(businessId, req.params.subjectiveTestId!, req.body, req.file, actingUser(req));
-      return ApiResponseHandler.success(res, SubjectiveTestMapper.test(updated), 'Subjective test updated successfully');
+      const draftTest = getLoadedAccessContext<SubjectiveTestRecord>(res);
+      const updatedTest = await subjectiveTestService.replaceQuestionPaper(draftTest, req.file!, getRequestActor(req));
+      return ApiResponseHandler.success(res, SubjectiveTestMapper.toStaffTestResponse(updatedTest), 'Question paper uploaded successfully');
     } catch (e: unknown) {
-      return handleTestControllerError({ res, error: e, endpoint: 'updateSubjectiveTest', serverErrorMessage: 'Failed to update subjective test' });
+      return handleTestControllerError({ res, error: e, endpoint: 'replaceQuestionPaper', serverErrorMessage: 'Failed to upload question paper' });
     }
   },
 
-  async publishSubjectiveTest(req: AuthRequest, res: Response) {
+  async publishDraftTest(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
       const { subjectiveTestId } = req.body as PublishSubjectiveTestRequestDto;
-      const published = await subjectiveTestService.publish(businessId, subjectiveTestId, actingUser(req));
-      return ApiResponseHandler.success(res, SubjectiveTestMapper.test(published), 'Subjective test published successfully');
+      const publishedTest = await subjectiveTestService.publishDraftTest(businessId, subjectiveTestId, getRequestActor(req));
+      return ApiResponseHandler.success(res, SubjectiveTestMapper.toStaffTestResponse(publishedTest), 'Subjective test published successfully');
     } catch (e: unknown) {
-      return handleTestControllerError({ res, error: e, endpoint: 'publishSubjectiveTest', serverErrorMessage: 'Failed to publish subjective test' });
+      return handleTestControllerError({ res, error: e, endpoint: 'publishDraftTest', serverErrorMessage: 'Failed to publish subjective test' });
     }
   },
 
-  async deleteSubjectiveTest(req: AuthRequest, res: Response) {
+  async deleteDraftTest(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      await subjectiveTestService.remove(businessId, req.params.subjectiveTestId!, actingUser(req));
+      const subjectiveTestId = req.params.subjectiveTestId!;
+      await subjectiveTestService.deleteDraftTest(businessId, subjectiveTestId, getRequestActor(req));
       return ApiResponseHandler.success(res, null, 'Subjective test deleted successfully');
     } catch (e: unknown) {
-      return handleTestControllerError({ res, error: e, endpoint: 'deleteSubjectiveTest', serverErrorMessage: 'Failed to delete subjective test' });
+      return handleTestControllerError({ res, error: e, endpoint: 'deleteDraftTest', serverErrorMessage: 'Failed to delete subjective test' });
     }
   },
 
-  /** Shared path: staff need test access; students must have started the test. */
+  /** Staff can always download; students only after they started the test. */
   async downloadQuestionPaper(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
       const subjectiveTestId = req.params.subjectiveTestId!;
-      const user = actingUser(req);
-      const ref = user.role === UserRole.STUDENT
-        ? await subjectiveTestService.getQuestionPaperForStudent(businessId, subjectiveTestId, user)
-        : await subjectiveTestService.getQuestionPaperForStaff(businessId, subjectiveTestId, user);
-      return await streamPdf(res, ref);
+      const questionPaperDownload = await subjectiveTestService.getQuestionPaperDownload(businessId, subjectiveTestId, getRequestActor(req));
+      return await privateFileStorage.streamToResponse(res, questionPaperDownload);
     } catch (e: unknown) {
       return handleTestControllerError({ res, error: e, endpoint: 'downloadQuestionPaper', serverErrorMessage: 'Failed to download question paper' });
     }
@@ -134,74 +130,75 @@ export const subjectiveTestController = {
   // Staff: submissions and grading
   // ---------------------------------------------------------------------------
 
-  async listSubmissions(req: AuthRequest, res: Response) {
+  async listRosterForStaff(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      const query = parseSubmissionListQuery(req.query);
-      const result = await subjectiveTestService.listSubmissions(businessId, req.params.subjectiveTestId!, query, actingUser(req));
-      return ApiResponseHandler.success(res, result, 'Submissions fetched successfully');
+      const subjectiveTestId = req.params.subjectiveTestId!;
+      const filters = parseSubmissionListFilters(req.query);
+      const rosterPage = await subjectiveTestService.listRosterForStaff(businessId, subjectiveTestId, filters, getRequestActor(req));
+      return ApiResponseHandler.success(res, rosterPage, 'Submissions fetched successfully');
     } catch (e: unknown) {
-      return handleTestControllerError({ res, error: e, endpoint: 'listSubmissions', serverErrorMessage: 'Failed to fetch submissions' });
+      return handleTestControllerError({ res, error: e, endpoint: 'listRosterForStaff', serverErrorMessage: 'Failed to fetch submissions' });
     }
   },
 
-  async getSubmissionForStaff(req: AuthRequest, res: Response) {
+  async getSubmissionDetailForStaff(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      const submission = await subjectiveTestService.getSubmissionDetailForStaff(
+      const subjectiveTestId = req.params.subjectiveTestId!;
+      const submissionId = req.params.submissionId!;
+      const submissionDetail = await subjectiveTestService.getSubmissionDetailForStaff(
         businessId,
-        req.params.subjectiveTestId!,
-        req.params.submissionId!,
-        actingUser(req),
+        subjectiveTestId,
+        submissionId,
+        getRequestActor(req),
       );
-      return ApiResponseHandler.success(res, submission, 'Submission fetched successfully');
+      return ApiResponseHandler.success(res, submissionDetail, 'Submission fetched successfully');
     } catch (e: unknown) {
-      return handleTestControllerError({ res, error: e, endpoint: 'getSubmissionForStaff', serverErrorMessage: 'Failed to fetch submission' });
+      return handleTestControllerError({ res, error: e, endpoint: 'getSubmissionDetailForStaff', serverErrorMessage: 'Failed to fetch submission' });
     }
   },
 
   async downloadAnswerSheetForStaff(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      const ref = await subjectiveTestService.getAnswerSheetForStaff(
+      const subjectiveTestId = req.params.subjectiveTestId!;
+      const submissionId = req.params.submissionId!;
+      const answerSheetDownload = await subjectiveTestService.getAnswerSheetDownloadForStaff(
         businessId,
-        req.params.subjectiveTestId!,
-        req.params.submissionId!,
-        actingUser(req),
+        subjectiveTestId,
+        submissionId,
+        getRequestActor(req),
       );
-      return await streamPdf(res, ref);
+      return await privateFileStorage.streamToResponse(res, answerSheetDownload);
     } catch (e: unknown) {
       return handleTestControllerError({ res, error: e, endpoint: 'downloadAnswerSheetForStaff', serverErrorMessage: 'Failed to download answer sheet' });
     }
   },
 
-  async downloadCheckedAnswerSheetForStaff(req: AuthRequest, res: Response) {
+  async downloadCheckedCopyForStaff(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      const ref = await subjectiveTestService.getCheckedAnswerSheetForStaff(
+      const subjectiveTestId = req.params.subjectiveTestId!;
+      const submissionId = req.params.submissionId!;
+      const checkedCopyDownload = await subjectiveTestService.getCheckedCopyDownloadForStaff(
         businessId,
-        req.params.subjectiveTestId!,
-        req.params.submissionId!,
-        actingUser(req),
+        subjectiveTestId,
+        submissionId,
+        getRequestActor(req),
       );
-      return await streamPdf(res, ref);
+      return await privateFileStorage.streamToResponse(res, checkedCopyDownload);
     } catch (e: unknown) {
-      return handleTestControllerError({ res, error: e, endpoint: 'downloadCheckedAnswerSheetForStaff', serverErrorMessage: 'Failed to download checked answer sheet' });
+      return handleTestControllerError({ res, error: e, endpoint: 'downloadCheckedCopyForStaff', serverErrorMessage: 'Failed to download checked answer sheet' });
     }
   },
 
+  /** The submission was loaded and access-checked before the upload (requireGradableSubmissionBeforeUpload). */
   async gradeSubmission(req: AuthRequest, res: Response) {
     try {
-      const businessId = getBusinessId(req);
-      const graded = await subjectiveTestService.grade(
-        businessId,
-        req.params.subjectiveTestId!,
-        req.params.submissionId!,
-        req.body,
-        req.file,
-        actingUser(req),
-      );
-      return ApiResponseHandler.success(res, graded, 'Submission graded successfully');
+      const gradableSubmission = getLoadedAccessContext<StaffSubmissionContext>(res);
+      const gradedSubmission = await subjectiveTestService.gradeSubmission(gradableSubmission, req.body, req.file, getRequestActor(req));
+      return ApiResponseHandler.success(res, gradedSubmission, 'Submission graded successfully');
     } catch (e: unknown) {
       return handleTestControllerError({ res, error: e, endpoint: 'gradeSubmission', serverErrorMessage: 'Failed to grade submission' });
     }
@@ -211,63 +208,68 @@ export const subjectiveTestController = {
   // Student
   // ---------------------------------------------------------------------------
 
-  async listAvailableSubjectiveTests(req: AuthRequest, res: Response) {
+  async listTestsForStudent(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      const tests = await subjectiveTestService.listAvailable(businessId, actingUser(req));
-      return ApiResponseHandler.success(res, tests, 'Available subjective tests fetched successfully');
+      const testCards = await subjectiveTestService.listTestsForStudent(businessId, getRequestActor(req));
+      return ApiResponseHandler.success(res, testCards, 'Available subjective tests fetched successfully');
     } catch (e: unknown) {
-      return handleTestControllerError({ res, error: e, endpoint: 'listAvailableSubjectiveTests', serverErrorMessage: 'Failed to fetch available subjective tests' });
+      return handleTestControllerError({ res, error: e, endpoint: 'listTestsForStudent', serverErrorMessage: 'Failed to fetch available subjective tests' });
     }
   },
 
-  async startSubjectiveTest(req: AuthRequest, res: Response) {
+  async startOrResumeAttempt(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      const started = await subjectiveTestService.start(businessId, req.params.subjectiveTestId!, actingUser(req));
-      return ApiResponseHandler.success(res, started, 'Subjective test started successfully');
+      const subjectiveTestId = req.params.subjectiveTestId!;
+      const startedAttempt = await subjectiveTestService.startOrResumeAttempt(businessId, subjectiveTestId, getRequestActor(req));
+      return ApiResponseHandler.success(res, startedAttempt, 'Subjective test started successfully');
     } catch (e: unknown) {
-      return handleTestControllerError({ res, error: e, endpoint: 'startSubjectiveTest', serverErrorMessage: 'Failed to start subjective test' });
+      return handleTestControllerError({ res, error: e, endpoint: 'startOrResumeAttempt', serverErrorMessage: 'Failed to start subjective test' });
     }
   },
 
+  /** The open attempt was loaded and checked before the upload (requireOpenAttemptBeforeUpload). */
   async submitAnswerSheet(req: AuthRequest, res: Response) {
     try {
-      const businessId = getBusinessId(req);
-      const submitted = await subjectiveTestService.submit(businessId, req.params.subjectiveTestId!, req.file, actingUser(req));
-      return ApiResponseHandler.success(res, submitted, 'Answer sheet submitted successfully');
+      const openAttempt = getLoadedAccessContext<StudentOpenAttemptContext>(res);
+      const submittedAttempt = await subjectiveTestService.submitAnswerSheet(openAttempt, req.file!, getRequestActor(req));
+      return ApiResponseHandler.success(res, submittedAttempt, 'Answer sheet submitted successfully');
     } catch (e: unknown) {
       return handleTestControllerError({ res, error: e, endpoint: 'submitAnswerSheet', serverErrorMessage: 'Failed to submit answer sheet' });
     }
   },
 
-  async getOwnSubmission(req: AuthRequest, res: Response) {
+  async getOwnAttemptDetail(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      const submission = await subjectiveTestService.getOwnSubmissionDetail(businessId, req.params.submissionId!, actingUser(req));
-      return ApiResponseHandler.success(res, submission, 'Submission fetched successfully');
+      const submissionId = req.params.submissionId!;
+      const ownAttempt = await subjectiveTestService.getOwnAttemptDetail(businessId, submissionId, getRequestActor(req));
+      return ApiResponseHandler.success(res, ownAttempt, 'Submission fetched successfully');
     } catch (e: unknown) {
-      return handleTestControllerError({ res, error: e, endpoint: 'getOwnSubmission', serverErrorMessage: 'Failed to fetch submission' });
+      return handleTestControllerError({ res, error: e, endpoint: 'getOwnAttemptDetail', serverErrorMessage: 'Failed to fetch submission' });
     }
   },
 
   async downloadOwnAnswerSheet(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      const ref = await subjectiveTestService.getOwnAnswerSheet(businessId, req.params.submissionId!, actingUser(req));
-      return await streamPdf(res, ref);
+      const submissionId = req.params.submissionId!;
+      const answerSheetDownload = await subjectiveTestService.getOwnAnswerSheetDownload(businessId, submissionId, getRequestActor(req));
+      return await privateFileStorage.streamToResponse(res, answerSheetDownload);
     } catch (e: unknown) {
       return handleTestControllerError({ res, error: e, endpoint: 'downloadOwnAnswerSheet', serverErrorMessage: 'Failed to download answer sheet' });
     }
   },
 
-  async downloadOwnCheckedAnswerSheet(req: AuthRequest, res: Response) {
+  async downloadOwnCheckedCopy(req: AuthRequest, res: Response) {
     try {
       const businessId = getBusinessId(req);
-      const ref = await subjectiveTestService.getOwnCheckedAnswerSheet(businessId, req.params.submissionId!, actingUser(req));
-      return await streamPdf(res, ref);
+      const submissionId = req.params.submissionId!;
+      const checkedCopyDownload = await subjectiveTestService.getOwnCheckedCopyDownload(businessId, submissionId, getRequestActor(req));
+      return await privateFileStorage.streamToResponse(res, checkedCopyDownload);
     } catch (e: unknown) {
-      return handleTestControllerError({ res, error: e, endpoint: 'downloadOwnCheckedAnswerSheet', serverErrorMessage: 'Failed to download checked answer sheet' });
+      return handleTestControllerError({ res, error: e, endpoint: 'downloadOwnCheckedCopy', serverErrorMessage: 'Failed to download checked answer sheet' });
     }
   },
 };

@@ -12,7 +12,7 @@ describe('createPrivatePdfUpload request context', () => {
 
   const app = express();
   app.use((_req, _res, next) => requestContext.run({ user: undefined, tenant: TENANT }, () => next()));
-  app.post('/upload', createPrivatePdfUpload('questionPaper'), (req, res) => {
+  app.post('/upload', createPrivatePdfUpload({ fieldName: 'questionPaper' }), (req, res) => {
     res.json({ tenant: requestContext.getTenant() ?? null, batchId: req.body.batchId });
   });
 

@@ -4,6 +4,11 @@ import { authorize } from '../middlewares/auth.middleware';
 import { validateDto } from '../middlewares/validation/dto.middleware';
 import { authorizeBusinessAccess, validateIdParam, validateStringIdParam } from '../middlewares/validation.middleware';
 import { createPrivatePdfUpload } from '../middlewares/upload.middleware';
+import {
+  requireDraftTestBeforeUpload,
+  requireGradableSubmissionBeforeUpload,
+  requireOpenAttemptBeforeUpload,
+} from '../middlewares/subjectiveTestAccess.middleware';
 import { SUBJECTIVE_TEST_CONFIG } from '../config/subjectiveTest.config';
 import {
   CreateSubjectiveTestDto,
@@ -16,10 +21,11 @@ import { subjectiveTestController } from '../controllers/subjectiveTest.controll
 export const subjectiveTestRouter = Router();
 
 const STAFF_ROLES = [UserRole.ADMIN, UserRole.TEACHER, UserRole.SUPERADMIN] as const;
-const { fields } = SUBJECTIVE_TEST_CONFIG;
+const { uploadFieldNames } = SUBJECTIVE_TEST_CONFIG;
 
 // ==================== SUBJECTIVE TEST ROUTES ====================
 // Files are PDFs only (max 20MB) and are streamed through these routes; they are never public URLs.
+// Upload routes check access BEFORE the upload middleware, so a refused request never writes a file.
 
 // Static routes MUST come before parameterized routes
 /**
@@ -61,7 +67,7 @@ subjectiveTestRouter.get(
   authorize(UserRole.STUDENT),
   validateIdParam('businessId'),
   authorizeBusinessAccess,
-  subjectiveTestController.listAvailableSubjectiveTests,
+  subjectiveTestController.listTestsForStudent,
 );
 
 /**
@@ -108,7 +114,7 @@ subjectiveTestRouter.post(
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateDto(PublishSubjectiveTestRequestDto),
-  subjectiveTestController.publishSubjectiveTest,
+  subjectiveTestController.publishDraftTest,
 );
 
 /**
@@ -152,7 +158,7 @@ subjectiveTestRouter.get(
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('submissionId'),
-  subjectiveTestController.getOwnSubmission,
+  subjectiveTestController.getOwnAttemptDetail,
 );
 
 /**
@@ -231,7 +237,7 @@ subjectiveTestRouter.get(
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('submissionId'),
-  subjectiveTestController.downloadOwnCheckedAnswerSheet,
+  subjectiveTestController.downloadOwnCheckedCopy,
 );
 
 /**
@@ -239,7 +245,7 @@ subjectiveTestRouter.get(
  * /api/business/{businessId}/subjective-tests:
  *   post:
  *     summary: Create a draft subjective test
- *     description: The question paper is optional at creation but required to publish.
+ *     description: Upload the question paper afterwards with PUT /{subjectiveTestId}/question-paper; it is required to publish.
  *     tags: [SubjectiveTests]
  *     security:
  *       - bearerAuth: []
@@ -252,17 +258,9 @@ subjectiveTestRouter.get(
  *     requestBody:
  *       required: true
  *       content:
- *         multipart/form-data:
+ *         application/json:
  *           schema:
- *             type: object
- *             required: [data]
- *             properties:
- *               data:
- *                 type: string
- *                 description: JSON string matching CreateSubjectiveTestRequest
- *               questionPaper:
- *                 type: string
- *                 format: binary
+ *             $ref: '#/components/schemas/CreateSubjectiveTestRequest'
  *     responses:
  *       201:
  *         description: Subjective test created successfully
@@ -276,16 +274,15 @@ subjectiveTestRouter.get(
  *                     data:
  *                       $ref: '#/components/schemas/SubjectiveTest'
  *       400:
- *         description: Invalid input data or file
+ *         description: Invalid input data
  */
 subjectiveTestRouter.post(
   '/:businessId/subjective-tests',
   authorize(...STAFF_ROLES),
   validateIdParam('businessId'),
   authorizeBusinessAccess,
-  createPrivatePdfUpload(fields.questionPaper),
   validateDto(CreateSubjectiveTestDto),
-  subjectiveTestController.createSubjectiveTest,
+  subjectiveTestController.createDraftTest,
 );
 
 /**
@@ -335,7 +332,7 @@ subjectiveTestRouter.get(
   authorize(...STAFF_ROLES),
   validateIdParam('businessId'),
   authorizeBusinessAccess,
-  subjectiveTestController.listSubjectiveTests,
+  subjectiveTestController.listTestsForStaff,
 );
 
 // Parameterized routes after all static ones
@@ -379,7 +376,7 @@ subjectiveTestRouter.get(
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('subjectiveTestId'),
-  subjectiveTestController.getSubjectiveTest,
+  subjectiveTestController.getTestDetailForStaff,
 );
 
 /**
@@ -387,7 +384,7 @@ subjectiveTestRouter.get(
  * /api/business/{businessId}/subjective-tests/{subjectiveTestId}:
  *   put:
  *     summary: Update a draft subjective test
- *     description: Send only changed fields in `data`. Sending `questionPaper` replaces the current paper.
+ *     description: Send only the changed fields. Replace the question paper with PUT /{subjectiveTestId}/question-paper.
  *     tags: [SubjectiveTests]
  *     security:
  *       - bearerAuth: []
@@ -405,16 +402,9 @@ subjectiveTestRouter.get(
  *     requestBody:
  *       required: true
  *       content:
- *         multipart/form-data:
+ *         application/json:
  *           schema:
- *             type: object
- *             properties:
- *               data:
- *                 type: string
- *                 description: JSON string matching UpdateSubjectiveTestRequest
- *               questionPaper:
- *                 type: string
- *                 format: binary
+ *             $ref: '#/components/schemas/UpdateSubjectiveTestRequest'
  *     responses:
  *       200:
  *         description: Subjective test updated successfully
@@ -438,9 +428,67 @@ subjectiveTestRouter.put(
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('subjectiveTestId'),
-  createPrivatePdfUpload(fields.questionPaper),
   validateDto(UpdateSubjectiveTestDto, true),
-  subjectiveTestController.updateSubjectiveTest,
+  subjectiveTestController.updateDraftTest,
+);
+
+/**
+ * @swagger
+ * /api/business/{businessId}/subjective-tests/{subjectiveTestId}/question-paper:
+ *   put:
+ *     summary: Upload or replace the question paper of a draft test
+ *     description: Access is checked before the file is stored. The previous paper is deleted after the new one is saved.
+ *     tags: [SubjectiveTests]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: businessId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: path
+ *         name: subjectiveTestId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required: [questionPaper]
+ *             properties:
+ *               questionPaper:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       200:
+ *         description: Question paper uploaded successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/ApiResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       $ref: '#/components/schemas/SubjectiveTest'
+ *       400:
+ *         description: Missing/invalid PDF, or the test is already published
+ *       404:
+ *         description: Subjective test not found
+ */
+subjectiveTestRouter.put(
+  '/:businessId/subjective-tests/:subjectiveTestId/question-paper',
+  authorize(...STAFF_ROLES),
+  validateIdParam('businessId'),
+  authorizeBusinessAccess,
+  validateStringIdParam('subjectiveTestId'),
+  requireDraftTestBeforeUpload,
+  createPrivatePdfUpload({ fieldName: uploadFieldNames.questionPaper, missingFileMessage: 'Upload the question paper' }),
+  subjectiveTestController.replaceQuestionPaper,
 );
 
 /**
@@ -476,7 +524,7 @@ subjectiveTestRouter.delete(
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('subjectiveTestId'),
-  subjectiveTestController.deleteSubjectiveTest,
+  subjectiveTestController.deleteDraftTest,
 );
 
 /**
@@ -563,7 +611,7 @@ subjectiveTestRouter.post(
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('subjectiveTestId'),
-  subjectiveTestController.startSubjectiveTest,
+  subjectiveTestController.startOrResumeAttempt,
 );
 
 /**
@@ -620,7 +668,8 @@ subjectiveTestRouter.post(
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('subjectiveTestId'),
-  createPrivatePdfUpload(fields.answerSheet),
+  requireOpenAttemptBeforeUpload,
+  createPrivatePdfUpload({ fieldName: uploadFieldNames.answerSheet, missingFileMessage: 'Upload your answer sheet' }),
   subjectiveTestController.submitAnswerSheet,
 );
 
@@ -685,7 +734,7 @@ subjectiveTestRouter.get(
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('subjectiveTestId'),
-  subjectiveTestController.listSubmissions,
+  subjectiveTestController.listRosterForStaff,
 );
 
 /**
@@ -734,7 +783,7 @@ subjectiveTestRouter.get(
   authorizeBusinessAccess,
   validateStringIdParam('subjectiveTestId'),
   validateStringIdParam('submissionId'),
-  subjectiveTestController.getSubmissionForStaff,
+  subjectiveTestController.getSubmissionDetailForStaff,
 );
 
 /**
@@ -824,7 +873,7 @@ subjectiveTestRouter.get(
   authorizeBusinessAccess,
   validateStringIdParam('subjectiveTestId'),
   validateStringIdParam('submissionId'),
-  subjectiveTestController.downloadCheckedAnswerSheetForStaff,
+  subjectiveTestController.downloadCheckedCopyForStaff,
 );
 
 /**
@@ -892,7 +941,8 @@ subjectiveTestRouter.put(
   authorizeBusinessAccess,
   validateStringIdParam('subjectiveTestId'),
   validateStringIdParam('submissionId'),
-  createPrivatePdfUpload(fields.checkedAnswerSheet),
+  requireGradableSubmissionBeforeUpload,
+  createPrivatePdfUpload({ fieldName: uploadFieldNames.checkedAnswerSheet }),
   validateDto(GradeSubjectiveSubmissionDto),
   subjectiveTestController.gradeSubmission,
 );

@@ -9,12 +9,11 @@ import {
 } from '../../../src/errors/api.errors';
 import { ValidationUtils } from '../../../src/utils/validation';
 import { ContentType, ContentStatus } from '@prisma/client';
-import * as fs from 'fs';
 import { AuthRequest } from '../../../src/dtos/auth.dto';
+import { contentFileStorage } from '../../../src/services/fileStorage.service';
 
 jest.mock('../../../src/utils/apiResponse');
 jest.mock('../../../src/utils/logger');
-jest.mock('fs');
 
 describe('Content Controller (Comprehensive)', () => {
   let req: Partial<AuthRequest>;
@@ -332,50 +331,30 @@ describe('Content Controller (Comprehensive)', () => {
 
 
   describe('getContentFile', () => {
-    it('streams file correctly', async () => {
+    const contentFileDownload = {
+      storageKey: 'file-1.pdf',
+      downloadFileName: 'Polity Notes.pdf',
+      contentType: 'application/pdf',
+    };
+
+    it('streams the file through content file storage', async () => {
       req.params = { contentId: '1' };
-
-      jest
-        .spyOn(ContentService.prototype, 'getContentFile')
-        .mockResolvedValue({
-          filePath: '/tmp/file.pdf',
-          fileName: 'file.pdf',
-          mimeType: 'application/pdf'
-        });
-
-      const stream = { pipe: jest.fn(), on: jest.fn() };
-      (fs.createReadStream as jest.Mock).mockReturnValue(stream);
+      jest.spyOn(ContentService.prototype, 'getContentFileDownload').mockResolvedValue(contentFileDownload);
+      const streamToResponse = jest.spyOn(contentFileStorage, 'streamToResponse').mockResolvedValue();
 
       await contentController.getContentFile(req as any, res as any);
 
-      expect(res.setHeader).toHaveBeenCalledWith(
-        'Content-Type',
-        'application/pdf'
-      );
-      expect(stream.pipe).toHaveBeenCalledWith(res);
+      expect(streamToResponse).toHaveBeenCalledWith(res, contentFileDownload);
     });
 
-    it('handles stream error safely', async () => {
+    it('returns not found when the file is missing on disk', async () => {
       req.params = { contentId: '1' };
-
-      jest
-        .spyOn(ContentService.prototype, 'getContentFile')
-        .mockResolvedValue({
-          filePath: '/tmp/file.pdf',
-          fileName: 'file.pdf',
-          mimeType: 'application/pdf'
-        });
-
-      const stream = {
-        pipe: jest.fn(),
-        on: jest.fn((_, cb) => cb(new Error())),
-        destroy: jest.fn()
-      };
-      (fs.createReadStream as jest.Mock).mockReturnValue(stream);
+      jest.spyOn(ContentService.prototype, 'getContentFileDownload').mockResolvedValue(contentFileDownload);
+      jest.spyOn(contentFileStorage, 'streamToResponse').mockRejectedValue(new NotFoundError('File'));
 
       await contentController.getContentFile(req as any, res as any);
 
-      expect(stream.destroy).toHaveBeenCalled();
+      expect(ApiResponseHandler.notFound).toHaveBeenCalled();
     });
   });
 });
