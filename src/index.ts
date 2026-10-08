@@ -8,7 +8,6 @@ import { Server as SocketIOServer } from 'socket.io';
 import routes from './routes';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
-import path from 'path';
 import { errorHandler } from './middlewares/error.middleware';
 import { config } from './config/config';
 import logger from './utils/logger';
@@ -19,6 +18,9 @@ import cron from 'node-cron';
 import { auditService } from './services/audit.service';
 import { auditConfig } from './config/audit.config';
 import { registerAnnouncementSocket } from './sockets/announcement.socket';
+import { FILE_STORAGE_CONFIG } from './config/fileStorage.config';
+import { authenticate } from './middlewares/auth.middleware';
+import { authorizeUploadedFileAccess } from './middlewares/uploadedFileAccess.middleware';
 
 // Load environment variables
 dotenv.config();
@@ -41,7 +43,14 @@ async function start() {
     app.use(cookieParser());
     app.use(express.json());
     app.use(express.urlencoded({ extended: true }));
-    app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
+    // Only email assets are public. Every other upload needs login and must belong to the viewer's business.
+    app.use(FILE_STORAGE_CONFIG.publicAssetsUrlPrefix, express.static(FILE_STORAGE_CONFIG.publicAssetsDir));
+    app.use(
+      FILE_STORAGE_CONFIG.publicUrlPrefix,
+      authenticate,
+      authorizeUploadedFileAccess,
+      express.static(FILE_STORAGE_CONFIG.uploadsRootDir, { cacheControl: false }),
+    );
 
     // Audit Logging
     app.use(apiAuditLogger);

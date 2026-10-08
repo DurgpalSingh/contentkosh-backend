@@ -2,12 +2,17 @@ import { Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import * as path from 'path';
 import * as fs from 'fs';
-import { BadRequestError } from '../errors/api.errors';
+import { ApiError, BadRequestError } from '../errors/api.errors';
 import { ContentType, UserRole } from '@prisma/client';
 import { AuthRequest } from '../dtos/auth.dto';
 import logger from '../utils/logger';
 
 import { EDITOR_IMAGE_UPLOAD_CONFIG, FILE_TYPE_CONFIG, IMAGE_UPLOAD_CONFIG } from '../config/file-type';
+import { SUBJECTIVE_TEST_CONFIG } from '../config/subjectiveTest.config';
+import { FILE_STORAGE_CONFIG, UPLOAD_FOLDERS, uploadFolderDir } from '../config/fileStorage.config';
+import { createUniqueFileName } from '../services/fileStorage.service';
+import { hasPdfSignature } from '../utils/fileSignature.util';
+import { requestContext } from '../contexts/request-context';
 
 const BYTES_IN_MB = 1024 * 1024;
 
@@ -113,15 +118,12 @@ export const parseMultipartData = (req: Request) => {
 
 // ─── General content upload ───────────────────────────────────────────────────
 
-const uploadDir = process.env.UPLOAD_DIR || 'uploads/content';
-ensureDirExists(uploadDir);
+const contentUploadDir = uploadFolderDir(UPLOAD_FOLDERS.content);
+ensureDirExists(contentUploadDir);
 
 const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadDir),
-  filename: (_req, file, cb) => {
-    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    cb(null, `${file.fieldname}-${uniqueSuffix}${path.extname(file.originalname)}`);
-  },
+  destination: (_req, _file, cb) => cb(null, contentUploadDir),
+  filename: (_req, file, cb) => cb(null, createUniqueFileName(file.fieldname, path.extname(file.originalname))),
 });
 
 const fileFilter: multer.Options['fileFilter'] = (
@@ -177,12 +179,12 @@ const normalizeUploadError = (error: any, next: NextFunction) => {
 
 // Middleware to handle single file upload with explicit error bridging
 export const uploadSingleFile = (req: Request, res: Response, next: NextFunction) => {
-  upload.single('file')(req, res, (error: any) => {
+  upload.single('file')(req, res, requestContext.bind((error: any) => {
     if (error) return normalizeUploadError(error, next);
     const msg = getRejectedUploadMessage(req);
     if (msg) return next(new BadRequestError(msg));
     next();
-  });
+  }));
 };
 
 export const validateFileSize = (req: Request, res: Response, next: NextFunction) => {
@@ -215,8 +217,8 @@ ensureDirExists(EDITOR_IMAGE_UPLOAD_CONFIG.tempDir);
 const editorImageStorage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, EDITOR_IMAGE_UPLOAD_CONFIG.tempDir),
   filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase() || EDITOR_IMAGE_UPLOAD_CONFIG.defaultExtension;
-    cb(null, `tmp-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
+    const extension = path.extname(file.originalname).toLowerCase() || EDITOR_IMAGE_UPLOAD_CONFIG.defaultExtension;
+    cb(null, createUniqueFileName('tmp', extension));
   },
 });
 
@@ -238,10 +240,10 @@ const editorImageMulter = multer({
  * The controller (editorImage.controller) converts it to WebP via sharp.
  */
 export const uploadEditorImageFile = (req: Request, res: Response, next: NextFunction) => {
-  editorImageMulter.single('image')(req, res, (error: any) => {
+  editorImageMulter.single('image')(req, res, requestContext.bind((error: any) => {
     if (error) return normalizeUploadError(error, next);
     next();
-  });
+  }));
 };
 
 // ─── Profile / business-logo upload ──────────────────────────────────────────
@@ -269,10 +271,7 @@ const profileStorage = multer.diskStorage({
     if (!config) return cb(new BadRequestError('Unexpected image field'), '');
     cb(null, config.uploadDir);
   },
-  filename: (_req, file, cb) => {
-    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    cb(null, `${file.fieldname}-${uniqueSuffix}${path.extname(file.originalname)}`);
-  },
+  filename: (_req, file, cb) => cb(null, createUniqueFileName(file.fieldname, path.extname(file.originalname))),
 });
 
 const profileUpload = multer({
@@ -309,7 +308,7 @@ export const uploadProfileAssets = (req: Request, res: Response, next: NextFunct
     { name: IMAGE_UPLOAD_CONFIG.profilePicture.fieldName, maxCount: 1 },
     { name: 'profilePhoto', maxCount: 1 },
     { name: IMAGE_UPLOAD_CONFIG.businessLogo.fieldName, maxCount: 1 }
-  ])(req, res, (error: any) => {
+  ])(req, res, requestContext.bind((error: any) => {
     if (error) return normalizeUploadError(error, next);
 
     const files = req.files as Record<string, Express.Multer.File[]> | undefined;
@@ -324,7 +323,7 @@ export const uploadProfileAssets = (req: Request, res: Response, next: NextFunct
     }
 
     next();
-  });
+  }));
 };
 
 const toPublicAssetPath = (filePath: string): string => {
@@ -377,10 +376,8 @@ ensureDirExists(courseThumbnailConfig.uploadDir);
 
 const courseThumbnailStorage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, courseThumbnailConfig.uploadDir),
-  filename: (_req, file, cb) => {
-    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    cb(null, `${courseThumbnailConfig.fieldName}-${uniqueSuffix}${path.extname(file.originalname)}`);
-  },
+  filename: (_req, file, cb) =>
+    cb(null, createUniqueFileName(courseThumbnailConfig.fieldName, path.extname(file.originalname))),
 });
 
 const courseThumbnailUpload = multer({
@@ -401,10 +398,10 @@ const courseThumbnailUpload = multer({
 });
 
 export const uploadCourseThumbnail = (req: Request, res: Response, next: NextFunction) => {
-  courseThumbnailUpload.single(courseThumbnailConfig.fieldName)(req, res, (error: any) => {
+  courseThumbnailUpload.single(courseThumbnailConfig.fieldName)(req, res, requestContext.bind((error: any) => {
     if (error) return normalizeUploadError(error, next);
     next();
-  });
+  }));
 };
 
 export const mapCourseThumbnailToPayload = (req: Request, res: Response, next: NextFunction) => {
@@ -452,7 +449,7 @@ const bulkUpload = multer({
  * pattern as uploadSingleFile — no multer concerns leak into the controller.
  */
 export const uploadBulkFile = (req: Request, res: Response, next: NextFunction): void => {
-  bulkUpload.single('file')(req, res, (error: any) => {
+  bulkUpload.single('file')(req, res, requestContext.bind((error: any) => {
     if (!error) return next();
 
     if (error instanceof multer.MulterError) {
@@ -471,5 +468,71 @@ export const uploadBulkFile = (req: Request, res: Response, next: NextFunction):
     }
 
     next(error);
+  }));
+};
+
+// ---------------------------------------------------------------------------
+// Private PDF upload (subjective tests) — stored in `uploads/subjective`, which is never served by URL
+// ---------------------------------------------------------------------------
+ensureDirExists(FILE_STORAGE_CONFIG.uploadsTempDir);
+
+const privatePdfUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, FILE_STORAGE_CONFIG.uploadsTempDir),
+    filename: (_req, _file, cb) => cb(null, createUniqueFileName('tmp', SUBJECTIVE_TEST_CONFIG.pdfExtension)),
+  }),
+  limits: { fileSize: SUBJECTIVE_TEST_CONFIG.maxPdfSizeBytes },
+  fileFilter: (_req, file, cb) => {
+    const extension = path.extname(file.originalname).toLowerCase();
+    if (extension !== SUBJECTIVE_TEST_CONFIG.pdfExtension || file.mimetype !== SUBJECTIVE_TEST_CONFIG.pdfMimeType) {
+      return cb(new BadRequestError('Only PDF files are allowed'));
+    }
+    cb(null, true);
+  },
+});
+
+const removeTempFileWhenResponseEnds = (res: Response, tempFilePath: string) => {
+  res.on('finish', () => {
+    fs.promises.rm(tempFilePath, { force: true }).catch((cleanupError) => {
+      logger.error(`[upload-middleware] temp cleanup failed path=${tempFilePath}`, cleanupError);
+    });
   });
 };
+
+type PrivatePdfUploadOptions = {
+  fieldName: string;
+  /** When set, a request without a file is rejected with this message. */
+  missingFileMessage?: string;
+};
+
+/**
+ * Accepts one PDF in `fieldName` (plus an optional `data` JSON field) into a temp folder and
+ * checks the file really is a PDF. The temp file is removed when the response finishes unless
+ * the service already moved it to its final storage key, so failures never leave files behind.
+ * Run access checks BEFORE this middleware so unauthorized requests never write to disk.
+ */
+export const createPrivatePdfUpload = ({ fieldName, missingFileMessage }: PrivatePdfUploadOptions) =>
+  (req: Request, res: Response, next: NextFunction) => {
+    // Multer can call back outside the request context, which would send tenant queries to the public schema.
+    privatePdfUpload.single(fieldName)(req, res, requestContext.bind(async (error: any) => {
+      if (req.file) removeTempFileWhenResponseEnds(res, req.file.path);
+
+      if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
+        return next(new BadRequestError(`File size cannot exceed ${SUBJECTIVE_TEST_CONFIG.maxPdfSizeMb}MB`));
+      }
+      if (error instanceof ApiError) return next(error);
+      if (error) return normalizeUploadError(error, next);
+
+      if (!req.file && missingFileMessage) return next(new BadRequestError(missingFileMessage));
+      if (req.file && !(await hasPdfSignature(req.file.path))) {
+        return next(new BadRequestError('The uploaded file is not a valid PDF'));
+      }
+
+      try {
+        parseMultipartData(req);
+      } catch (parseError) {
+        return next(parseError);
+      }
+      next();
+    }));
+  };

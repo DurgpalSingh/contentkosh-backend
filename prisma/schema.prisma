@@ -107,6 +107,7 @@ model Business {
   students      Student[]
   practiceTests PracticeTest[]
   examTests     ExamTest[]
+  subjectiveTests SubjectiveTest[]
   slugHistory   BusinessSlugHistory[]
 
   @@map("business")
@@ -142,6 +143,7 @@ model Batch {
   contents   Content[]
   practiceTests PracticeTest[]
   examTests     ExamTest[]
+  subjectiveTests SubjectiveTest[]
   announcementTargets AnnouncementTarget[]
 
   @@index([courseId])
@@ -267,6 +269,7 @@ model Subject {
   contents    Content[]
   practiceTests PracticeTest[]
   examTests     ExamTest[]
+  subjectiveTests SubjectiveTest[]
 
   @@unique([courseId, name])
   @@index([courseId])
@@ -648,4 +651,67 @@ model TestAttemptAnswer {
   @@index([attemptId])
   @@index([questionId])
   @@map("test_attempt_answers")
+}
+
+model SubjectiveTest {
+  id           String  @id @default(cuid()) @map("id")
+  businessId   Int     @map("business_id")
+  batchId      Int     @map("batch_id")
+  subjectId    Int?    @map("subject_id")
+  name         String  @map("name")
+  paperType    String  @map("paper_type")
+  description  String? @map("description") @db.Text
+  instructions String? @map("instructions") @db.Text
+  status       Int     @default(0) @map("status") // 0=DRAFT, 1=PUBLISHED
+
+  totalMarks      Float    @map("total_marks")
+  durationMinutes Int      @map("duration_minutes")
+  startAt         DateTime @map("start_at")
+  deadlineAt      DateTime @map("deadline_at")
+
+  questionPaperPath String? @map("question_paper_path") // private storage key; required to publish
+
+  createdBy Int      @map("created_by")
+  updatedBy Int?     @map("updated_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  business    Business                   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  batch       Batch                      @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  subject     Subject?                   @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  submissions SubjectiveTestSubmission[]
+
+  @@index([businessId, status])
+  @@index([batchId, status])
+  @@index([subjectId])
+  @@map("subjective_tests")
+}
+
+model SubjectiveTestSubmission {
+  id               String @id @default(cuid()) @map("id")
+  subjectiveTestId String @map("subjective_test_id")
+  studentId        Int    @map("student_id")
+  status           Int    @default(0) @map("status") // 0=IN_PROGRESS, 1=SUBMITTED, 2=CHECKED (EXPIRED is derived, never stored)
+
+  startedAt       DateTime  @map("started_at")
+  submittedAt     DateTime? @map("submitted_at")
+  answerSheetPath String?   @map("answer_sheet_path") // private storage key
+
+  marksAwarded           Float?    @map("marks_awarded")
+  remarks                String?   @map("remarks") @db.Text
+  checkedAnswerSheetPath String?   @map("checked_answer_sheet_path") // private storage key
+  checkedBy              Int?      @map("checked_by")
+  checkedAt              DateTime? @map("checked_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  test SubjectiveTest @relation(fields: [subjectiveTestId], references: [id], onDelete: Cascade)
+
+  @@unique([subjectiveTestId, studentId])
+  @@index([subjectiveTestId, status])
+  @@index([studentId, status])
+  @@map("subjective_test_submissions")
 }
