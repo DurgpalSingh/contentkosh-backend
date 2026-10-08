@@ -2,8 +2,10 @@ import { BadRequestError, NotFoundError } from '../errors/api.errors';
 import {
   SubjectiveAvailability,
   SubjectiveDisplayStatus,
+  SubjectiveSubmissionFile,
   SubjectiveSubmissionStatus,
   isSubjectiveDisplayStatus,
+  isSubjectiveSubmissionFile,
 } from '../constants/test-enums';
 import { SUBJECTIVE_TEST_CONFIG } from '../config/subjectiveTest.config';
 import {
@@ -16,6 +18,8 @@ import {
   type StoredFileDownload,
 } from '../services/fileStorage.service';
 import { parseOptionalIntQueryParam, parseOptionalStringQueryParam } from './testController.utils';
+import { pickDefined } from './objectUtils';
+import logger from './logger';
 
 /** Absorbs small client/server clock drift on window boundaries (same tolerance as Exam start). */
 export const SUBJECTIVE_TIME_TOLERANCE_MS = 1000;
@@ -59,8 +63,26 @@ export function getSubmissionDisplayStatus(
 
 /** Create/update can't cross-check two fields in the DTO, so the schedule order is checked here. */
 export function assertDeadlineAfterStart(startAt: Date, deadlineAt: Date): void {
-  if (deadlineAt <= startAt) throw new BadRequestError('Deadline must be after the start time');
+  if (deadlineAt <= startAt) {
+    logger.warn(`[subjective-test] schedule rejected: deadline not after start startAt=${startAt.toISOString()} deadlineAt=${deadlineAt.toISOString()}`);
+    throw new BadRequestError('Deadline must be after the start time');
+  }
 }
+
+/**
+ * Fields a draft edit may change as sent (dates are converted separately). An explicit list, because the
+ * DTO keeps unknown body properties (e.g. `status`), which must never reach the DB.
+ */
+export const DRAFT_TEST_EDITABLE_FIELDS = [
+  'batchId',
+  'subjectId',
+  'name',
+  'paperType',
+  'description',
+  'instructions',
+  'totalMarks',
+  'durationMinutes',
+] as const;
 
 // ---------------------------------------------------------------------------
 // Storage keys: subjective/<businessId>/<testId>/...  (a new key per upload, never overwritten)
@@ -71,10 +93,12 @@ export function subjectiveTestStorageFolder(businessId: number, subjectiveTestId
 }
 
 export function buildQuestionPaperStorageKey(businessId: number, subjectiveTestId: string): string {
-  return uploadsFileStorage.joinStorageKey(
+  const questionPaperStorageKey = uploadsFileStorage.joinStorageKey(
     subjectiveTestStorageFolder(businessId, subjectiveTestId),
     createUniqueFileName('question-paper', SUBJECTIVE_TEST_CONFIG.pdfExtension),
   );
+  logger.debug(`[subjective-test] question paper storage key built storageKey=${questionPaperStorageKey}`);
+  return questionPaperStorageKey;
 }
 
 /** Keeps the student's original file name inside the key so it can be shown later. */
@@ -84,19 +108,23 @@ export function buildAnswerSheetStorageKey(
   studentId: number,
   uploadedFile: Express.Multer.File,
 ): string {
-  return uploadsFileStorage.joinStorageKey(
+  const answerSheetStorageKey = uploadsFileStorage.joinStorageKey(
     subjectiveTestStorageFolder(businessId, subjectiveTestId),
     'answers',
     appendOriginalFileName(createUniqueFileStem(studentId), toStorageSafeFileName(uploadedFile)),
   );
+  logger.debug(`[subjective-test] answer sheet storage key built storageKey=${answerSheetStorageKey}`);
+  return answerSheetStorageKey;
 }
 
 export function buildCheckedCopyStorageKey(businessId: number, subjectiveTestId: string, submissionId: string): string {
-  return uploadsFileStorage.joinStorageKey(
+  const checkedCopyStorageKey = uploadsFileStorage.joinStorageKey(
     subjectiveTestStorageFolder(businessId, subjectiveTestId),
     'checked',
     createUniqueFileName(submissionId, SUBJECTIVE_TEST_CONFIG.pdfExtension),
   );
+  logger.debug(`[subjective-test] checked copy storage key built storageKey=${checkedCopyStorageKey}`);
+  return checkedCopyStorageKey;
 }
 
 // ---------------------------------------------------------------------------
@@ -113,7 +141,11 @@ export function answerSheetDisplayName(answerSheetPath: string | null): string |
 }
 
 const pdfDownload = (storageKey: string | null, downloadFileName: string, missingFileLabel: string): StoredFileDownload => {
-  if (!storageKey) throw new NotFoundError(missingFileLabel);
+  if (!storageKey) {
+    logger.warn(`[subjective-test] download rejected: no file stored file=${missingFileLabel}`);
+    throw new NotFoundError(missingFileLabel);
+  }
+  logger.debug(`[subjective-test] download prepared file=${missingFileLabel} storageKey=${storageKey}`);
   return { storageKey, downloadFileName, contentType: SUBJECTIVE_TEST_CONFIG.pdfMimeType };
 };
 
@@ -121,16 +153,29 @@ export function questionPaperDownload(test: TestFileFields): StoredFileDownload 
   return pdfDownload(test.questionPaperPath, questionPaperDisplayName(test) ?? '', 'Question paper');
 }
 
-export function answerSheetDownload(test: TestFileFields, submission: SubmissionFileFields): StoredFileDownload {
+/** Reads the requested submission file from the last URL segment (`answer-sheet` / `checked-answer-sheet`). */
+export function parseSubmissionFile(urlSegment: unknown): SubjectiveSubmissionFile {
+  if (!isSubjectiveSubmissionFile(urlSegment)) {
+    logger.warn(`[subjective-test] download rejected: unknown submission file file=${String(urlSegment)}`);
+    throw new NotFoundError('File');
+  }
+  return urlSegment;
+}
+
+/** The checked copy path is only ever saved together with CHECKED, so a missing path covers "not checked yet". */
+export function submissionFileDownload(
+  test: TestFileFields,
+  submission: SubmissionFileFields,
+  submissionFile: SubjectiveSubmissionFile,
+): StoredFileDownload {
+  if (submissionFile === SubjectiveSubmissionFile.CHECKED_COPY) {
+    return pdfDownload(submission.checkedAnswerSheetPath, `${test.name} - checked copy.pdf`, 'Checked answer sheet');
+  }
   return pdfDownload(
     submission.answerSheetPath,
     answerSheetDisplayName(submission.answerSheetPath) ?? `${test.name} - answer sheet.pdf`,
     'Answer sheet',
   );
-}
-
-export function checkedCopyDownload(test: TestFileFields, submission: SubmissionFileFields): StoredFileDownload {
-  return pdfDownload(submission.checkedAnswerSheetPath, `${test.name} - checked copy.pdf`, 'Checked answer sheet');
 }
 
 // ---------------------------------------------------------------------------
@@ -144,18 +189,44 @@ export type SubmissionListFilters = {
   pageSize: number;
 };
 
+export type StaffTestListFilters = { status?: number; batchId?: number; paperType?: string };
+
+export function parseStaffTestListFilters(query: Record<string, unknown>): StaffTestListFilters {
+  const filters = pickDefined(
+    {
+      status: parseOptionalIntQueryParam(query.status, 'status'),
+      batchId: parseOptionalIntQueryParam(query.batchId, 'batchId'),
+      paperType: parseOptionalStringQueryParam(query.paperType, 'paperType'),
+    },
+    ['status', 'batchId', 'paperType'],
+  );
+  logger.debug(`[subjective-test] staff test list filters parsed filters=${JSON.stringify(filters)}`);
+  return filters;
+}
+
+function rejectInvalidListFilter(message: string, query: Record<string, unknown>): never {
+  logger.warn(`[subjective-test] submission list filters rejected reason="${message}" query=${JSON.stringify(query)}`);
+  throw new BadRequestError(message);
+}
+
 export function parseSubmissionListFilters(query: Record<string, unknown>): SubmissionListFilters {
   const displayStatus = parseOptionalStringQueryParam(query.status, 'status');
-  if (displayStatus !== undefined && !isSubjectiveDisplayStatus(displayStatus)) throw new BadRequestError('Invalid status');
+  if (displayStatus !== undefined && !isSubjectiveDisplayStatus(displayStatus)) rejectInvalidListFilter('Invalid status', query);
   const page = parseOptionalIntQueryParam(query.page, 'page') ?? 1;
   const pageSize = parseOptionalIntQueryParam(query.limit, 'limit') ?? SUBJECTIVE_TEST_CONFIG.submissionsDefaultPageSize;
-  if (page < 1) throw new BadRequestError('Invalid page');
-  if (pageSize < 1) throw new BadRequestError('Invalid limit');
-  const searchText = parseOptionalStringQueryParam(query.search, 'search')?.trim().toLowerCase();
-  return {
-    ...(displayStatus !== undefined ? { displayStatus } : {}),
-    ...(searchText ? { searchText } : {}),
+  if (page < 1) rejectInvalidListFilter('Invalid page', query);
+  if (pageSize < 1) rejectInvalidListFilter('Invalid limit', query);
+  const filters: SubmissionListFilters = {
+    ...pickDefined(
+      {
+        displayStatus,
+        searchText: parseOptionalStringQueryParam(query.search, 'search')?.trim().toLowerCase() || undefined,
+      },
+      ['displayStatus', 'searchText'],
+    ),
     page,
     pageSize: Math.min(pageSize, SUBJECTIVE_TEST_CONFIG.submissionsMaxPageSize),
   };
+  logger.debug(`[subjective-test] submission list filters parsed filters=${JSON.stringify(filters)}`);
+  return filters;
 }

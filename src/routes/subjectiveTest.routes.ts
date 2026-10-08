@@ -191,14 +191,6 @@ subjectiveTestRouter.get(
  *       404:
  *         description: Answer sheet not found
  */
-subjectiveTestRouter.get(
-  '/:businessId/subjective-tests/submissions/:submissionId/answer-sheet',
-  authorize(UserRole.STUDENT),
-  validateIdParam('businessId'),
-  authorizeBusinessAccess,
-  validateStringIdParam('submissionId'),
-  subjectiveTestController.downloadOwnAnswerSheet,
-);
 
 /**
  * @swagger
@@ -231,13 +223,14 @@ subjectiveTestRouter.get(
  *       404:
  *         description: Checked answer sheet not found
  */
+// Serves both documented paths above: `answer-sheet` and `checked-answer-sheet`.
 subjectiveTestRouter.get(
-  '/:businessId/subjective-tests/submissions/:submissionId/checked-answer-sheet',
+  '/:businessId/subjective-tests/submissions/:submissionId/:submissionFile',
   authorize(UserRole.STUDENT),
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('submissionId'),
-  subjectiveTestController.downloadOwnCheckedCopy,
+  subjectiveTestController.downloadOwnSubmissionFile,
 );
 
 /**
@@ -821,15 +814,6 @@ subjectiveTestRouter.get(
  *       404:
  *         description: Answer sheet not found
  */
-subjectiveTestRouter.get(
-  '/:businessId/subjective-tests/:subjectiveTestId/submissions/:submissionId/answer-sheet',
-  authorize(...STAFF_ROLES),
-  validateIdParam('businessId'),
-  authorizeBusinessAccess,
-  validateStringIdParam('subjectiveTestId'),
-  validateStringIdParam('submissionId'),
-  subjectiveTestController.downloadAnswerSheetForStaff,
-);
 
 /**
  * @swagger
@@ -866,14 +850,15 @@ subjectiveTestRouter.get(
  *       404:
  *         description: Checked answer sheet not found
  */
+// Serves both documented paths above: `answer-sheet` and `checked-answer-sheet`.
 subjectiveTestRouter.get(
-  '/:businessId/subjective-tests/:subjectiveTestId/submissions/:submissionId/checked-answer-sheet',
+  '/:businessId/subjective-tests/:subjectiveTestId/submissions/:submissionId/:submissionFile',
   authorize(...STAFF_ROLES),
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('subjectiveTestId'),
   validateStringIdParam('submissionId'),
-  subjectiveTestController.downloadCheckedCopyForStaff,
+  subjectiveTestController.downloadSubmissionFileForStaff,
 );
 
 /**

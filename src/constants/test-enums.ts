@@ -124,6 +124,19 @@ export const SubjectiveAvailability = {
 export type SubjectiveAvailability =
   (typeof SubjectiveAvailability)[keyof typeof SubjectiveAvailability];
 
+/** Files stored on a submission; the values are the last URL segment of their download routes. */
+export const SubjectiveSubmissionFile = {
+  ANSWER_SHEET: 'answer-sheet',
+  CHECKED_COPY: 'checked-answer-sheet',
+} as const;
+
+export type SubjectiveSubmissionFile =
+  (typeof SubjectiveSubmissionFile)[keyof typeof SubjectiveSubmissionFile];
+
+export function isSubjectiveSubmissionFile(v: unknown): v is SubjectiveSubmissionFile {
+  return typeof v === 'string' && (Object.values(SubjectiveSubmissionFile) as string[]).includes(v);
+}
+
 export function isSubjectiveDisplayStatus(v: unknown): v is SubjectiveDisplayStatus {
   return typeof v === 'string' && (Object.values(SubjectiveDisplayStatus) as string[]).includes(v);
 }

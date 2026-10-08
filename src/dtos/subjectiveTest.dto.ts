@@ -9,6 +9,10 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
+
+/** Trims text before validation, so `@IsNotEmpty` also rejects whitespace-only values. */
+const TrimText = () => Transform(({ value }) => (typeof value === 'string' ? value.trim() : value));
 
 export class CreateSubjectiveTestDto {
   @IsInt()
@@ -20,10 +24,12 @@ export class CreateSubjectiveTestDto {
   @Min(1)
   subjectId?: number;
 
+  @TrimText()
   @IsString()
   @IsNotEmpty()
   name!: string;
 
+  @TrimText()
   @IsString()
   @IsNotEmpty()
   paperType!: string;
@@ -63,11 +69,13 @@ export class UpdateSubjectiveTestDto {
   @Min(1)
   subjectId?: number | null;
 
+  @TrimText()
   @IsOptional()
   @IsString()
   @IsNotEmpty()
   name?: string;
 
+  @TrimText()
   @IsOptional()
   @IsString()
   @IsNotEmpty()
@@ -111,6 +119,7 @@ export class GradeSubjectiveSubmissionDto {
   @Min(0)
   marksAwarded!: number;
 
+  @TrimText()
   @IsOptional()
   @IsString()
   @MaxLength(5000)

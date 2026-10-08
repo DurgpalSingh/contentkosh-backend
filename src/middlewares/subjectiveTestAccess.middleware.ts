@@ -7,6 +7,7 @@ import {
 } from '../services/subjectiveTest.service';
 import type { SubjectiveTestRecord } from '../repositories/subjectiveTest.repo';
 import { getBusinessId, getRequestActor, handleTestControllerError } from '../utils/testController.utils';
+import logger from '../utils/logger';
 
 const LOADED_ACCESS_CONTEXT = 'subjectiveTestAccessContext';
 
@@ -18,8 +19,12 @@ function checkAccessBeforeUpload<LoadedContext>(endpoint: string, loadContext: (
   return async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       res.locals[LOADED_ACCESS_CONTEXT] = await loadContext(req);
+      logger.info(`[subjective-test-access] ${endpoint} allowed before upload userId=${req.user?.id} params=${JSON.stringify(req.params)}`);
       next();
     } catch (error: unknown) {
+      logger.warn(
+        `[subjective-test-access] ${endpoint} refused before upload userId=${req.user?.id} params=${JSON.stringify(req.params)} reason=${(error as Error).message}`,
+      );
       handleTestControllerError({ res, error, endpoint, serverErrorMessage: 'Failed to check access' });
     }
   };

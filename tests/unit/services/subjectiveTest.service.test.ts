@@ -1,7 +1,7 @@
 import { UserRole } from '@prisma/client';
 import { SubjectiveTestService } from '../../../src/services/subjectiveTest.service';
 import { ApiError, BadRequestError, NotFoundError } from '../../../src/errors/api.errors';
-import { SubjectiveDisplayStatus, SubjectiveSubmissionStatus, TestStatus } from '../../../src/constants/test-enums';
+import { SubjectiveDisplayStatus, SubjectiveSubmissionFile, SubjectiveSubmissionStatus, TestStatus } from '../../../src/constants/test-enums';
 import * as subjectiveTestRepo from '../../../src/repositories/subjectiveTest.repo';
 import * as userRepo from '../../../src/repositories/user.repo';
 import * as testUtils from '../../../src/utils/test.utils';
@@ -107,7 +107,7 @@ describe('SubjectiveTestService', () => {
     const createDto = {
       batchId: 3,
       subjectId: 8,
-      name: ' Mock ',
+      name: 'Mock',
       paperType: 'GS Paper I',
       totalMarks: 250,
       durationMinutes: 180,
@@ -123,7 +123,7 @@ describe('SubjectiveTestService', () => {
       expect(repo.insertDraftTest).not.toHaveBeenCalled();
     });
 
-    it('checks batch, teacher access and subject, then inserts a trimmed draft', async () => {
+    it('checks batch, teacher access and subject, then inserts the draft', async () => {
       repo.insertDraftTest.mockResolvedValue(buildTest({ status: TestStatus.DRAFT }));
       await service.createDraftTest(BUSINESS_ID, createDto, ADMIN);
 
@@ -140,7 +140,7 @@ describe('SubjectiveTestService', () => {
       repo.findTestInBusiness.mockResolvedValue(buildTest({ status: TestStatus.DRAFT }));
       repo.updateTest.mockResolvedValue(buildTest({ status: TestStatus.DRAFT }));
 
-      await service.updateDraftTest(BUSINESS_ID, 'st-1', { name: ' New name ', status: TestStatus.PUBLISHED } as never, ADMIN);
+      await service.updateDraftTest(BUSINESS_ID, 'st-1', { name: 'New name', status: TestStatus.PUBLISHED } as never, ADMIN);
 
       const savedFields = repo.updateTest.mock.calls[0]![2];
       expect(savedFields).toEqual(expect.objectContaining({ name: 'New name', updatedBy: ADMIN.id }));
@@ -396,7 +396,7 @@ describe('SubjectiveTestService', () => {
     });
 
     it('updates marks without re-uploading by keeping the current checked copy', async () => {
-      await service.gradeSubmission({ test: buildTest(), submission: checkedSheet }, { marksAwarded: 120, remarks: ' Good ' }, undefined, ADMIN);
+      await service.gradeSubmission({ test: buildTest(), submission: checkedSheet }, { marksAwarded: 120, remarks: 'Good' }, undefined, ADMIN);
       expect(fileStorage.saveUploadThenCommit).not.toHaveBeenCalled();
       expect(repo.saveGrade).toHaveBeenCalledWith(
         'sub-1',
@@ -438,7 +438,7 @@ describe('SubjectiveTestService', () => {
         test: buildTest(),
       });
       expect((await service.getOwnAttemptDetail(BUSINESS_ID, 'sub-1', STUDENT)).result).toBeNull();
-      await expect(service.getOwnCheckedCopyDownload(BUSINESS_ID, 'sub-1', STUDENT)).rejects.toThrow(NotFoundError);
+      await expect(service.getOwnSubmissionFileDownload(BUSINESS_ID, 'sub-1', SubjectiveSubmissionFile.CHECKED_COPY, STUDENT)).rejects.toThrow(NotFoundError);
     });
 
     it('shows marks, remarks and the checked copy once checked', async () => {
@@ -454,7 +454,7 @@ describe('SubjectiveTestService', () => {
       });
       const ownAttempt = await service.getOwnAttemptDetail(BUSINESS_ID, 'sub-1', STUDENT);
       expect(ownAttempt.result).toEqual(expect.objectContaining({ marksAwarded: 118, remarks: 'Good', hasCheckedAnswerSheet: true }));
-      expect((await service.getOwnCheckedCopyDownload(BUSINESS_ID, 'sub-1', STUDENT)).storageKey).toBe('c.pdf');
+      expect((await service.getOwnSubmissionFileDownload(BUSINESS_ID, 'sub-1', SubjectiveSubmissionFile.CHECKED_COPY, STUDENT)).storageKey).toBe('c.pdf');
     });
 
     it("returns 404 for another student's submission", async () => {

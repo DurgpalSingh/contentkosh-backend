@@ -159,6 +159,40 @@ describe('Subjective test routes', () => {
     });
   });
 
+  describe('submission file downloads (one route per role, file chosen by the last URL segment)', () => {
+    const CHECKED_SHEET = {
+      ...SUBMITTED_SHEET,
+      status: SubjectiveSubmissionStatus.CHECKED,
+      checkedAnswerSheetPath: 'checked.pdf',
+    };
+
+    beforeEach(() => fileStorage.streamToResponse.mockImplementation(async (res) => void res.status(200).end()));
+
+    it('streams the answer sheet and the checked copy to staff', async () => {
+      repo.findSubmissionWithTest.mockResolvedValue({ ...CHECKED_SHEET, test: DRAFT_TEST });
+
+      expect((await request(app).get(`${BASE}/st-1/submissions/sub-1/answer-sheet`)).status).toBe(200);
+      expect((await request(app).get(`${BASE}/st-1/submissions/sub-1/checked-answer-sheet`)).status).toBe(200);
+      expect(fileStorage.streamToResponse.mock.calls.map(([, download]) => download.storageKey)).toEqual(['a.pdf', 'checked.pdf']);
+    });
+
+    it('streams the student their own files and hides the checked copy until checked', async () => {
+      mockUserRole = UserRole.STUDENT;
+      repo.findOwnSubmissionWithTest.mockResolvedValue({ ...SUBMITTED_SHEET, test: DRAFT_TEST });
+
+      expect((await request(app).get(`${BASE}/submissions/sub-1/answer-sheet`)).status).toBe(200);
+      const checkedCopyResponse = await request(app).get(`${BASE}/submissions/sub-1/checked-answer-sheet`);
+      expect(checkedCopyResponse.status).toBe(404);
+      expect(checkedCopyResponse.body.message).toBe('Checked answer sheet not found');
+    });
+
+    it('returns 404 for an unknown file name without loading the submission', async () => {
+      const unknownFileResponse = await request(app).get(`${BASE}/st-1/submissions/sub-1/question-paper.exe`);
+      expect(unknownFileResponse.status).toBe(404);
+      expect(repo.findSubmissionWithTest).not.toHaveBeenCalled();
+    });
+  });
+
   describe('create and update are JSON', () => {
     it('creates a draft from a JSON body', async () => {
       repo.insertDraftTest.mockResolvedValue(DRAFT_TEST);
@@ -179,6 +213,34 @@ describe('Subjective test routes', () => {
       const createResponse = await request(app).post(BASE).send({ batchId: 3, name: 'x', paperType: 'y', totalMarks: 0 });
       expect(createResponse.status).toBe(400);
       expect(createResponse.body.message).toContain('totalMarks');
+    });
+
+    it('trims text fields in the DTO and rejects a whitespace-only name', async () => {
+      repo.insertDraftTest.mockResolvedValue(DRAFT_TEST);
+      const draftBody = {
+        batchId: 3,
+        paperType: '  GS Paper I  ',
+        totalMarks: 250,
+        durationMinutes: 180,
+        startAt: DRAFT_TEST.startAt.toISOString(),
+        deadlineAt: DRAFT_TEST.deadlineAt.toISOString(),
+      };
+
+      expect((await request(app).post(BASE).send({ ...draftBody, name: '   ' })).status).toBe(400);
+      expect((await request(app).post(BASE).send({ ...draftBody, name: '  Mains Mock 4 ' })).status).toBe(201);
+      expect(repo.insertDraftTest).toHaveBeenCalledWith(expect.objectContaining({ name: 'Mains Mock 4', paperType: 'GS Paper I' }));
+    });
+
+    it('updates only the sent fields of a draft', async () => {
+      repo.findTestInBusiness.mockResolvedValue(DRAFT_TEST);
+      repo.updateTest.mockResolvedValue(DRAFT_TEST);
+
+      const updateResponse = await request(app).put(`${BASE}/st-1`).send({ name: ' Renamed ', totalMarks: 200 });
+
+      expect(updateResponse.status).toBe(200);
+      const [, , savedFields] = repo.updateTest.mock.calls[0]!;
+      expect(Object.keys(savedFields).sort()).toEqual(['deadlineAt', 'name', 'startAt', 'totalMarks', 'updatedBy']);
+      expect(savedFields).toEqual(expect.objectContaining({ name: 'Renamed', totalMarks: 200 }));
     });
   });
 
