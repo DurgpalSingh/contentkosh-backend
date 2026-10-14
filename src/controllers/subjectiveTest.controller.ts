@@ -49,11 +49,11 @@ export const subjectiveTestController = {
     try {
       const businessId = getBusinessId(req);
       const subjectiveTestId = req.params.subjectiveTestId!;
-      const { test, submissionCounts } = await subjectiveTestService.getTestDetailForStaff(businessId, subjectiveTestId, getRequestActor(req));
+      const { subjectiveTest, submissionCounts } = await subjectiveTestService.getTestDetailForStaff(businessId, subjectiveTestId, getRequestActor(req));
       logger.info(`[subjective-test-controller] getTestDetailForStaff success userId=${req.user!.id} params=${JSON.stringify(req.params)}`);
       return ApiResponseHandler.success(
         res,
-        { ...SubjectiveTestMapper.toStaffTestResponse(test), submissionCounts },
+        { ...SubjectiveTestMapper.toStaffTestResponse(subjectiveTest), submissionCounts },
         'Subjective test fetched successfully',
       );
     } catch (e: unknown) {

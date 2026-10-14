@@ -46,3 +46,14 @@ export const MIME_TYPES = {
 
   DEFAULT: 'application/octet-stream'
 };
+
+export const FILE_PATH_REGEX = {
+  /** Windows separators, to normalise paths to `/`. */
+  BACKSLASHES: /\\/g,
+  /** Leading `/` of a URL path, to turn `/uploads/x.png` into a path relative to the working directory. */
+  LEADING_SLASHES: /^\/+/,
+  /** An absolute `http(s)://` URL (as opposed to a `/uploads/...` path). */
+  ABSOLUTE_HTTP_URL: /^https?:\/\//i,
+  /** Anything except letters (any language), digits, space, `.`, `_` and `-`. */
+  UNSAFE_FILE_NAME_CHARACTERS: /[^\p{L}\p{M}\p{N} ._-]+/gu,
+} as const;

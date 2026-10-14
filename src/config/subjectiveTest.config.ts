@@ -15,6 +15,8 @@ export const SUBJECTIVE_TEST_CONFIG = {
     answerSheet: 'answerSheet',
     checkedAnswerSheet: 'checkedAnswerSheet',
   },
+  /** Absorbs small client/server clock drift on window boundaries (same tolerance as Exam start). Used in JS and SQL rules. */
+  timeToleranceMs: 1000,
   submissionsDefaultPageSize: 20,
   submissionsMaxPageSize: 100,
 } as const;

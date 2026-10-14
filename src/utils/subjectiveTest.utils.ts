@@ -21,8 +21,7 @@ import { parseOptionalIntQueryParam, parseOptionalStringQueryParam } from './tes
 import { pickDefined } from './objectUtils';
 import logger from './logger';
 
-/** Absorbs small client/server clock drift on window boundaries (same tolerance as Exam start). */
-export const SUBJECTIVE_TIME_TOLERANCE_MS = 1000;
+const { timeToleranceMs } = SUBJECTIVE_TEST_CONFIG;
 
 type TestSchedule = { startAt: Date; deadlineAt: Date; durationMinutes: number };
 type AttemptTiming = { status: number; startedAt: Date };
@@ -41,12 +40,12 @@ export function computeAttemptDeadline(schedule: TestSchedule, startedAt: Date):
 
 export function getTestAvailability(schedule: TestSchedule, now: Date): SubjectiveAvailability {
   const nowMs = now.getTime();
-  if (nowMs + SUBJECTIVE_TIME_TOLERANCE_MS < schedule.startAt.getTime()) return SubjectiveAvailability.UPCOMING;
-  if (nowMs > schedule.deadlineAt.getTime() + SUBJECTIVE_TIME_TOLERANCE_MS) return SubjectiveAvailability.CLOSED;
+  if (nowMs + timeToleranceMs < schedule.startAt.getTime()) return SubjectiveAvailability.UPCOMING;
+  if (nowMs > schedule.deadlineAt.getTime() + timeToleranceMs) return SubjectiveAvailability.CLOSED;
   return SubjectiveAvailability.OPEN;
 }
 
-/** EXPIRED is never stored: an IN_PROGRESS attempt past its deadline reads as EXPIRED. */
+/** EXPIRED is never stored: an IN_PROGRESS attempt past its deadline reads as EXPIRED. The roster SQL mirrors this rule. */
 export function getSubmissionDisplayStatus(
   schedule: TestSchedule,
   attempt: AttemptTiming | null,
@@ -56,7 +55,7 @@ export function getSubmissionDisplayStatus(
   if (attempt.status === SubjectiveSubmissionStatus.CHECKED) return SubjectiveDisplayStatus.CHECKED;
   if (attempt.status === SubjectiveSubmissionStatus.SUBMITTED) return SubjectiveDisplayStatus.SUBMITTED;
   const attemptDeadlineMs = computeAttemptDeadline(schedule, attempt.startedAt).getTime();
-  return now.getTime() > attemptDeadlineMs + SUBJECTIVE_TIME_TOLERANCE_MS
+  return now.getTime() > attemptDeadlineMs + timeToleranceMs
     ? SubjectiveDisplayStatus.EXPIRED
     : SubjectiveDisplayStatus.IN_PROGRESS;
 }
@@ -70,10 +69,10 @@ export function assertDeadlineAfterStart(startAt: Date, deadlineAt: Date): void 
 }
 
 /**
- * Fields a draft edit may change as sent (dates are converted separately). An explicit list, because the
- * DTO keeps unknown body properties (e.g. `status`), which must never reach the DB.
+ * Create/update DTO fields saved as sent (dates are converted separately). An explicit list, because the
+ * DTO keeps unknown body properties (e.g. `status`, `createdBy`), which must never reach the DB.
  */
-export const DRAFT_TEST_EDITABLE_FIELDS = [
+export const SUBJECTIVE_TEST_DTO_FIELDS = [
   'batchId',
   'subjectId',
   'name',
@@ -132,8 +131,8 @@ export function buildCheckedCopyStorageKey(businessId: number, subjectiveTestId:
 // ---------------------------------------------------------------------------
 
 /** The question paper is named after the paper type, e.g. "GS Paper I.pdf". */
-export function questionPaperDisplayName(test: Pick<TestFileFields, 'paperType' | 'questionPaperPath'>): string | null {
-  return test.questionPaperPath ? `${test.paperType.trim() || 'Question paper'}.pdf` : null;
+export function questionPaperDisplayName(subjectiveTest: Pick<TestFileFields, 'paperType' | 'questionPaperPath'>): string | null {
+  return subjectiveTest.questionPaperPath ? `${subjectiveTest.paperType.trim() || 'Question paper'}.pdf` : null;
 }
 
 export function answerSheetDisplayName(answerSheetPath: string | null): string | null {
@@ -149,8 +148,8 @@ const pdfDownload = (storageKey: string | null, downloadFileName: string, missin
   return { storageKey, downloadFileName, contentType: SUBJECTIVE_TEST_CONFIG.pdfMimeType };
 };
 
-export function questionPaperDownload(test: TestFileFields): StoredFileDownload {
-  return pdfDownload(test.questionPaperPath, questionPaperDisplayName(test) ?? '', 'Question paper');
+export function questionPaperDownload(subjectiveTest: TestFileFields): StoredFileDownload {
+  return pdfDownload(subjectiveTest.questionPaperPath, questionPaperDisplayName(subjectiveTest) ?? '', 'Question paper');
 }
 
 /** Reads the requested submission file from the last URL segment (`answer-sheet` / `checked-answer-sheet`). */
@@ -164,16 +163,16 @@ export function parseSubmissionFile(urlSegment: unknown): SubjectiveSubmissionFi
 
 /** The checked copy path is only ever saved together with CHECKED, so a missing path covers "not checked yet". */
 export function submissionFileDownload(
-  test: TestFileFields,
+  subjectiveTest: TestFileFields,
   submission: SubmissionFileFields,
   submissionFile: SubjectiveSubmissionFile,
 ): StoredFileDownload {
   if (submissionFile === SubjectiveSubmissionFile.CHECKED_COPY) {
-    return pdfDownload(submission.checkedAnswerSheetPath, `${test.name} - checked copy.pdf`, 'Checked answer sheet');
+    return pdfDownload(submission.checkedAnswerSheetPath, `${subjectiveTest.name} - checked copy.pdf`, 'Checked answer sheet');
   }
   return pdfDownload(
     submission.answerSheetPath,
-    answerSheetDisplayName(submission.answerSheetPath) ?? `${test.name} - answer sheet.pdf`,
+    answerSheetDisplayName(submission.answerSheetPath) ?? `${subjectiveTest.name} - answer sheet.pdf`,
     'Answer sheet',
   );
 }

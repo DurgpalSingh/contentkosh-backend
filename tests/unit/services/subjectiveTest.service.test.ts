@@ -92,7 +92,7 @@ describe('SubjectiveTestService', () => {
   describe('staff access', () => {
     it('hides a test from a teacher who did not create it', async () => {
       repo.findTestInBusiness.mockResolvedValue(buildTest({ createdBy: 999 }));
-      await expect(service.getTestDetailForStaff(BUSINESS_ID, 'st-1', TEACHER)).rejects.toThrow(NotFoundError);
+      await expect(service.findTestForStaff(BUSINESS_ID, 'st-1', TEACHER)).rejects.toThrow(NotFoundError);
     });
 
     it('refuses to change a published test', async () => {
@@ -199,63 +199,73 @@ describe('SubjectiveTestService', () => {
   });
 
   describe('getTestDetailForStaff', () => {
-    it('counts students per display status from two light queries', async () => {
-      repo.findTestInBusiness.mockResolvedValue(buildTest({ durationMinutes: 5 }));
-      repo.countStudentsNotStarted.mockResolvedValue(2);
-      repo.findAttemptTimingsForTest.mockResolvedValue([
-        { status: SubjectiveSubmissionStatus.SUBMITTED, startedAt: new Date() },
-        { status: SubjectiveSubmissionStatus.CHECKED, startedAt: new Date() },
-        { status: SubjectiveSubmissionStatus.IN_PROGRESS, startedAt: new Date(Date.now() - 10 * 60_000) },
-      ]);
+    const SUBMISSION_COUNTS = { NOT_STARTED: 2, IN_PROGRESS: 0, SUBMITTED: 1, CHECKED: 1, EXPIRED: 1 };
 
-      const { submissionCounts } = await service.getTestDetailForStaff(BUSINESS_ID, 'st-1', ADMIN);
-      expect(submissionCounts).toEqual({ NOT_STARTED: 2, IN_PROGRESS: 0, SUBMITTED: 1, CHECKED: 1, EXPIRED: 1 });
+    it('returns the test and its counts from a single repo call', async () => {
+      repo.findTestWithSubmissionCounts.mockResolvedValue({ subjectiveTest: buildTest(), submissionCounts: SUBMISSION_COUNTS });
+
+      const testDetail = await service.getTestDetailForStaff(BUSINESS_ID, 'st-1', ADMIN);
+
+      expect(testDetail.submissionCounts).toEqual(SUBMISSION_COUNTS);
+      expect(repo.findTestWithSubmissionCounts).toHaveBeenCalledTimes(1);
+      expect(repo.findTestInBusiness).not.toHaveBeenCalled();
+    });
+
+    it('hides the counts of a test the teacher did not create', async () => {
+      repo.findTestWithSubmissionCounts.mockResolvedValue({
+        subjectiveTest: buildTest({ createdBy: 999 }),
+        submissionCounts: SUBMISSION_COUNTS,
+      });
+      await expect(service.getTestDetailForStaff(BUSINESS_ID, 'st-1', TEACHER)).rejects.toThrow(NotFoundError);
     });
   });
 
   describe('listRosterForStaff', () => {
-    const rosterEntry = (studentId: number, studentName: string, status: number | null): subjectiveTestRepo.RosterEntryRecord => ({
+    const rosterEntry = (
+      studentId: number,
+      studentName: string,
+      displayStatus: SubjectiveDisplayStatus,
+    ): subjectiveTestRepo.RosterEntryRecord => ({
       studentId,
       studentName,
       studentEmail: `${studentName.toLowerCase()}@x.com`,
-      submissionId: status === null ? null : `sub-${studentId}`,
-      status,
-      startedAt: status === null ? null : new Date(Date.now() - 10 * 60_000),
+      submissionId: displayStatus === SubjectiveDisplayStatus.NOT_STARTED ? null : `sub-${studentId}`,
+      displayStatus,
+      startedAt: null,
       submittedAt: null,
       marksAwarded: null,
       remarks: null,
-      answerSheetPath: null,
+      answerSheetPath: `subjective/1/st-1/answers/${studentId}-1-1__sheet.pdf`,
       hasCheckedAnswerSheet: false,
       checkedAt: null,
     });
 
-    beforeEach(() => {
+    it('passes the filters to the paged SQL query and maps the page', async () => {
       repo.findTestInBusiness.mockResolvedValue(buildTest());
-      repo.findRosterWithSubmissions.mockResolvedValue([
-        rosterEntry(1, 'Asha', null),
-        rosterEntry(2, 'Bala', SubjectiveSubmissionStatus.SUBMITTED),
-        rosterEntry(3, 'Chitra', SubjectiveSubmissionStatus.CHECKED),
-        rosterEntry(4, 'Dev', null),
-      ]);
+      repo.findRosterPage.mockResolvedValue({
+        rosterEntries: [rosterEntry(1, 'Asha', SubjectiveDisplayStatus.NOT_STARTED)],
+        totalMatching: 4,
+      });
+      const filters = { displayStatus: SubjectiveDisplayStatus.NOT_STARTED, searchText: 'asha', page: 2, pageSize: 3 };
+
+      const rosterPage = await service.listRosterForStaff(BUSINESS_ID, 'st-1', filters, ADMIN);
+
+      expect(repo.findRosterPage).toHaveBeenCalledWith(BUSINESS_ID, 'st-1', filters, expect.any(Date));
+      expect(rosterPage).toEqual({
+        items: [expect.objectContaining({ studentId: 1, displayStatus: SubjectiveDisplayStatus.NOT_STARTED, answerSheetName: 'sheet.pdf' })],
+        total: 4,
+        page: 2,
+        limit: 3,
+      });
+      expect(rosterPage.items[0]).not.toHaveProperty('answerSheetPath');
     });
 
-    it('includes students who never started', async () => {
-      const rosterPage = await service.listRosterForStaff(
-        BUSINESS_ID,
-        'st-1',
-        { displayStatus: SubjectiveDisplayStatus.NOT_STARTED, page: 1, pageSize: 20 },
-        ADMIN,
-      );
-      expect(rosterPage.items.map((entry) => entry.studentName)).toEqual(['Asha', 'Dev']);
-    });
-
-    it('searches by name or email and pages the result', async () => {
-      const searched = await service.listRosterForStaff(BUSINESS_ID, 'st-1', { searchText: 'chitra@', page: 1, pageSize: 20 }, ADMIN);
-      expect(searched.items.map((entry) => entry.studentId)).toEqual([3]);
-
-      const secondPage = await service.listRosterForStaff(BUSINESS_ID, 'st-1', { page: 2, pageSize: 3 }, ADMIN);
-      expect(secondPage.items.map((entry) => entry.studentId)).toEqual([4]);
-      expect(secondPage.total).toBe(4);
+    it('refuses a teacher who did not create the test', async () => {
+      repo.findTestInBusiness.mockResolvedValue(buildTest({ createdBy: 999 }));
+      repo.findRosterPage.mockResolvedValue({ rosterEntries: [], totalMatching: 0 });
+      await expect(
+        service.listRosterForStaff(BUSINESS_ID, 'st-1', { page: 1, pageSize: 20 }, TEACHER),
+      ).rejects.toThrow(NotFoundError);
     });
   });
 
@@ -347,7 +357,7 @@ describe('SubjectiveTestService', () => {
   });
 
   describe('submitAnswerSheet', () => {
-    const openAttempt = () => ({ test: buildTest(), attempt: buildAttempt() });
+    const openAttempt = () => ({ subjectiveTest: buildTest(), attempt: buildAttempt() });
 
     it("stores the sheet under a key with the student's file name and marks it submitted", async () => {
       repo.markAttemptSubmitted.mockResolvedValue(buildAttempt({ status: SubjectiveSubmissionStatus.SUBMITTED }));
@@ -386,7 +396,7 @@ describe('SubjectiveTestService', () => {
     });
 
     it('rejects marks above the total and a first grade without a checked copy', async () => {
-      const gradable = { test: buildTest(), submission: submittedSheet };
+      const gradable = { subjectiveTest: buildTest(), submission: submittedSheet };
       await expect(service.gradeSubmission(gradable, { marksAwarded: 251 }, uploadedPdf, ADMIN)).rejects.toThrow(
         'Marks cannot be more than 250',
       );
@@ -396,7 +406,7 @@ describe('SubjectiveTestService', () => {
     });
 
     it('updates marks without re-uploading by keeping the current checked copy', async () => {
-      await service.gradeSubmission({ test: buildTest(), submission: checkedSheet }, { marksAwarded: 120, remarks: 'Good' }, undefined, ADMIN);
+      await service.gradeSubmission({ subjectiveTest: buildTest(), submission: checkedSheet }, { marksAwarded: 120, remarks: 'Good' }, undefined, ADMIN);
       expect(fileStorage.saveUploadThenCommit).not.toHaveBeenCalled();
       expect(repo.saveGrade).toHaveBeenCalledWith(
         'sub-1',
@@ -406,7 +416,7 @@ describe('SubjectiveTestService', () => {
     });
 
     it('replaces the checked copy when a new one is uploaded', async () => {
-      await service.gradeSubmission({ test: buildTest(), submission: checkedSheet }, { marksAwarded: 120 }, uploadedPdf, ADMIN);
+      await service.gradeSubmission({ subjectiveTest: buildTest(), submission: checkedSheet }, { marksAwarded: 120 }, uploadedPdf, ADMIN);
       const { storageKey, replacedStorageKey } = fileStorage.saveUploadThenCommit.mock.calls[0]![0];
       expect(storageKey).toMatch(/^subjective\/1\/st-1\/checked\/sub-1-\d+-\d+\.pdf$/);
       expect(replacedStorageKey).toBe('old-checked.pdf');
@@ -415,7 +425,7 @@ describe('SubjectiveTestService', () => {
     it('returns 409 when someone else graded at the same time', async () => {
       repo.saveGrade.mockRejectedValue(prismaError('P2025'));
       const gradeError = await service
-        .gradeSubmission({ test: buildTest(), submission: checkedSheet }, { marksAwarded: 120 }, undefined, ADMIN)
+        .gradeSubmission({ subjectiveTest: buildTest(), submission: checkedSheet }, { marksAwarded: 120 }, undefined, ADMIN)
         .catch((error: unknown) => error);
       expect(gradeError).toBeInstanceOf(ApiError);
       expect((gradeError as ApiError).statusCode).toBe(409);

@@ -5,38 +5,46 @@ import { UserRole } from '@prisma/client';
 import { BadRequestError } from '../errors/api.errors';
 import { IUser } from '../dtos/auth.dto';
 import { UPLOAD_FOLDERS, uploadFolderDir } from '../config/fileStorage.config';
+import { FILE_PATH_REGEX } from '../constants/file.constants';
 import { createUniqueFileName } from './fileStorage.service';
 import logger from '../utils/logger';
 
-const EDITOR_IMAGE_DIR = uploadFolderDir(UPLOAD_FOLDERS.editorImages);
-
-// Ensure the output directory exists at startup
-try {
-  if (!fs.existsSync(EDITOR_IMAGE_DIR)) {
-    fs.mkdirSync(EDITOR_IMAGE_DIR, { recursive: true });
-  }
-} catch (err) {
-  logger.error('[EditorImageService] Failed to create upload directory', err);
-}
+const EDITOR_IMAGES_DIR = uploadFolderDir(UPLOAD_FOLDERS.editorImages);
+const EDITOR_IMAGE_WEBP_QUALITY = 80;
+const INVALID_IMAGE_PATH_MESSAGE = 'Invalid file path';
 
 /** Images inserted in rich-text editors. New images go to `<editorDir>/<businessId>/` so access can be checked per business. */
 export class EditorImageService {
-  private editorFolderFor(businessId: number | null | undefined): string {
-    return businessId ? path.join(EDITOR_IMAGE_DIR, String(businessId)) : EDITOR_IMAGE_DIR;
+  private editorImageFolderFor(businessId: number | null | undefined): string {
+    return businessId ? path.join(EDITOR_IMAGES_DIR, String(businessId)) : EDITOR_IMAGES_DIR;
   }
 
-  /** Converts the uploaded temp file to WebP, removes the temp file, and returns the image URL path. */
+  /** `/uploads/editor/...` from either the stored path or an absolute URL. Malformed input is a 400, not a 500. */
+  private toImageUrlPath(imageUrl: string, requester: IUser): string {
+    try {
+      const imageUrlPath = FILE_PATH_REGEX.ABSOLUTE_HTTP_URL.test(imageUrl) ? new URL(imageUrl).pathname : imageUrl;
+      return decodeURIComponent(imageUrlPath);
+    } catch {
+      logger.warn(`[EditorImageService] delete rejected: malformed url userId=${requester.id} url=${imageUrl}`);
+      throw new BadRequestError(INVALID_IMAGE_PATH_MESSAGE);
+    }
+  }
+
+  /** Converts the uploaded temp file to WebP and returns the image URL path. The temp file is always removed. */
   async uploadImage(tempFilePath: string, businessId: number | null | undefined): Promise<string> {
-    const businessFolder = this.editorFolderFor(businessId);
-    await fs.promises.mkdir(businessFolder, { recursive: true });
-    const outputPath = path
-      .join(businessFolder, createUniqueFileName('editor', '.webp'))
-      .replace(/\\/g, '/');
+    const businessImageFolder = this.editorImageFolderFor(businessId);
+    const imageFilePath = path
+      .join(businessImageFolder, createUniqueFileName('editor', '.webp'))
+      .replace(FILE_PATH_REGEX.BACKSLASHES, '/');
 
-    await sharp(tempFilePath).webp({ quality: 80 }).toFile(outputPath);
-    await fs.promises.rm(tempFilePath, { force: true });
+    try {
+      await fs.promises.mkdir(businessImageFolder, { recursive: true });
+      await sharp(tempFilePath).webp({ quality: EDITOR_IMAGE_WEBP_QUALITY }).toFile(imageFilePath);
+    } finally {
+      await fs.promises.rm(tempFilePath, { force: true });
+    }
 
-    const imageUrlPath = `/${outputPath}`;
+    const imageUrlPath = `/${imageFilePath}`;
     logger.info(`[EditorImageService] uploaded businessId=${businessId ?? 'none'} path=${imageUrlPath}`);
     return imageUrlPath;
   }
@@ -44,31 +52,32 @@ export class EditorImageService {
   /**
    * Deletes an editor image. Accepts the stored URL (absolute or `/uploads/editor/...`). Images in a
    * business folder can only be deleted by that business (or a super admin); older flat images by anyone logged in.
+   * A missing file is a no-op.
    */
-  deleteImage(imageUrl: string, viewer: IUser): void {
-    if (!imageUrl || typeof imageUrl !== 'string') {
+  async deleteImage(imageUrl: string, requester: IUser): Promise<void> {
+    if (!imageUrl) {
+      logger.warn(`[EditorImageService] delete rejected: no url userId=${requester.id}`);
       throw new BadRequestError('url is required');
     }
 
-    const imagePath = /^https?:\/\//i.test(imageUrl) ? new URL(imageUrl).pathname : imageUrl;
-    const resolvedImagePath = path.resolve(decodeURIComponent(imagePath).replace(/^\/+/, ''));
-    const editorDir = path.resolve(EDITOR_IMAGE_DIR);
-    if (!resolvedImagePath.startsWith(editorDir + path.sep)) {
-      throw new BadRequestError('Invalid file path');
+    const imageUrlPath = this.toImageUrlPath(imageUrl, requester);
+    const absoluteImagePath = path.resolve(imageUrlPath.replace(FILE_PATH_REGEX.LEADING_SLASHES, ''));
+    const absoluteEditorImagesDir = path.resolve(EDITOR_IMAGES_DIR);
+    if (!absoluteImagePath.startsWith(absoluteEditorImagesDir + path.sep)) {
+      logger.warn(`[EditorImageService] delete rejected: outside editor folder userId=${requester.id} path=${imageUrlPath}`);
+      throw new BadRequestError(INVALID_IMAGE_PATH_MESSAGE);
     }
 
-    const pathInsideEditorDir = path.relative(editorDir, resolvedImagePath).split(path.sep);
-    const ownerBusinessFolder = pathInsideEditorDir.length > 1 ? pathInsideEditorDir[0] : null;
-    const isOwnBusinessImage = ownerBusinessFolder === null || ownerBusinessFolder === String(viewer.businessId);
-    if (!isOwnBusinessImage && viewer.role !== UserRole.SUPERADMIN) {
-      logger.warn(`[EditorImageService] delete denied userId=${viewer.id} path=${imagePath}`);
-      throw new BadRequestError('Invalid file path');
+    const pathPartsInsideEditorDir = path.relative(absoluteEditorImagesDir, absoluteImagePath).split(path.sep);
+    const ownerBusinessFolder = pathPartsInsideEditorDir.length > 1 ? pathPartsInsideEditorDir[0] : null;
+    const isOwnBusinessImage = ownerBusinessFolder === null || ownerBusinessFolder === String(requester.businessId);
+    if (!isOwnBusinessImage && requester.role !== UserRole.SUPERADMIN) {
+      logger.warn(`[EditorImageService] delete rejected: other business image userId=${requester.id} path=${imageUrlPath}`);
+      throw new BadRequestError(INVALID_IMAGE_PATH_MESSAGE);
     }
 
-    if (fs.existsSync(resolvedImagePath)) {
-      fs.unlinkSync(resolvedImagePath);
-      logger.info(`[EditorImageService] deleted userId=${viewer.id} path=${imagePath}`);
-    }
+    await fs.promises.rm(absoluteImagePath, { force: true });
+    logger.info(`[EditorImageService] deleted userId=${requester.id} path=${imageUrlPath}`);
   }
 }
 

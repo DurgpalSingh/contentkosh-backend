@@ -107,60 +107,60 @@ export type SubjectiveRosterRowResponse = {
   checkedAt: Date | null;
 };
 
-function toTestSummary(test: SubjectiveTestRecord): TestSummaryResponse {
+function toTestSummary(subjectiveTest: SubjectiveTestRecord): TestSummaryResponse {
   return {
-    id: test.id,
-    batchId: test.batchId,
-    batchName: test.batch.displayName,
-    subjectId: test.subjectId ?? null,
-    subjectName: test.subject?.name ?? null,
-    name: test.name,
-    paperType: test.paperType,
-    description: test.description ?? null,
-    instructions: test.instructions ?? null,
-    totalMarks: test.totalMarks,
-    durationMinutes: test.durationMinutes,
-    startAt: test.startAt,
-    deadlineAt: test.deadlineAt,
-    hasQuestionPaper: Boolean(test.questionPaperPath),
-    questionPaperName: questionPaperDisplayName(test),
+    id: subjectiveTest.id,
+    batchId: subjectiveTest.batchId,
+    batchName: subjectiveTest.batch.displayName,
+    subjectId: subjectiveTest.subjectId ?? null,
+    subjectName: subjectiveTest.subject?.name ?? null,
+    name: subjectiveTest.name,
+    paperType: subjectiveTest.paperType,
+    description: subjectiveTest.description ?? null,
+    instructions: subjectiveTest.instructions ?? null,
+    totalMarks: subjectiveTest.totalMarks,
+    durationMinutes: subjectiveTest.durationMinutes,
+    startAt: subjectiveTest.startAt,
+    deadlineAt: subjectiveTest.deadlineAt,
+    hasQuestionPaper: Boolean(subjectiveTest.questionPaperPath),
+    questionPaperName: questionPaperDisplayName(subjectiveTest),
   };
 }
 
 export const SubjectiveTestMapper = {
-  toStaffTestResponse(test: SubjectiveTestRecord): SubjectiveTestResponse {
+  toStaffTestResponse(subjectiveTest: SubjectiveTestRecord): SubjectiveTestResponse {
     return {
-      ...toTestSummary(test),
-      businessId: test.businessId,
-      status: test.status,
-      isPublished: test.status === TestStatus.PUBLISHED,
-      createdBy: test.createdBy,
-      updatedBy: test.updatedBy ?? null,
-      createdAt: test.createdAt,
-      updatedAt: test.updatedAt,
+      ...toTestSummary(subjectiveTest),
+      businessId: subjectiveTest.businessId,
+      status: subjectiveTest.status,
+      isPublished: subjectiveTest.status === TestStatus.PUBLISHED,
+      createdBy: subjectiveTest.createdBy,
+      updatedBy: subjectiveTest.updatedBy ?? null,
+      createdAt: subjectiveTest.createdAt,
+      updatedAt: subjectiveTest.updatedAt,
     };
   },
 
   toStudentTestCardResponse(
-    test: SubjectiveTestRecord,
+    subjectiveTest: SubjectiveTestRecord,
     ownAttempt: SubjectiveSubmissionRecord | null,
     now: Date,
   ): SubjectiveAvailableTestResponse {
     return {
-      ...toTestSummary(test),
-      availability: getTestAvailability(test, now),
-      displayStatus: getSubmissionDisplayStatus(test, ownAttempt, now),
+      ...toTestSummary(subjectiveTest),
+      availability: getTestAvailability(subjectiveTest, now),
+      displayStatus: getSubmissionDisplayStatus(subjectiveTest, ownAttempt, now),
       submissionId: ownAttempt?.id ?? null,
-      effectiveDeadlineAt: ownAttempt ? computeAttemptDeadline(test, ownAttempt.startedAt) : null,
+      effectiveDeadlineAt: ownAttempt ? computeAttemptDeadline(subjectiveTest, ownAttempt.startedAt) : null,
     };
   },
 
   toStudentAttemptResponse(
-    test: SubjectiveTestRecord,
+    subjectiveTest: SubjectiveTestRecord,
     attempt: SubjectiveSubmissionRecord,
     now: Date,
   ): SubjectiveStudentSubmissionResponse {
-    const testCard = SubjectiveTestMapper.toStudentTestCardResponse(test, attempt, now);
+    const testCard = SubjectiveTestMapper.toStudentTestCardResponse(subjectiveTest, attempt, now);
     return {
       submissionId: attempt.id,
       test: testCard,
@@ -174,7 +174,7 @@ export const SubjectiveTestMapper = {
         testCard.displayStatus === SubjectiveDisplayStatus.CHECKED
           ? {
               marksAwarded: attempt.marksAwarded ?? 0,
-              totalMarks: test.totalMarks,
+              totalMarks: subjectiveTest.totalMarks,
               remarks: attempt.remarks ?? null,
               checkedAt: attempt.checkedAt ?? null,
               hasCheckedAnswerSheet: Boolean(attempt.checkedAnswerSheetPath),
@@ -184,7 +184,7 @@ export const SubjectiveTestMapper = {
   },
 
   toStaffSubmissionResponse(
-    test: SubjectiveTestRecord,
+    subjectiveTest: SubjectiveTestRecord,
     submission: SubjectiveSubmissionRecord,
     student: { id: number; name: string; email: string } | null,
     now: Date,
@@ -193,9 +193,9 @@ export const SubjectiveTestMapper = {
       id: submission.id,
       subjectiveTestId: submission.subjectiveTestId,
       student,
-      displayStatus: getSubmissionDisplayStatus(test, submission, now),
+      displayStatus: getSubmissionDisplayStatus(subjectiveTest, submission, now),
       startedAt: submission.startedAt,
-      effectiveDeadlineAt: computeAttemptDeadline(test, submission.startedAt),
+      effectiveDeadlineAt: computeAttemptDeadline(subjectiveTest, submission.startedAt),
       submittedAt: submission.submittedAt ?? null,
       hasAnswerSheet: Boolean(submission.answerSheetPath),
       answerSheetName: answerSheetDisplayName(submission.answerSheetPath),
@@ -207,24 +207,9 @@ export const SubjectiveTestMapper = {
     };
   },
 
-  toRosterEntryResponse(test: SubjectiveTestRecord, entry: RosterEntryRecord, now: Date): SubjectiveRosterRowResponse {
-    const attempt =
-      entry.submissionId && entry.status !== null && entry.startedAt
-        ? { status: entry.status, startedAt: entry.startedAt }
-        : null;
-    return {
-      studentId: entry.studentId,
-      studentName: entry.studentName,
-      studentEmail: entry.studentEmail,
-      submissionId: entry.submissionId,
-      displayStatus: getSubmissionDisplayStatus(test, attempt, now),
-      startedAt: entry.startedAt,
-      submittedAt: entry.submittedAt,
-      answerSheetName: answerSheetDisplayName(entry.answerSheetPath),
-      marksAwarded: entry.marksAwarded,
-      remarks: entry.remarks,
-      hasCheckedAnswerSheet: entry.hasCheckedAnswerSheet,
-      checkedAt: entry.checkedAt,
-    };
+  /** The display status was already calculated in SQL (subjectiveTest.repo roster query). */
+  toRosterEntryResponse(rosterEntry: RosterEntryRecord): SubjectiveRosterRowResponse {
+    const { answerSheetPath, ...rosterEntryFields } = rosterEntry;
+    return { ...rosterEntryFields, answerSheetName: answerSheetDisplayName(answerSheetPath) };
   },
 };

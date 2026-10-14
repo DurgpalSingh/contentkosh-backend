@@ -3,6 +3,7 @@ import * as path from 'path';
 import { Response } from 'express';
 import { NotFoundError } from '../errors/api.errors';
 import { FILE_STORAGE_CONFIG } from '../config/fileStorage.config';
+import { FILE_PATH_REGEX } from '../constants/file.constants';
 import logger from '../utils/logger';
 
 export type StoredFileDownload = {
@@ -13,7 +14,6 @@ export type StoredFileDownload = {
 
 const ORIGINAL_FILE_NAME_SEPARATOR = '__';
 const MAX_ORIGINAL_FILE_NAME_LENGTH = 100;
-const UNSAFE_FILE_NAME_CHARACTERS = /[^\p{L}\p{M}\p{N} ._-]+/gu;
 
 /**
  * Stores and streams files under one root folder. Callers only use storage keys
@@ -113,9 +113,9 @@ export class FileStorageService {
  */
 export function toStorageSafeFileName(uploadedFile: Express.Multer.File): string {
   const decodedName = Buffer.from(uploadedFile.originalname, 'latin1').toString('utf8');
-  const baseName = path.basename(decodedName.replace(/\\/g, '/'));
+  const baseName = path.basename(decodedName.replace(FILE_PATH_REGEX.BACKSLASHES, '/'));
   const safeName = baseName
-    .replace(UNSAFE_FILE_NAME_CHARACTERS, '_')
+    .replace(FILE_PATH_REGEX.UNSAFE_FILE_NAME_CHARACTERS, '_')
     .split(ORIGINAL_FILE_NAME_SEPARATOR)
     .join('_')
     .trim()
@@ -139,7 +139,9 @@ export function createUniqueFileName(prefix: string | number, extension: string)
  * Paths outside `uploads/` give a `../` key, which `resolveStoragePath` refuses.
  */
 export function toUploadsStorageKey(storedFilePath: string): string {
-  const pathRelativeToCwd = storedFilePath.replace(/\\/g, '/').replace(/^\/+/, '');
+  const pathRelativeToCwd = storedFilePath
+    .replace(FILE_PATH_REGEX.BACKSLASHES, '/')
+    .replace(FILE_PATH_REGEX.LEADING_SLASHES, '');
   const absolutePath = path.resolve(process.cwd(), pathRelativeToCwd);
   return path.relative(FILE_STORAGE_CONFIG.uploadsRootDir, absolutePath).split(path.sep).join('/');
 }
@@ -158,7 +160,7 @@ export function extractOriginalFileName(storageKey: string | null | undefined): 
 }
 
 function toHeaderSafeFileName(fileName: string): string {
-  const safeName = fileName.replace(UNSAFE_FILE_NAME_CHARACTERS, '_').trim();
+  const safeName = fileName.replace(FILE_PATH_REGEX.UNSAFE_FILE_NAME_CHARACTERS, '_').trim();
   return safeName.length > 0 ? safeName : 'file';
 }
 

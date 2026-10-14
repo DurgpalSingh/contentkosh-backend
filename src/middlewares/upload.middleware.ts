@@ -12,6 +12,7 @@ import { SUBJECTIVE_TEST_CONFIG } from '../config/subjectiveTest.config';
 import { FILE_STORAGE_CONFIG, UPLOAD_FOLDERS, uploadFolderDir } from '../config/fileStorage.config';
 import { createUniqueFileName } from '../services/fileStorage.service';
 import { hasPdfSignature } from '../utils/fileSignature.util';
+import { FILE_PATH_REGEX } from '../constants/file.constants';
 import { requestContext } from '../contexts/request-context';
 
 const BYTES_IN_MB = 1024 * 1024;
@@ -327,7 +328,7 @@ export const uploadProfileAssets = (req: Request, res: Response, next: NextFunct
 };
 
 const toPublicAssetPath = (filePath: string): string => {
-  const normalized = filePath.replace(/\\/g, '/');
+  const normalized = filePath.replace(FILE_PATH_REGEX.BACKSLASHES, '/');
   return normalized.startsWith('/') ? normalized : `/${normalized}`;
 };
 
