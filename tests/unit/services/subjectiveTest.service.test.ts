@@ -1,5 +1,10 @@
 import { UserRole } from '@prisma/client';
 import { SubjectiveTestService } from '../../../src/services/subjectiveTest.service';
+import { STUDENT_ATTEMPT_REQUIREMENT } from '../../../src/constants/subjectiveTest.constants';
+import type {
+  SubjectiveStaffSubmissionResponse,
+  SubjectiveStudentSubmissionResponse,
+} from '../../../src/mappers/subjectiveTest.mapper';
 import { ApiError, BadRequestError, NotFoundError } from '../../../src/errors/api.errors';
 import { SubjectiveDisplayStatus, SubjectiveSubmissionFile, SubjectiveSubmissionStatus, TestStatus } from '../../../src/constants/test-enums';
 import * as subjectiveTestRepo from '../../../src/repositories/subjectiveTest.repo';
@@ -343,21 +348,44 @@ describe('SubjectiveTestService', () => {
     });
   });
 
-  describe('findOpenAttemptForStudent (runs before the upload)', () => {
-    it('requires a started, still-open attempt', async () => {
+  describe('findPublishedTestForStudent (one lookup, three attempt requirements)', () => {
+    const { NONE, STARTED, OPEN } = STUDENT_ATTEMPT_REQUIREMENT;
+
+    it('NONE: returns the test without an attempt (start)', async () => {
       repo.findPublishedTestWithOwnAttempt.mockResolvedValue(testWithOwnAttempt());
-      await expect(service.findOpenAttemptForStudent(BUSINESS_ID, 'st-1', STUDENT)).rejects.toThrow('Start the test before submitting');
+      expect((await service.findPublishedTestForStudent(BUSINESS_ID, 'st-1', STUDENT, NONE)).ownAttempt).toBeNull();
+    });
+
+    it('STARTED: needs an attempt, even a finished one (question paper)', async () => {
+      repo.findPublishedTestWithOwnAttempt.mockResolvedValue(testWithOwnAttempt());
+      await expect(service.findPublishedTestForStudent(BUSINESS_ID, 'st-1', STUDENT, STARTED)).rejects.toThrow(
+        'Start the test to view the question paper',
+      );
+
+      repo.findPublishedTestWithOwnAttempt.mockResolvedValue(
+        testWithOwnAttempt({}, buildAttempt({ status: SubjectiveSubmissionStatus.SUBMITTED })),
+      );
+      expect((await service.findPublishedTestForStudent(BUSINESS_ID, 'st-1', STUDENT, STARTED)).ownAttempt.id).toBe('sub-1');
+    });
+
+    it('OPEN: needs a started, still-open attempt (submit, runs before the upload)', async () => {
+      repo.findPublishedTestWithOwnAttempt.mockResolvedValue(testWithOwnAttempt());
+      await expect(service.findPublishedTestForStudent(BUSINESS_ID, 'st-1', STUDENT, OPEN)).rejects.toThrow(
+        'Start the test before submitting',
+      );
 
       repo.findPublishedTestWithOwnAttempt.mockResolvedValue(testWithOwnAttempt({ durationMinutes: 5 }, buildAttempt()));
-      await expect(service.findOpenAttemptForStudent(BUSINESS_ID, 'st-1', STUDENT)).rejects.toThrow('time for this test is over');
+      await expect(service.findPublishedTestForStudent(BUSINESS_ID, 'st-1', STUDENT, OPEN)).rejects.toThrow(
+        'time for this test is over',
+      );
 
       repo.findPublishedTestWithOwnAttempt.mockResolvedValue(testWithOwnAttempt({}, buildAttempt()));
-      expect((await service.findOpenAttemptForStudent(BUSINESS_ID, 'st-1', STUDENT)).attempt.id).toBe('sub-1');
+      expect((await service.findPublishedTestForStudent(BUSINESS_ID, 'st-1', STUDENT, OPEN)).ownAttempt.id).toBe('sub-1');
     });
   });
 
   describe('submitAnswerSheet', () => {
-    const openAttempt = () => ({ subjectiveTest: buildTest(), attempt: buildAttempt() });
+    const openAttempt = () => ({ subjectiveTest: buildTest(), ownAttempt: buildAttempt() });
 
     it("stores the sheet under a key with the student's file name and marks it submitted", async () => {
       repo.markAttemptSubmitted.mockResolvedValue(buildAttempt({ status: SubjectiveSubmissionStatus.SUBMITTED }));
@@ -390,9 +418,10 @@ describe('SubjectiveTestService', () => {
 
     it('refuses to grade an attempt that is still in progress (checked before the upload)', async () => {
       repo.findSubmissionWithTest.mockResolvedValue({ ...buildAttempt(), test: buildTest() });
-      await expect(service.findGradableSubmissionForStaff(BUSINESS_ID, 'st-1', 'sub-1', ADMIN)).rejects.toThrow(
-        'Only submitted answer sheets can be graded',
-      );
+      await expect(
+        service.findSubmission(BUSINESS_ID, 'sub-1', ADMIN, { submittedOnly: true }),
+      ).rejects.toThrow('Only submitted answer sheets can be graded');
+      expect(repo.findSubmissionWithTest).toHaveBeenCalledWith(BUSINESS_ID, 'sub-1', null);
     });
 
     it('rejects marks above the total and a first grade without a checked copy', async () => {
@@ -443,16 +472,20 @@ describe('SubjectiveTestService', () => {
     });
 
     it('hides marks and the checked copy until the submission is checked', async () => {
-      repo.findOwnSubmissionWithTest.mockResolvedValue({
+      repo.findSubmissionWithTest.mockResolvedValue({
         ...buildAttempt({ status: SubjectiveSubmissionStatus.SUBMITTED, marksAwarded: 99, answerSheetPath: 'a.pdf' }),
         test: buildTest(),
       });
-      expect((await service.getOwnAttemptDetail(BUSINESS_ID, 'sub-1', STUDENT)).result).toBeNull();
-      await expect(service.getOwnSubmissionFileDownload(BUSINESS_ID, 'sub-1', SubjectiveSubmissionFile.CHECKED_COPY, STUDENT)).rejects.toThrow(NotFoundError);
+      const ownSubmission = (await service.getSubmissionDetail(BUSINESS_ID, 'sub-1', STUDENT)) as SubjectiveStudentSubmissionResponse;
+      expect(ownSubmission.result).toBeNull();
+      expect(repo.findSubmissionWithTest).toHaveBeenCalledWith(BUSINESS_ID, 'sub-1', STUDENT.id);
+      await expect(
+        service.getSubmissionFileDownload(BUSINESS_ID, 'sub-1', SubjectiveSubmissionFile.CHECKED_COPY, STUDENT),
+      ).rejects.toThrow(NotFoundError);
     });
 
     it('shows marks, remarks and the checked copy once checked', async () => {
-      repo.findOwnSubmissionWithTest.mockResolvedValue({
+      repo.findSubmissionWithTest.mockResolvedValue({
         ...buildAttempt({
           status: SubjectiveSubmissionStatus.CHECKED,
           answerSheetPath: 'a.pdf',
@@ -462,14 +495,41 @@ describe('SubjectiveTestService', () => {
         }),
         test: buildTest(),
       });
-      const ownAttempt = await service.getOwnAttemptDetail(BUSINESS_ID, 'sub-1', STUDENT);
-      expect(ownAttempt.result).toEqual(expect.objectContaining({ marksAwarded: 118, remarks: 'Good', hasCheckedAnswerSheet: true }));
-      expect((await service.getOwnSubmissionFileDownload(BUSINESS_ID, 'sub-1', SubjectiveSubmissionFile.CHECKED_COPY, STUDENT)).storageKey).toBe('c.pdf');
+      const ownSubmission = (await service.getSubmissionDetail(BUSINESS_ID, 'sub-1', STUDENT)) as SubjectiveStudentSubmissionResponse;
+      expect(ownSubmission.result).toEqual(expect.objectContaining({ marksAwarded: 118, remarks: 'Good', hasCheckedAnswerSheet: true }));
+      expect(
+        (await service.getSubmissionFileDownload(BUSINESS_ID, 'sub-1', SubjectiveSubmissionFile.CHECKED_COPY, STUDENT)).storageKey,
+      ).toBe('c.pdf');
     });
 
     it("returns 404 for another student's submission", async () => {
-      repo.findOwnSubmissionWithTest.mockResolvedValue(null);
-      await expect(service.getOwnAttemptDetail(BUSINESS_ID, 'sub-other', STUDENT)).rejects.toThrow(NotFoundError);
+      repo.findSubmissionWithTest.mockResolvedValue(null);
+      await expect(service.getSubmissionDetail(BUSINESS_ID, 'sub-other', STUDENT)).rejects.toThrow(NotFoundError);
+    });
+  });
+
+  describe('submission detail and files for staff (same API as students)', () => {
+    const submittedSheet = { ...buildAttempt({ status: SubjectiveSubmissionStatus.SUBMITTED, answerSheetPath: 'a.pdf' }), test: buildTest() };
+
+    it('gives staff the grading view with the student profile, looked up by submission id only', async () => {
+      repo.findSubmissionWithTest.mockResolvedValue(submittedSheet);
+      (userRepo.findBasicProfileById as jest.Mock).mockResolvedValue({ id: STUDENT.id, name: 'S', email: 's@x.com' });
+
+      const staffView = (await service.getSubmissionDetail(BUSINESS_ID, 'sub-1', ADMIN)) as SubjectiveStaffSubmissionResponse;
+
+      expect(repo.findSubmissionWithTest).toHaveBeenCalledWith(BUSINESS_ID, 'sub-1', null);
+      expect(staffView.student).toEqual({ id: STUDENT.id, name: 'S', email: 's@x.com' });
+      expect(
+        (await service.getSubmissionFileDownload(BUSINESS_ID, 'sub-1', SubjectiveSubmissionFile.ANSWER_SHEET, ADMIN)).storageKey,
+      ).toBe('a.pdf');
+    });
+
+    it('hides the submission from a teacher who did not create the test', async () => {
+      repo.findSubmissionWithTest.mockResolvedValue({ ...submittedSheet, test: buildTest({ createdBy: 999 }) });
+      await expect(service.getSubmissionDetail(BUSINESS_ID, 'sub-1', TEACHER)).rejects.toThrow(NotFoundError);
+      await expect(
+        service.getSubmissionFileDownload(BUSINESS_ID, 'sub-1', SubjectiveSubmissionFile.ANSWER_SHEET, TEACHER),
+      ).rejects.toThrow(NotFoundError);
     });
   });
 });

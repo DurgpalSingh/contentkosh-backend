@@ -2,6 +2,7 @@ import { NextFunction, Response } from 'express';
 import { AuthRequest } from '../dtos/auth.dto';
 import { ApiResponseHandler } from '../utils/apiResponse';
 import { canViewUploadedFile } from '../services/uploadedFileAccess.service';
+import { CACHE_CONTROL_VALUES, HTTP_HEADERS } from '../constants/httpHeaders.constants';
 import logger from '../utils/logger';
 
 /**
@@ -11,7 +12,7 @@ import logger from '../utils/logger';
 export async function authorizeUploadedFileAccess(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   try {
     if (await canViewUploadedFile(req.user!, req.path)) {
-      res.setHeader('Cache-Control', 'private, max-age=300');
+      res.setHeader(HTTP_HEADERS.CACHE_CONTROL, CACHE_CONTROL_VALUES.PRIVATE_SHORT);
       next();
       return;
     }

@@ -5,12 +5,12 @@ import { UserRole } from '@prisma/client';
 import { BadRequestError } from '../errors/api.errors';
 import { IUser } from '../dtos/auth.dto';
 import { UPLOAD_FOLDERS, uploadFolderDir } from '../config/fileStorage.config';
-import { FILE_PATH_REGEX } from '../constants/file.constants';
+import { EDITOR_IMAGE_UPLOAD_CONFIG } from '../config/file-type';
+import { FILE_NAME_RULES, FILE_PATH_REGEX } from '../constants/file.constants';
 import { createUniqueFileName } from './fileStorage.service';
 import logger from '../utils/logger';
 
 const EDITOR_IMAGES_DIR = uploadFolderDir(UPLOAD_FOLDERS.editorImages);
-const EDITOR_IMAGE_WEBP_QUALITY = 80;
 const INVALID_IMAGE_PATH_MESSAGE = 'Invalid file path';
 
 /** Images inserted in rich-text editors. New images go to `<editorDir>/<businessId>/` so access can be checked per business. */
@@ -34,17 +34,17 @@ export class EditorImageService {
   async uploadImage(tempFilePath: string, businessId: number | null | undefined): Promise<string> {
     const businessImageFolder = this.editorImageFolderFor(businessId);
     const imageFilePath = path
-      .join(businessImageFolder, createUniqueFileName('editor', '.webp'))
-      .replace(FILE_PATH_REGEX.BACKSLASHES, '/');
+      .join(businessImageFolder, createUniqueFileName(EDITOR_IMAGE_UPLOAD_CONFIG.fileNamePrefix, EDITOR_IMAGE_UPLOAD_CONFIG.outputExtension))
+      .replace(FILE_PATH_REGEX.BACKSLASHES, FILE_NAME_RULES.PATH_SEPARATOR);
 
     try {
       await fs.promises.mkdir(businessImageFolder, { recursive: true });
-      await sharp(tempFilePath).webp({ quality: EDITOR_IMAGE_WEBP_QUALITY }).toFile(imageFilePath);
+      await sharp(tempFilePath).webp({ quality: EDITOR_IMAGE_UPLOAD_CONFIG.webpQuality }).toFile(imageFilePath);
     } finally {
       await fs.promises.rm(tempFilePath, { force: true });
     }
 
-    const imageUrlPath = `/${imageFilePath}`;
+    const imageUrlPath = `${FILE_NAME_RULES.PATH_SEPARATOR}${imageFilePath}`;
     logger.info(`[EditorImageService] uploaded businessId=${businessId ?? 'none'} path=${imageUrlPath}`);
     return imageUrlPath;
   }

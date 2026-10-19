@@ -2,11 +2,12 @@ import { NextFunction, Response } from 'express';
 import { AuthRequest } from '../dtos/auth.dto';
 import {
   subjectiveTestService,
-  type StaffSubmissionContext,
+  type SubmissionContext,
   type StudentOpenAttemptContext,
 } from '../services/subjectiveTest.service';
 import type { SubjectiveTestRecord } from '../repositories/subjectiveTest.repo';
 import { getBusinessId, getRequestActor, handleTestControllerError } from '../utils/testController.utils';
+import { STUDENT_ATTEMPT_REQUIREMENT } from '../constants/subjectiveTest.constants';
 import logger from '../utils/logger';
 
 const LOADED_ACCESS_CONTEXT = 'subjectiveTestAccessContext';
@@ -35,18 +36,18 @@ export function getLoadedAccessContext<LoadedContext>(res: Response): LoadedCont
 }
 
 export const requireDraftTestBeforeUpload = checkAccessBeforeUpload<SubjectiveTestRecord>('replaceQuestionPaper', (req) =>
-  subjectiveTestService.findDraftTestForStaff(getBusinessId(req), req.params.subjectiveTestId!, getRequestActor(req)),
+  subjectiveTestService.findTestForStaff(getBusinessId(req), req.params.subjectiveTestId!, getRequestActor(req), { draftOnly: true }),
 );
 
-export const requireGradableSubmissionBeforeUpload = checkAccessBeforeUpload<StaffSubmissionContext>('gradeSubmission', (req) =>
-  subjectiveTestService.findGradableSubmissionForStaff(
-    getBusinessId(req),
-    req.params.subjectiveTestId!,
-    req.params.submissionId!,
-    getRequestActor(req),
-  ),
+export const requireGradableSubmissionBeforeUpload = checkAccessBeforeUpload<SubmissionContext>('gradeSubmission', (req) =>
+  subjectiveTestService.findSubmission(getBusinessId(req), req.params.submissionId!, getRequestActor(req), { submittedOnly: true }),
 );
 
 export const requireOpenAttemptBeforeUpload = checkAccessBeforeUpload<StudentOpenAttemptContext>('submitAnswerSheet', (req) =>
-  subjectiveTestService.findOpenAttemptForStudent(getBusinessId(req), req.params.subjectiveTestId!, getRequestActor(req)),
+  subjectiveTestService.findPublishedTestForStudent(
+    getBusinessId(req),
+    req.params.subjectiveTestId!,
+    getRequestActor(req),
+    STUDENT_ATTEMPT_REQUIREMENT.OPEN,
+  ),
 );

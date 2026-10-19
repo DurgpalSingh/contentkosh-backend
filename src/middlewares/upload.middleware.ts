@@ -12,7 +12,7 @@ import { SUBJECTIVE_TEST_CONFIG } from '../config/subjectiveTest.config';
 import { FILE_STORAGE_CONFIG, UPLOAD_FOLDERS, uploadFolderDir } from '../config/fileStorage.config';
 import { createUniqueFileName } from '../services/fileStorage.service';
 import { hasPdfSignature } from '../utils/fileSignature.util';
-import { FILE_PATH_REGEX } from '../constants/file.constants';
+import { FILE_NAME_RULES, FILE_PATH_REGEX } from '../constants/file.constants';
 import { requestContext } from '../contexts/request-context';
 
 const BYTES_IN_MB = 1024 * 1024;
@@ -219,7 +219,7 @@ const editorImageStorage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, EDITOR_IMAGE_UPLOAD_CONFIG.tempDir),
   filename: (_req, file, cb) => {
     const extension = path.extname(file.originalname).toLowerCase() || EDITOR_IMAGE_UPLOAD_CONFIG.defaultExtension;
-    cb(null, createUniqueFileName('tmp', extension));
+    cb(null, createUniqueFileName(FILE_NAME_RULES.TEMP_FILE_PREFIX, extension));
   },
 });
 
@@ -241,7 +241,7 @@ const editorImageMulter = multer({
  * The controller (editorImage.controller) converts it to WebP via sharp.
  */
 export const uploadEditorImageFile = (req: Request, res: Response, next: NextFunction) => {
-  editorImageMulter.single('image')(req, res, requestContext.bind((error: any) => {
+  editorImageMulter.single(EDITOR_IMAGE_UPLOAD_CONFIG.fieldName)(req, res, requestContext.bind((error: any) => {
     if (error) return normalizeUploadError(error, next);
     next();
   }));
@@ -328,8 +328,8 @@ export const uploadProfileAssets = (req: Request, res: Response, next: NextFunct
 };
 
 const toPublicAssetPath = (filePath: string): string => {
-  const normalized = filePath.replace(FILE_PATH_REGEX.BACKSLASHES, '/');
-  return normalized.startsWith('/') ? normalized : `/${normalized}`;
+  const normalized = filePath.replace(FILE_PATH_REGEX.BACKSLASHES, FILE_NAME_RULES.PATH_SEPARATOR);
+  return normalized.startsWith(FILE_NAME_RULES.PATH_SEPARATOR) ? normalized : `${FILE_NAME_RULES.PATH_SEPARATOR}${normalized}`;
 };
 
 const parseBodyJsonObject = (value: unknown): Record<string, unknown> => {
@@ -480,7 +480,7 @@ ensureDirExists(FILE_STORAGE_CONFIG.uploadsTempDir);
 const privatePdfUpload = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => cb(null, FILE_STORAGE_CONFIG.uploadsTempDir),
-    filename: (_req, _file, cb) => cb(null, createUniqueFileName('tmp', SUBJECTIVE_TEST_CONFIG.pdfExtension)),
+    filename: (_req, _file, cb) => cb(null, createUniqueFileName(FILE_NAME_RULES.TEMP_FILE_PREFIX, SUBJECTIVE_TEST_CONFIG.pdfExtension)),
   }),
   limits: { fileSize: SUBJECTIVE_TEST_CONFIG.maxPdfSizeBytes },
   fileFilter: (_req, file, cb) => {

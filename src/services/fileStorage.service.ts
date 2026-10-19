@@ -3,7 +3,8 @@ import * as path from 'path';
 import { Response } from 'express';
 import { NotFoundError } from '../errors/api.errors';
 import { FILE_STORAGE_CONFIG } from '../config/fileStorage.config';
-import { FILE_PATH_REGEX } from '../constants/file.constants';
+import { FILE_ENTITY_LABEL, FILE_NAME_RULES, FILE_PATH_REGEX } from '../constants/file.constants';
+import { CACHE_CONTROL_VALUES, HTTP_HEADERS } from '../constants/httpHeaders.constants';
 import logger from '../utils/logger';
 
 export type StoredFileDownload = {
@@ -12,7 +13,6 @@ export type StoredFileDownload = {
   contentType: string;
 };
 
-const ORIGINAL_FILE_NAME_SEPARATOR = '__';
 const MAX_ORIGINAL_FILE_NAME_LENGTH = 100;
 
 /**
@@ -26,13 +26,13 @@ export class FileStorageService {
   resolveStoragePath(storageKey: string): string {
     const absolutePath = path.resolve(this.rootDir, storageKey);
     if (!absolutePath.startsWith(this.rootDir + path.sep)) {
-      throw new NotFoundError('File');
+      throw new NotFoundError(FILE_ENTITY_LABEL);
     }
     return absolutePath;
   }
 
   joinStorageKey(...keyParts: Array<string | number>): string {
-    return keyParts.map(String).join('/');
+    return keyParts.map(String).join(FILE_NAME_RULES.PATH_SEPARATOR);
   }
 
   /**
@@ -69,16 +69,16 @@ export class FileStorageService {
     const fileStats = await fs.promises.stat(absolutePath).catch(() => null);
     if (!fileStats?.isFile()) {
       logger.warn(`[file-storage] stream missing storageKey=${download.storageKey}`);
-      throw new NotFoundError('File');
+      throw new NotFoundError(FILE_ENTITY_LABEL);
     }
 
-    res.setHeader('Content-Type', download.contentType);
-    res.setHeader('Content-Length', fileStats.size);
+    res.setHeader(HTTP_HEADERS.CONTENT_TYPE, download.contentType);
+    res.setHeader(HTTP_HEADERS.CONTENT_LENGTH, fileStats.size);
     res.setHeader(
-      'Content-Disposition',
+      HTTP_HEADERS.CONTENT_DISPOSITION,
       `inline; filename*=UTF-8''${encodeURIComponent(toHeaderSafeFileName(download.downloadFileName))}`,
     );
-    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader(HTTP_HEADERS.CACHE_CONTROL, CACHE_CONTROL_VALUES.PRIVATE_NO_STORE);
 
     const fileStream = fs.createReadStream(absolutePath);
     fileStream.on('error', (error) => {
@@ -113,14 +113,14 @@ export class FileStorageService {
  */
 export function toStorageSafeFileName(uploadedFile: Express.Multer.File): string {
   const decodedName = Buffer.from(uploadedFile.originalname, 'latin1').toString('utf8');
-  const baseName = path.basename(decodedName.replace(FILE_PATH_REGEX.BACKSLASHES, '/'));
+  const baseName = path.basename(decodedName.replace(FILE_PATH_REGEX.BACKSLASHES, FILE_NAME_RULES.PATH_SEPARATOR));
   const safeName = baseName
-    .replace(FILE_PATH_REGEX.UNSAFE_FILE_NAME_CHARACTERS, '_')
-    .split(ORIGINAL_FILE_NAME_SEPARATOR)
-    .join('_')
+    .replace(FILE_PATH_REGEX.UNSAFE_FILE_NAME_CHARACTERS, FILE_NAME_RULES.UNSAFE_CHARACTER_REPLACEMENT)
+    .split(FILE_NAME_RULES.ORIGINAL_NAME_SEPARATOR)
+    .join(FILE_NAME_RULES.UNSAFE_CHARACTER_REPLACEMENT)
     .trim()
     .slice(-MAX_ORIGINAL_FILE_NAME_LENGTH);
-  return safeName || 'file.pdf';
+  return safeName || FILE_NAME_RULES.FALLBACK_PDF_NAME;
 }
 
 /** `<prefix>-<timestamp>-<random>`: unique, so a new upload never overwrites an existing file. */
@@ -140,28 +140,28 @@ export function createUniqueFileName(prefix: string | number, extension: string)
  */
 export function toUploadsStorageKey(storedFilePath: string): string {
   const pathRelativeToCwd = storedFilePath
-    .replace(FILE_PATH_REGEX.BACKSLASHES, '/')
+    .replace(FILE_PATH_REGEX.BACKSLASHES, FILE_NAME_RULES.PATH_SEPARATOR)
     .replace(FILE_PATH_REGEX.LEADING_SLASHES, '');
   const absolutePath = path.resolve(process.cwd(), pathRelativeToCwd);
-  return path.relative(FILE_STORAGE_CONFIG.uploadsRootDir, absolutePath).split(path.sep).join('/');
+  return path.relative(FILE_STORAGE_CONFIG.uploadsRootDir, absolutePath).split(path.sep).join(FILE_NAME_RULES.PATH_SEPARATOR);
 }
 
 /** `<generatedName>__<originalFileName>` — keeps the uploader's name without a DB column. */
 export function appendOriginalFileName(generatedName: string, originalFileName: string): string {
-  return `${generatedName}${ORIGINAL_FILE_NAME_SEPARATOR}${originalFileName}`;
+  return `${generatedName}${FILE_NAME_RULES.ORIGINAL_NAME_SEPARATOR}${originalFileName}`;
 }
 
 export function extractOriginalFileName(storageKey: string | null | undefined): string | null {
   if (!storageKey) return null;
-  const fileName = storageKey.slice(storageKey.lastIndexOf('/') + 1);
-  const separatorIndex = fileName.indexOf(ORIGINAL_FILE_NAME_SEPARATOR);
+  const fileName = storageKey.slice(storageKey.lastIndexOf(FILE_NAME_RULES.PATH_SEPARATOR) + 1);
+  const separatorIndex = fileName.indexOf(FILE_NAME_RULES.ORIGINAL_NAME_SEPARATOR);
   if (separatorIndex < 0) return null;
-  return fileName.slice(separatorIndex + ORIGINAL_FILE_NAME_SEPARATOR.length) || null;
+  return fileName.slice(separatorIndex + FILE_NAME_RULES.ORIGINAL_NAME_SEPARATOR.length) || null;
 }
 
 function toHeaderSafeFileName(fileName: string): string {
-  const safeName = fileName.replace(FILE_PATH_REGEX.UNSAFE_FILE_NAME_CHARACTERS, '_').trim();
-  return safeName.length > 0 ? safeName : 'file';
+  const safeName = fileName.replace(FILE_PATH_REGEX.UNSAFE_FILE_NAME_CHARACTERS, FILE_NAME_RULES.UNSAFE_CHARACTER_REPLACEMENT).trim();
+  return safeName.length > 0 ? safeName : FILE_NAME_RULES.FALLBACK_NAME;
 }
 
 /** The one storage for every feature: keys are relative to `uploads/` (e.g. `content/x.pdf`, `subjective/1/st-1/...`). */

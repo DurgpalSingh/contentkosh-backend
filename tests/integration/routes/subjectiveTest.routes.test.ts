@@ -151,7 +151,7 @@ describe('Subjective test routes', () => {
       repo.findPublishedTestsWithOwnAttempt.mockResolvedValue([]);
       expect((await request(app).get(`${BASE}/available`)).status).toBe(200);
 
-      repo.findOwnSubmissionWithTest.mockResolvedValue(null);
+      repo.findSubmissionWithTest.mockResolvedValue(null);
       const ownSubmissionResponse = await request(app).get(`${BASE}/submissions/sub-1`);
       expect(ownSubmissionResponse.status).toBe(404);
       expect(ownSubmissionResponse.body.message).toBe('Submission not found');
@@ -159,7 +159,7 @@ describe('Subjective test routes', () => {
     });
   });
 
-  describe('submission file downloads (one route per role, file chosen by the last URL segment)', () => {
+  describe('submission detail and files (one route for staff and students)', () => {
     const CHECKED_SHEET = {
       ...SUBMITTED_SHEET,
       status: SubjectiveSubmissionStatus.CHECKED,
@@ -168,26 +168,40 @@ describe('Subjective test routes', () => {
 
     beforeEach(() => fileStorage.streamToResponse.mockImplementation(async (res) => void res.status(200).end()));
 
-    it('streams the answer sheet and the checked copy to staff', async () => {
+    it('gives staff the grading view and both files on the shared routes', async () => {
       repo.findSubmissionWithTest.mockResolvedValue({ ...CHECKED_SHEET, test: DRAFT_TEST });
 
-      expect((await request(app).get(`${BASE}/st-1/submissions/sub-1/answer-sheet`)).status).toBe(200);
-      expect((await request(app).get(`${BASE}/st-1/submissions/sub-1/checked-answer-sheet`)).status).toBe(200);
+      const detailResponse = await request(app).get(`${BASE}/submissions/sub-1`);
+      expect(detailResponse.status).toBe(200);
+      expect(detailResponse.body.data).toEqual(expect.objectContaining({ id: 'sub-1', marksAwarded: null, checkedBy: null }));
+      expect((await request(app).get(`${BASE}/submissions/sub-1/answer-sheet`)).status).toBe(200);
+      expect((await request(app).get(`${BASE}/submissions/sub-1/checked-answer-sheet`)).status).toBe(200);
       expect(fileStorage.streamToResponse.mock.calls.map(([, download]) => download.storageKey)).toEqual(['a.pdf', 'checked.pdf']);
+      expect(repo.findSubmissionWithTest).toHaveBeenCalledWith(1, 'sub-1', null);
     });
 
     it('streams the student their own files and hides the checked copy until checked', async () => {
       mockUserRole = UserRole.STUDENT;
-      repo.findOwnSubmissionWithTest.mockResolvedValue({ ...SUBMITTED_SHEET, test: DRAFT_TEST });
+      mockUserId = 42;
+      repo.findSubmissionWithTest.mockResolvedValue({ ...SUBMITTED_SHEET, test: DRAFT_TEST });
 
       expect((await request(app).get(`${BASE}/submissions/sub-1/answer-sheet`)).status).toBe(200);
       const checkedCopyResponse = await request(app).get(`${BASE}/submissions/sub-1/checked-answer-sheet`);
       expect(checkedCopyResponse.status).toBe(404);
       expect(checkedCopyResponse.body.message).toBe('Checked answer sheet not found');
+      expect(repo.findSubmissionWithTest).toHaveBeenCalledWith(1, 'sub-1', 42);
+    });
+
+    it('no longer serves the old staff URLs that included the test id', async () => {
+      repo.findSubmissionWithTest.mockResolvedValue({ ...CHECKED_SHEET, test: DRAFT_TEST });
+      expect((await request(app).get(`${BASE}/st-1/submissions/sub-1`)).status).toBe(404);
+      expect((await request(app).get(`${BASE}/st-1/submissions/sub-1/answer-sheet`)).status).toBe(404);
+      expect((await request(app).put(`${BASE}/st-1/submissions/sub-1/grade`).field('data', '{}')).status).toBe(404);
+      expect(repo.findSubmissionWithTest).not.toHaveBeenCalled();
     });
 
     it('returns 404 for an unknown file name without loading the submission', async () => {
-      const unknownFileResponse = await request(app).get(`${BASE}/st-1/submissions/sub-1/question-paper.exe`);
+      const unknownFileResponse = await request(app).get(`${BASE}/submissions/sub-1/question-paper.exe`);
       expect(unknownFileResponse.status).toBe(404);
       expect(repo.findSubmissionWithTest).not.toHaveBeenCalled();
     });
@@ -301,7 +315,7 @@ describe('Subjective test routes', () => {
     it('validates marks from the data field', async () => {
       repo.findSubmissionWithTest.mockResolvedValue({ ...SUBMITTED_SHEET, test: { ...DRAFT_TEST, status: TestStatus.PUBLISHED } });
       const gradeResponse = await request(app)
-        .put(`${BASE}/st-1/submissions/sub-1/grade`)
+        .put(`${BASE}/submissions/sub-1/grade`)
         .field('data', JSON.stringify({ marksAwarded: -1 }));
       expect(gradeResponse.status).toBe(400);
       expect(gradeResponse.body.message).toContain('marksAwarded');
@@ -312,11 +326,12 @@ describe('Subjective test routes', () => {
       repo.saveGrade.mockResolvedValue({ ...SUBMITTED_SHEET, status: SubjectiveSubmissionStatus.CHECKED });
 
       const gradeResponse = await request(app)
-        .put(`${BASE}/st-1/submissions/sub-1/grade`)
+        .put(`${BASE}/submissions/sub-1/grade`)
         .field('data', JSON.stringify({ marksAwarded: 118, remarks: 'Good structure' }))
         .attach('checkedAnswerSheet', REAL_PDF, PDF_ATTACHMENT);
 
       expect(gradeResponse.status).toBe(200);
+      expect(repo.findSubmissionWithTest).toHaveBeenCalledWith(1, 'sub-1', null);
       expect(repo.saveGrade).toHaveBeenCalledWith(
         'sub-1',
         null,

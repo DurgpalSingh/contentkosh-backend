@@ -7,7 +7,14 @@ import {
   isSubjectiveDisplayStatus,
   isSubjectiveSubmissionFile,
 } from '../constants/test-enums';
+import { UserRole } from '@prisma/client';
 import { SUBJECTIVE_TEST_CONFIG } from '../config/subjectiveTest.config';
+import { FILE_ENTITY_LABEL } from '../constants/file.constants';
+import {
+  SUBJECTIVE_TEST_DOWNLOAD_NAMES,
+  SUBJECTIVE_TEST_LABELS,
+  SUBJECTIVE_TEST_QUERY_PARAMS,
+} from '../constants/subjectiveTest.constants';
 import {
   appendOriginalFileName,
   createUniqueFileName,
@@ -21,7 +28,7 @@ import { parseOptionalIntQueryParam, parseOptionalStringQueryParam } from './tes
 import { pickDefined } from './objectUtils';
 import logger from './logger';
 
-const { timeToleranceMs } = SUBJECTIVE_TEST_CONFIG;
+const { timeToleranceMs, storageNames, pdfExtension } = SUBJECTIVE_TEST_CONFIG;
 
 type TestSchedule = { startAt: Date; deadlineAt: Date; durationMinutes: number };
 type AttemptTiming = { status: number; startedAt: Date };
@@ -68,20 +75,8 @@ export function assertDeadlineAfterStart(startAt: Date, deadlineAt: Date): void 
   }
 }
 
-/**
- * Create/update DTO fields saved as sent (dates are converted separately). An explicit list, because the
- * DTO keeps unknown body properties (e.g. `status`, `createdBy`), which must never reach the DB.
- */
-export const SUBJECTIVE_TEST_DTO_FIELDS = [
-  'batchId',
-  'subjectId',
-  'name',
-  'paperType',
-  'description',
-  'instructions',
-  'totalMarks',
-  'durationMinutes',
-] as const;
+/** Admins (and super admins) manage every subjective test in the business; teachers only their own. */
+export const isAdminRole = (role: UserRole): boolean => role === UserRole.ADMIN || role === UserRole.SUPERADMIN;
 
 // ---------------------------------------------------------------------------
 // Storage keys: subjective/<businessId>/<testId>/...  (a new key per upload, never overwritten)
@@ -94,7 +89,7 @@ export function subjectiveTestStorageFolder(businessId: number, subjectiveTestId
 export function buildQuestionPaperStorageKey(businessId: number, subjectiveTestId: string): string {
   const questionPaperStorageKey = uploadsFileStorage.joinStorageKey(
     subjectiveTestStorageFolder(businessId, subjectiveTestId),
-    createUniqueFileName('question-paper', SUBJECTIVE_TEST_CONFIG.pdfExtension),
+    createUniqueFileName(storageNames.questionPaperFilePrefix, pdfExtension),
   );
   logger.debug(`[subjective-test] question paper storage key built storageKey=${questionPaperStorageKey}`);
   return questionPaperStorageKey;
@@ -109,7 +104,7 @@ export function buildAnswerSheetStorageKey(
 ): string {
   const answerSheetStorageKey = uploadsFileStorage.joinStorageKey(
     subjectiveTestStorageFolder(businessId, subjectiveTestId),
-    'answers',
+    storageNames.answerSheetsFolder,
     appendOriginalFileName(createUniqueFileStem(studentId), toStorageSafeFileName(uploadedFile)),
   );
   logger.debug(`[subjective-test] answer sheet storage key built storageKey=${answerSheetStorageKey}`);
@@ -119,8 +114,8 @@ export function buildAnswerSheetStorageKey(
 export function buildCheckedCopyStorageKey(businessId: number, subjectiveTestId: string, submissionId: string): string {
   const checkedCopyStorageKey = uploadsFileStorage.joinStorageKey(
     subjectiveTestStorageFolder(businessId, subjectiveTestId),
-    'checked',
-    createUniqueFileName(submissionId, SUBJECTIVE_TEST_CONFIG.pdfExtension),
+    storageNames.checkedCopiesFolder,
+    createUniqueFileName(submissionId, pdfExtension),
   );
   logger.debug(`[subjective-test] checked copy storage key built storageKey=${checkedCopyStorageKey}`);
   return checkedCopyStorageKey;
@@ -132,7 +127,7 @@ export function buildCheckedCopyStorageKey(businessId: number, subjectiveTestId:
 
 /** The question paper is named after the paper type, e.g. "GS Paper I.pdf". */
 export function questionPaperDisplayName(subjectiveTest: Pick<TestFileFields, 'paperType' | 'questionPaperPath'>): string | null {
-  return subjectiveTest.questionPaperPath ? `${subjectiveTest.paperType.trim() || 'Question paper'}.pdf` : null;
+  return subjectiveTest.questionPaperPath ? `${subjectiveTest.paperType.trim() || SUBJECTIVE_TEST_DOWNLOAD_NAMES.DEFAULT_QUESTION_PAPER}${pdfExtension}` : null;
 }
 
 export function answerSheetDisplayName(answerSheetPath: string | null): string | null {
@@ -149,14 +144,14 @@ const pdfDownload = (storageKey: string | null, downloadFileName: string, missin
 };
 
 export function questionPaperDownload(subjectiveTest: TestFileFields): StoredFileDownload {
-  return pdfDownload(subjectiveTest.questionPaperPath, questionPaperDisplayName(subjectiveTest) ?? '', 'Question paper');
+  return pdfDownload(subjectiveTest.questionPaperPath, questionPaperDisplayName(subjectiveTest) ?? '', SUBJECTIVE_TEST_LABELS.QUESTION_PAPER);
 }
 
 /** Reads the requested submission file from the last URL segment (`answer-sheet` / `checked-answer-sheet`). */
 export function parseSubmissionFile(urlSegment: unknown): SubjectiveSubmissionFile {
   if (!isSubjectiveSubmissionFile(urlSegment)) {
     logger.warn(`[subjective-test] download rejected: unknown submission file file=${String(urlSegment)}`);
-    throw new NotFoundError('File');
+    throw new NotFoundError(FILE_ENTITY_LABEL);
   }
   return urlSegment;
 }
@@ -168,12 +163,17 @@ export function submissionFileDownload(
   submissionFile: SubjectiveSubmissionFile,
 ): StoredFileDownload {
   if (submissionFile === SubjectiveSubmissionFile.CHECKED_COPY) {
-    return pdfDownload(submission.checkedAnswerSheetPath, `${subjectiveTest.name} - checked copy.pdf`, 'Checked answer sheet');
+    return pdfDownload(
+      submission.checkedAnswerSheetPath,
+      `${subjectiveTest.name}${SUBJECTIVE_TEST_DOWNLOAD_NAMES.CHECKED_COPY_SUFFIX}${pdfExtension}`,
+      SUBJECTIVE_TEST_LABELS.CHECKED_ANSWER_SHEET,
+    );
   }
   return pdfDownload(
     submission.answerSheetPath,
-    answerSheetDisplayName(submission.answerSheetPath) ?? `${subjectiveTest.name} - answer sheet.pdf`,
-    'Answer sheet',
+    answerSheetDisplayName(submission.answerSheetPath) ??
+      `${subjectiveTest.name}${SUBJECTIVE_TEST_DOWNLOAD_NAMES.ANSWER_SHEET_SUFFIX}${pdfExtension}`,
+    SUBJECTIVE_TEST_LABELS.ANSWER_SHEET,
   );
 }
 
@@ -188,14 +188,16 @@ export type SubmissionListFilters = {
   pageSize: number;
 };
 
+const { STATUS, BATCH_ID, PAPER_TYPE, PAGE, LIMIT, SEARCH } = SUBJECTIVE_TEST_QUERY_PARAMS;
+
 export type StaffTestListFilters = { status?: number; batchId?: number; paperType?: string };
 
 export function parseStaffTestListFilters(query: Record<string, unknown>): StaffTestListFilters {
   const filters = pickDefined(
     {
-      status: parseOptionalIntQueryParam(query.status, 'status'),
-      batchId: parseOptionalIntQueryParam(query.batchId, 'batchId'),
-      paperType: parseOptionalStringQueryParam(query.paperType, 'paperType'),
+      status: parseOptionalIntQueryParam(query[STATUS], STATUS),
+      batchId: parseOptionalIntQueryParam(query[BATCH_ID], BATCH_ID),
+      paperType: parseOptionalStringQueryParam(query[PAPER_TYPE], PAPER_TYPE),
     },
     ['status', 'batchId', 'paperType'],
   );
@@ -209,17 +211,17 @@ function rejectInvalidListFilter(message: string, query: Record<string, unknown>
 }
 
 export function parseSubmissionListFilters(query: Record<string, unknown>): SubmissionListFilters {
-  const displayStatus = parseOptionalStringQueryParam(query.status, 'status');
+  const displayStatus = parseOptionalStringQueryParam(query[STATUS], STATUS);
   if (displayStatus !== undefined && !isSubjectiveDisplayStatus(displayStatus)) rejectInvalidListFilter('Invalid status', query);
-  const page = parseOptionalIntQueryParam(query.page, 'page') ?? 1;
-  const pageSize = parseOptionalIntQueryParam(query.limit, 'limit') ?? SUBJECTIVE_TEST_CONFIG.submissionsDefaultPageSize;
-  if (page < 1) rejectInvalidListFilter('Invalid page', query);
+  const page = parseOptionalIntQueryParam(query[PAGE], PAGE) ?? SUBJECTIVE_TEST_CONFIG.firstPage;
+  const pageSize = parseOptionalIntQueryParam(query[LIMIT], LIMIT) ?? SUBJECTIVE_TEST_CONFIG.submissionsDefaultPageSize;
+  if (page < SUBJECTIVE_TEST_CONFIG.firstPage) rejectInvalidListFilter('Invalid page', query);
   if (pageSize < 1) rejectInvalidListFilter('Invalid limit', query);
   const filters: SubmissionListFilters = {
     ...pickDefined(
       {
         displayStatus,
-        searchText: parseOptionalStringQueryParam(query.search, 'search')?.trim().toLowerCase() || undefined,
+        searchText: parseOptionalStringQueryParam(query[SEARCH], SEARCH)?.trim().toLowerCase() || undefined,
       },
       ['displayStatus', 'searchText'],
     ),

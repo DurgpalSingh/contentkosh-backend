@@ -47,6 +47,20 @@ export const MIME_TYPES = {
   DEFAULT: 'application/octet-stream'
 };
 
+/** Entity name for missing files: `NotFoundError(FILE_ENTITY_LABEL)` → "File not found". */
+export const FILE_ENTITY_LABEL = 'File';
+
+export const FILE_NAME_RULES = {
+  /** Between the generated name and the uploader's name in a storage key: `<generated>__<original>`. */
+  ORIGINAL_NAME_SEPARATOR: '__',
+  UNSAFE_CHARACTER_REPLACEMENT: '_',
+  /** Separator in storage keys and URL paths (on every OS). */
+  PATH_SEPARATOR: '/',
+  TEMP_FILE_PREFIX: 'tmp',
+  FALLBACK_PDF_NAME: 'file.pdf',
+  FALLBACK_NAME: 'file',
+} as const;
+
 export const FILE_PATH_REGEX = {
   /** Windows separators, to normalise paths to `/`. */
   BACKSLASHES: /\\/g,

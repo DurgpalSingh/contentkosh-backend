@@ -23,9 +23,8 @@ export const subjectiveTestRouter = Router();
 const STAFF_ROLES = [UserRole.ADMIN, UserRole.TEACHER, UserRole.SUPERADMIN] as const;
 const { uploadFieldNames } = SUBJECTIVE_TEST_CONFIG;
 
-// ==================== SUBJECTIVE TEST ROUTES ====================
-// Files are PDFs only (max 20MB) and are streamed through these routes; they are never public URLs.
-// Upload routes check access BEFORE the upload middleware, so a refused request never writes a file.
+// Files are streamed through these routes, never served by URL. Upload routes check access before the
+// upload middleware, so a refused request never writes a file.
 
 // Static routes MUST come before parameterized routes
 /**
@@ -121,8 +120,10 @@ subjectiveTestRouter.post(
  * @swagger
  * /api/business/{businessId}/subjective-tests/submissions/{submissionId}:
  *   get:
- *     summary: Get the authenticated student's own submission
- *     description: Marks, remarks and the checked copy are included only once the submission is CHECKED.
+ *     summary: Get one submission (staff grading view, or the student's own view)
+ *     description: |
+ *       Staff (admin, the teacher who created the test, super admin) get the grading view with the student's profile.
+ *       A student gets only their own submission; marks, remarks and the checked copy are included once it is CHECKED.
  *     tags: [SubjectiveTests]
  *     security:
  *       - bearerAuth: []
@@ -148,24 +149,26 @@ subjectiveTestRouter.post(
  *                 - type: object
  *                   properties:
  *                     data:
- *                       $ref: '#/components/schemas/SubjectiveStudentSubmission'
+ *                       oneOf:
+ *                         - $ref: '#/components/schemas/SubjectiveStaffSubmission'
+ *                         - $ref: '#/components/schemas/SubjectiveStudentSubmission'
  *       404:
  *         description: Submission not found
  */
 subjectiveTestRouter.get(
   '/:businessId/subjective-tests/submissions/:submissionId',
-  authorize(UserRole.STUDENT),
+  authorize(UserRole.STUDENT, ...STAFF_ROLES),
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('submissionId'),
-  subjectiveTestController.getOwnAttemptDetail,
+  subjectiveTestController.getSubmissionDetail,
 );
 
 /**
  * @swagger
  * /api/business/{businessId}/subjective-tests/submissions/{submissionId}/answer-sheet:
  *   get:
- *     summary: Download the authenticated student's submitted answer sheet
+ *     summary: Download a submitted answer sheet (staff, or the student's own)
  *     tags: [SubjectiveTests]
  *     security:
  *       - bearerAuth: []
@@ -196,7 +199,7 @@ subjectiveTestRouter.get(
  * @swagger
  * /api/business/{businessId}/subjective-tests/submissions/{submissionId}/checked-answer-sheet:
  *   get:
- *     summary: Download the latest checked copy of the authenticated student's answer sheet
+ *     summary: Download the latest checked copy of an answer sheet (staff, or the student's own)
  *     description: Available only once the submission is CHECKED.
  *     tags: [SubjectiveTests]
  *     security:
@@ -226,11 +229,76 @@ subjectiveTestRouter.get(
 // Serves both documented paths above: `answer-sheet` and `checked-answer-sheet`.
 subjectiveTestRouter.get(
   '/:businessId/subjective-tests/submissions/:submissionId/:submissionFile',
-  authorize(UserRole.STUDENT),
+  authorize(UserRole.STUDENT, ...STAFF_ROLES),
   validateIdParam('businessId'),
   authorizeBusinessAccess,
   validateStringIdParam('submissionId'),
-  subjectiveTestController.downloadOwnSubmissionFile,
+  subjectiveTestController.downloadSubmissionFile,
+);
+
+/**
+ * @swagger
+ * /api/business/{businessId}/subjective-tests/submissions/{submissionId}/grade:
+ *   put:
+ *     summary: Add or update marks, remarks and the checked answer sheet
+ *     description: The checked PDF is required the first time; later updates may change marks/remarks only. Sending a new PDF replaces the previous checked copy.
+ *     tags: [SubjectiveTests]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: businessId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: path
+ *         name: submissionId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required: [data]
+ *             properties:
+ *               data:
+ *                 type: string
+ *                 description: JSON string matching GradeSubjectiveSubmissionRequest
+ *               checkedAnswerSheet:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       200:
+ *         description: Submission graded successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/ApiResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       $ref: '#/components/schemas/SubjectiveStaffSubmission'
+ *       400:
+ *         description: Invalid marks/file, or the submission is not submitted yet
+ *       404:
+ *         description: Submission not found
+ *       409:
+ *         description: Updated by someone else at the same time
+ */
+subjectiveTestRouter.put(
+  '/:businessId/subjective-tests/submissions/:submissionId/grade',
+  authorize(...STAFF_ROLES),
+  validateIdParam('businessId'),
+  authorizeBusinessAccess,
+  validateStringIdParam('submissionId'),
+  requireGradableSubmissionBeforeUpload,
+  createPrivatePdfUpload({ fieldName: uploadFieldNames.checkedAnswerSheet }),
+  validateDto(GradeSubjectiveSubmissionDto),
+  subjectiveTestController.gradeSubmission,
 );
 
 /**
@@ -728,206 +796,4 @@ subjectiveTestRouter.get(
   authorizeBusinessAccess,
   validateStringIdParam('subjectiveTestId'),
   subjectiveTestController.listRosterForStaff,
-);
-
-/**
- * @swagger
- * /api/business/{businessId}/subjective-tests/{subjectiveTestId}/submissions/{submissionId}:
- *   get:
- *     summary: Get one submission with grading details
- *     tags: [SubjectiveTests]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: businessId
- *         required: true
- *         schema:
- *           type: integer
- *       - in: path
- *         name: subjectiveTestId
- *         required: true
- *         schema:
- *           type: string
- *       - in: path
- *         name: submissionId
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Submission fetched successfully
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       $ref: '#/components/schemas/SubjectiveStaffSubmission'
- *       404:
- *         description: Submission not found
- */
-subjectiveTestRouter.get(
-  '/:businessId/subjective-tests/:subjectiveTestId/submissions/:submissionId',
-  authorize(...STAFF_ROLES),
-  validateIdParam('businessId'),
-  authorizeBusinessAccess,
-  validateStringIdParam('subjectiveTestId'),
-  validateStringIdParam('submissionId'),
-  subjectiveTestController.getSubmissionDetailForStaff,
-);
-
-/**
- * @swagger
- * /api/business/{businessId}/subjective-tests/{subjectiveTestId}/submissions/{submissionId}/answer-sheet:
- *   get:
- *     summary: Download a student's original answer sheet
- *     tags: [SubjectiveTests]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: businessId
- *         required: true
- *         schema:
- *           type: integer
- *       - in: path
- *         name: subjectiveTestId
- *         required: true
- *         schema:
- *           type: string
- *       - in: path
- *         name: submissionId
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: PDF file
- *         content:
- *           application/pdf:
- *             schema:
- *               type: string
- *               format: binary
- *       404:
- *         description: Answer sheet not found
- */
-
-/**
- * @swagger
- * /api/business/{businessId}/subjective-tests/{subjectiveTestId}/submissions/{submissionId}/checked-answer-sheet:
- *   get:
- *     summary: Download the latest checked copy of a student's answer sheet
- *     tags: [SubjectiveTests]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: businessId
- *         required: true
- *         schema:
- *           type: integer
- *       - in: path
- *         name: subjectiveTestId
- *         required: true
- *         schema:
- *           type: string
- *       - in: path
- *         name: submissionId
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: PDF file
- *         content:
- *           application/pdf:
- *             schema:
- *               type: string
- *               format: binary
- *       404:
- *         description: Checked answer sheet not found
- */
-// Serves both documented paths above: `answer-sheet` and `checked-answer-sheet`.
-subjectiveTestRouter.get(
-  '/:businessId/subjective-tests/:subjectiveTestId/submissions/:submissionId/:submissionFile',
-  authorize(...STAFF_ROLES),
-  validateIdParam('businessId'),
-  authorizeBusinessAccess,
-  validateStringIdParam('subjectiveTestId'),
-  validateStringIdParam('submissionId'),
-  subjectiveTestController.downloadSubmissionFileForStaff,
-);
-
-/**
- * @swagger
- * /api/business/{businessId}/subjective-tests/{subjectiveTestId}/submissions/{submissionId}/grade:
- *   put:
- *     summary: Add or update marks, remarks and the checked answer sheet
- *     description: The checked PDF is required the first time; later updates may change marks/remarks only. Sending a new PDF replaces the previous checked copy.
- *     tags: [SubjectiveTests]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: businessId
- *         required: true
- *         schema:
- *           type: integer
- *       - in: path
- *         name: subjectiveTestId
- *         required: true
- *         schema:
- *           type: string
- *       - in: path
- *         name: submissionId
- *         required: true
- *         schema:
- *           type: string
- *     requestBody:
- *       required: true
- *       content:
- *         multipart/form-data:
- *           schema:
- *             type: object
- *             required: [data]
- *             properties:
- *               data:
- *                 type: string
- *                 description: JSON string matching GradeSubjectiveSubmissionRequest
- *               checkedAnswerSheet:
- *                 type: string
- *                 format: binary
- *     responses:
- *       200:
- *         description: Submission graded successfully
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       $ref: '#/components/schemas/SubjectiveStaffSubmission'
- *       400:
- *         description: Invalid marks/file, or the submission is not submitted yet
- *       404:
- *         description: Submission not found
- *       409:
- *         description: Updated by someone else at the same time
- */
-subjectiveTestRouter.put(
-  '/:businessId/subjective-tests/:subjectiveTestId/submissions/:submissionId/grade',
-  authorize(...STAFF_ROLES),
-  validateIdParam('businessId'),
-  authorizeBusinessAccess,
-  validateStringIdParam('subjectiveTestId'),
-  validateStringIdParam('submissionId'),
-  requireGradableSubmissionBeforeUpload,
-  createPrivatePdfUpload({ fieldName: uploadFieldNames.checkedAnswerSheet }),
-  validateDto(GradeSubjectiveSubmissionDto),
-  subjectiveTestController.gradeSubmission,
 );

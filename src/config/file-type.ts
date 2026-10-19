@@ -102,7 +102,13 @@ export const EDITOR_IMAGE_UPLOAD_CONFIG = {
         MIME_TYPES.GIF
     ],
     maxSizeBytes: 10 * BYTES_IN_MB,
-    defaultExtension: FILE_EXTENSIONS.JPG
+    defaultExtension: FILE_EXTENSIONS.JPG,
+    /** Multipart field the editor sends the image in. */
+    fieldName: 'image',
+    /** Stored images are converted to WebP: `editor-<timestamp>-<random>.webp`. */
+    fileNamePrefix: 'editor',
+    outputExtension: FILE_EXTENSIONS.WEBP,
+    webpQuality: 80
 } as const;
 // ---------------------------------------------------------------------------
 // Bulk Question Upload config

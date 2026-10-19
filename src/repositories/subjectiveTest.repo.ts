@@ -116,7 +116,7 @@ export function findTestsInBusiness(businessId: number, filters: Prisma.Subjecti
   return prisma.subjectiveTest.findMany({
     where: { businessId, batch: ACTIVE_BATCH_WHERE, ...filters },
     select: subjectiveTestSelect,
-    orderBy: { createdAt: 'desc' },
+    orderBy: { createdAt: Prisma.SortOrder.desc },
   });
 }
 
@@ -136,7 +136,7 @@ export function findPublishedTestsWithOwnAttempt(businessId: number, studentId: 
   return prisma.subjectiveTest.findMany({
     where: publishedTestForStudentWhere(businessId, studentId),
     select: testWithOwnAttemptSelect(studentId),
-    orderBy: { startAt: 'desc' },
+    orderBy: { startAt: Prisma.SortOrder.desc },
   }) as Promise<StudentTestWithOwnAttemptRecord[]>;
 }
 
@@ -165,18 +165,13 @@ export function findAttemptByTestAndStudent(subjectiveTestId: string, studentId:
   });
 }
 
-/** Staff view: a submission of a test in the business (active hierarchy), with its test. */
-export function findSubmissionWithTest(businessId: number, subjectiveTestId: string, submissionId: string) {
+/** A submission with its test: staff (`studentId` null) in the active hierarchy, a student only their own on a published test. */
+export function findSubmissionWithTest(businessId: number, submissionId: string, studentId: number | null) {
   return prisma.subjectiveTestSubmission.findFirst({
-    where: { id: submissionId, subjectiveTestId, test: { businessId, batch: ACTIVE_BATCH_WHERE } },
-    select: submissionWithTestSelect,
-  });
-}
-
-/** Student view: their own submission of a published test, with its test. */
-export function findOwnSubmissionWithTest(businessId: number, submissionId: string, studentId: number) {
-  return prisma.subjectiveTestSubmission.findFirst({
-    where: { id: submissionId, studentId, test: { businessId, status: TestStatus.PUBLISHED } },
+    where:
+      studentId === null
+        ? { id: submissionId, test: { businessId, batch: ACTIVE_BATCH_WHERE } }
+        : { id: submissionId, studentId, test: { businessId, status: TestStatus.PUBLISHED } },
     select: submissionWithTestSelect,
   });
 }
