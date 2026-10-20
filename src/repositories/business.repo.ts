@@ -102,3 +102,11 @@ export async function updateBusinessStatus(id: number, data: UpdateBusinessStatu
     },
   });
 }
+
+/** Which business uses an uploaded logo (stored as `/uploads/business/<file>`). */
+export function findBusinessByLogoPath(logoPath: string) {
+  return prisma.business.findFirst({
+    where: { logo: logoPath },
+    select: { id: true },
+  });
+}

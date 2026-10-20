@@ -191,3 +191,18 @@ export function findSettingsProfileByUserId(userId: number) {
     } as any
   });
 }
+
+export function findBasicProfileById(id: number) {
+  return publicPrisma.user.findUnique({
+    where: { id },
+    select: { id: true, name: true, email: true },
+  });
+}
+
+/** Who owns an uploaded profile picture (stored as `/uploads/profile/<file>`). */
+export function findProfilePictureOwner(profilePicturePath: string) {
+  return publicPrisma.user.findFirst({
+    where: { profilePicture: profilePicturePath },
+    select: { id: true, businessId: true },
+  });
+}

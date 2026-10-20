@@ -11,6 +11,8 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import { FILE_TYPE_CONFIG } from '../config/file-type';
 import { MIME_TYPES } from '../constants/file.constants';
+import { toUploadsStorageKey, type StoredFileDownload } from './fileStorage.service';
+import { UPLOAD_FOLDERS, uploadFolderDir } from '../config/fileStorage.config';
 
 export class ContentService {
 
@@ -176,7 +178,8 @@ export class ContentService {
     }
   }
 
-  async getContentFile(id: number, user: IUser): Promise<{ filePath: string; fileName: string; mimeType: string }> {
+  /** Access is checked by `authorizeContentAccess` before this runs. Missing files become 404 when streamed. */
+  async getContentFileDownload(id: number, user: IUser): Promise<StoredFileDownload> {
     logger.info('ContentService: Getting content file', { contentId: id, userId: user.id });
 
     const content = await contentRepo.findContentById(id);
@@ -184,19 +187,11 @@ export class ContentService {
       throw new NotFoundError('Content not found');
     }
 
-    try {
-      await fs.access(content.filePath);
-    } catch {
-      throw new NotFoundError('File not found on server');
-    }
-
-    const fileName = path.basename(content.filePath);
-    const mimeType = this.getMimeType(content.type, fileName);
-
+    const storedFileName = path.basename(content.filePath);
     return {
-      filePath: content.filePath,
-      fileName: `${content.title}${path.extname(fileName)}`,
-      mimeType
+      storageKey: toUploadsStorageKey(content.filePath),
+      downloadFileName: `${content.title}${path.extname(storedFileName)}`,
+      contentType: this.getMimeType(content.type, storedFileName),
     };
   }
 
@@ -225,7 +220,7 @@ export class ContentService {
       throw new BadRequestError('File path is required');
     }
 
-    const uploadDir = path.resolve(process.env.UPLOAD_DIR || 'uploads/content');
+    const uploadDir = path.resolve(uploadFolderDir(UPLOAD_FOLDERS.content));
     const resolvedPath = path.resolve(filePath);
 
     if (!resolvedPath.startsWith(uploadDir + path.sep)) {

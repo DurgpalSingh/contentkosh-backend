@@ -70,3 +70,11 @@ export async function validateCourseIdsBelongToBusiness(
   });
   return count === courseIds.length;
 }
+
+/** A course in the current tenant schema that uses this thumbnail (`/uploads/courses/<file>`). */
+export function findCourseByThumbnailPath(thumbnailPath: string) {
+  return prisma.course.findFirst({
+    where: { thumbnail: thumbnailPath },
+    select: { id: true },
+  });
+}
