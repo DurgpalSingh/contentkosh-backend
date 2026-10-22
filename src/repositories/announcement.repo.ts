@@ -467,3 +467,15 @@ export async function resolveBatchIdsForEmit(
 
   return [];
 }
+
+/**
+ * Active announcements whose start time fell inside (from, to] and that were created before they
+ * started — i.e. scheduled ones whose "it's live now" push hasn't gone out at creation time.
+ */
+export async function findAnnouncementsStartedBetween(businessId: number, from: Date, to: Date) {
+  const rows = await prisma.announcement.findMany({
+    where: { businessId, isActive: true, startDate: { gt: from, lte: to }, endDate: { gte: to } },
+    include: announcementListInclude,
+  });
+  return rows.filter((row) => row.createdAt < row.startDate);
+}

@@ -84,6 +84,7 @@ By default the server runs on port `8080` (see `PORT` env var). Swagger UI is av
 - `JWT_SECRET` — secret used to sign JWT tokens
 - `FRONTEND_URL` / `NEXT_PUBLIC_API_URL` — frontend base URL used for CORS / callbacks
 - File-upload related variables are present in `.env` (allowed types, sizes, upload dir)
+- `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`, `PUSH_TOPIC_PREFIX` — optional, for Android push notifications of announcements. See [docs/PUSH_NOTIFICATIONS_SETUP.md](docs/PUSH_NOTIFICATIONS_SETUP.md)
 
 Check the `.env`, `.env.local`, or `.env.uat` files in the repo root to see concrete examples.
 
