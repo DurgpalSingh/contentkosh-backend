@@ -39,13 +39,15 @@ export class ContentService {
     }
 
     try {
+      const shouldUploadToAgent = data.type === ContentType.PDF && data.subjectId !== undefined;
+
       const createData: Prisma.ContentCreateInput = {
         title: data.title,
         type: data.type,
         filePath: data.filePath,
         fileSize: data.fileSize,
         status: data.status || ContentStatus.ACTIVE,
-        agentUploadStatus: data.type === ContentType.PDF
+        agentUploadStatus: shouldUploadToAgent
           ? ContentAgentUploadStatus.PENDING
           : ContentAgentUploadStatus.NOT_APPLICABLE,
         batch: {
@@ -70,24 +72,26 @@ export class ContentService {
         subjectId: data.subjectId
       });
 
-      if (data.type === ContentType.PDF && content.id) {
+      if (shouldUploadToAgent && content.id) {
         logger.info('ContentService: Starting background CK Agent upload', {
           contentId: content.id,
           businessId: batchContext.businessId,
           courseId: batchContext.courseId,
+          subjectId: data.subjectId,
         });
         void this.processAgentUpload({
           contentId: content.id,
           filePath: data.filePath,
           businessId: batchContext.businessId,
           courseId: batchContext.courseId,
+          subjectId: data.subjectId!,
         });
       }
 
       logger.info('ContentService: Returning content upload response', {
         contentId: content.id,
         batchId,
-        agentUploadQueued: data.type === ContentType.PDF,
+        agentUploadQueued: shouldUploadToAgent,
       });
       return ContentMapper.toResponse(content);
     } catch (error) {
@@ -115,12 +119,14 @@ export class ContentService {
     filePath: string;
     businessId: number;
     courseId: number;
+    subjectId: number;
   }): Promise<void> {
     try {
       logger.info('ContentService: CK Agent upload job processing started', {
         contentId: params.contentId,
         businessId: params.businessId,
         courseId: params.courseId,
+        subjectId: params.subjectId,
       });
       await contentRepo.updateAgentUploadStatus(
         params.contentId,
@@ -131,6 +137,7 @@ export class ContentService {
         filePath: params.filePath,
         businessId: params.businessId,
         courseId: params.courseId,
+        subjectId: params.subjectId,
         contentType: ContentType.PDF,
       });
       await contentRepo.updateAgentUploadStatus(

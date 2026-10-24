@@ -4,7 +4,7 @@ import * as path from 'path';
 import { ForbiddenError } from '../errors/api.errors';
 import { IUser } from '../dtos/auth.dto';
 import { KnowledgeBaseQueryResponse } from '../dtos/ai.dto';
-import { AiAgentClient, aiAgentClient } from './aiAgent.client';
+import { AiAgentClient, aiAgentClient, aiAgentQueryClient } from './aiAgent.client';
 import * as batchRepo from '../repositories/batch.repo';
 import logger from '../utils/logger';
 
@@ -14,13 +14,17 @@ interface AgentUploadResponse {
 }
 
 export class AiKnowledgeBaseService {
-  constructor(private readonly agentClient: AiAgentClient = aiAgentClient) {}
+  constructor(
+    private readonly agentClient: AiAgentClient = aiAgentClient,
+    private readonly queryAgentClient: AiAgentClient = aiAgentQueryClient,
+  ) {}
 
   async uploadPdfToKnowledgeBase(params: {
     filePath: string;
     originalFileName?: string;
     businessId: number;
     courseId: number;
+    subjectId?: number;
     contentType: ContentType;
   }): Promise<AgentUploadResponse | null> {
     if (params.contentType !== ContentType.PDF) {
@@ -32,10 +36,19 @@ export class AiKnowledgeBaseService {
       return null;
     }
 
+    if (params.subjectId === undefined) {
+      logger.info('AiKnowledgeBaseService: Skipping agent upload - content has no subject assigned', {
+        businessId: params.businessId,
+        courseId: params.courseId,
+      });
+      return null;
+    }
+
     const buffer = await fs.readFile(params.filePath);
     const formData = new FormData();
     formData.append('business_id', String(params.businessId));
     formData.append('course_ids', String(params.courseId));
+    formData.append('subject_ids', String(params.subjectId));
     formData.append(
       'files',
       new Blob([new Uint8Array(buffer)], { type: 'application/pdf' }),
@@ -45,6 +58,7 @@ export class AiKnowledgeBaseService {
     logger.info('AiKnowledgeBaseService: Sending document to CK Agent', {
       businessId: params.businessId,
       courseId: params.courseId,
+      subjectId: params.subjectId,
       contentType: params.contentType,
       fileName: params.originalFileName || path.basename(params.filePath),
       fileSize: buffer.length,
@@ -63,14 +77,28 @@ export class AiKnowledgeBaseService {
     businessId: number;
     query: string;
     user: IUser;
+    jobId: string;
   }): Promise<KnowledgeBaseQueryResponse> {
     const courseIds = await this.resolveEnrolledCourseIds(params.businessId, params.user);
 
-    return this.agentClient.postJson<KnowledgeBaseQueryResponse>('/llm/kb/query', {
+    return this.queryAgentClient.postJson<KnowledgeBaseQueryResponse>('/llm/kb/query', {
+      job_id: params.jobId,
       business_id: String(params.businessId),
       course_ids: courseIds.map(String),
       query: params.query,
     });
+  }
+
+  async stopQuery(jobId: string): Promise<void> {
+    logger.info('AiKnowledgeBaseService: Requesting CK Agent to stop query job', { jobId });
+    try {
+      await this.agentClient.postEmpty(`/query/${encodeURIComponent(jobId)}/stop`);
+    } catch (error) {
+      logger.warn('AiKnowledgeBaseService: Failed to stop CK Agent query job', {
+        jobId,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   private async resolveEnrolledCourseIds(businessId: number, user: IUser): Promise<number[]> {

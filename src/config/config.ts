@@ -19,6 +19,7 @@ export const config = {
     baseUrl: process.env.AI_AGENT_BASE_URL || 'http://localhost:8000',
     apiKey: process.env.AI_AGENT_API_KEY || undefined,
     timeoutMs: process.env.AI_AGENT_TIMEOUT_MS ? parseInt(process.env.AI_AGENT_TIMEOUT_MS) : 30000,
+   queryTimeoutMs: process.env.AI_AGENT_QUERY_TIMEOUT_MS ? parseInt(process.env.AI_AGENT_QUERY_TIMEOUT_MS) : 120000,
   },
   cookies: {
     accessCookieName: process.env.ACCESS_COOKIE_NAME || 'ck_access_token',

@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { UserRole } from '@prisma/client';
 import { ApiError, BadRequestError, ForbiddenError, NotFoundError } from '../errors/api.errors';
 import { IUser } from '../dtos/auth.dto';
@@ -21,6 +22,8 @@ const STALE_PENDING_GRACE_MS = 60_000;
 
 export class AIChatService {
   constructor(private readonly knowledgeBaseService: AiKnowledgeBaseService = aiKnowledgeBaseService) {}
+
+  private readonly activeJobIdsByChat = new Map<number, string>();
 
   /**
    * Stores the question as a PENDING chat and answers it in the background, so the
@@ -64,8 +67,10 @@ export class AIChatService {
     chatId: number,
     params: { businessId: number; user: IUser; query: string },
   ): Promise<void> {
+    const jobId = randomUUID();
+    this.activeJobIdsByChat.set(chatId, jobId);
     try {
-      const answer = await this.knowledgeBaseService.queryKnowledgeBase(params);
+      const answer = await this.knowledgeBaseService.queryKnowledgeBase({ ...params, jobId });
       const updated = await aiChatRepo.completePendingAIChat(chatId, {
         assistantResponse: answer?.answer || 'No answer was returned.',
         source: answer ? (answer as unknown as object) : null,
@@ -87,11 +92,13 @@ export class AIChatService {
           message: statusError instanceof Error ? statusError.message : String(statusError),
         });
       }
+    } finally {
+      this.activeJobIdsByChat.delete(chatId);
     }
   }
 
   private async failStalePendingChats(businessId: number, userId: number): Promise<void> {
-    const createdBefore = new Date(Date.now() - config.aiAgent.timeoutMs - STALE_PENDING_GRACE_MS);
+    const createdBefore = new Date(Date.now() - config.aiAgent.queryTimeoutMs - STALE_PENDING_GRACE_MS);
     await aiChatRepo.failPendingAIChats(
       { userId, businessId, createdBefore },
       INTERRUPTED_AI_ERROR_MESSAGE,
@@ -187,6 +194,11 @@ export class AIChatService {
     user: IUser;
   }): Promise<void> {
     await this.findOwnedChat(params, 'You do not have permission to delete this chat');
+
+    const jobId = this.activeJobIdsByChat.get(params.chatId);
+    if (jobId) {
+      await this.knowledgeBaseService.stopQuery(jobId);
+    }
 
     await aiChatRepo.deleteAIChatById(params.chatId);
   }
