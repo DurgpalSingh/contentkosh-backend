@@ -23,9 +23,17 @@ export const VISIBILITY_FIELD_STUDENTS = 'visibleToStudents';
  * FCM topic names for announcement push. The mobile app subscribes with the same names
  * (contentkosh-mobile/src/constants/pushTopics.ts) — keep both in sync.
  */
+export const ANNOUNCEMENT_PUSH_MEMBER_ROLES = {
+  TEACHERS: 'teachers',
+  STUDENTS: 'students',
+} as const;
+
+export type AnnouncementPushMemberRole =
+  (typeof ANNOUNCEMENT_PUSH_MEMBER_ROLES)[keyof typeof ANNOUNCEMENT_PUSH_MEMBER_ROLES];
+
 export const ANNOUNCEMENT_PUSH_TOPICS = {
   admins: (prefix: string, businessId: number) => `${prefix}-b${businessId}-admins`,
-  allMembers: (prefix: string, businessId: number, role: 'teachers' | 'students') => `${prefix}-b${businessId}-${role}-all`,
-  batchMembers: (prefix: string, businessId: number, batchId: number, role: 'teachers' | 'students') =>
+  allMembers: (prefix: string, businessId: number, role: AnnouncementPushMemberRole) => `${prefix}-b${businessId}-${role}-all`,
+  batchMembers: (prefix: string, businessId: number, batchId: number, role: AnnouncementPushMemberRole) =>
     `${prefix}-b${businessId}-batch${batchId}-${role}`,
 } as const;

@@ -1,13 +1,22 @@
 import { AnnouncementScope } from '@prisma/client';
-import { ANNOUNCEMENT_PUSH_TOPICS } from '../constants/announcement.constants';
+import {
+  ANNOUNCEMENT_PUSH_MEMBER_ROLES,
+  ANNOUNCEMENT_PUSH_TOPICS,
+  AnnouncementPushMemberRole,
+} from '../constants/announcement.constants';
+import {
+  ANNOUNCEMENT_PUSH_CONTENT,
+  ANNOUNCEMENT_PUSH_KIND,
+  AnnouncementPushKind,
+  AnnouncementSaveKind,
+  PUSH_LOG_TAG,
+} from '../constants/push.constants';
 import { pushConfig } from '../config/push.config';
 import { requestContext } from '../contexts/request-context';
 import * as announcementRepo from '../repositories/announcement.repo';
 import * as businessRepo from '../repositories/business.repo';
 import { fcmPushService } from './fcmPush.service';
 import logger from '../utils/logger';
-
-type PushKind = 'created' | 'updated' | 'started';
 
 type AnnouncementForPush = {
   id: number;
@@ -31,7 +40,8 @@ function isLiveNow(announcement: AnnouncementForPush, now = new Date()): boolean
 
 function truncate(text: string, max: number): string {
   const singleLine = text.replace(/\s+/g, ' ').trim();
-  return singleLine.length > max ? `${singleLine.slice(0, max - 1)}…` : singleLine;
+  const suffix = ANNOUNCEMENT_PUSH_CONTENT.TRUNCATION_SUFFIX;
+  return singleLine.length > max ? `${singleLine.slice(0, max - suffix.length)}${suffix}` : singleLine;
 }
 
 /**
@@ -44,9 +54,9 @@ async function topicsForAnnouncement(businessId: number, announcement: Announcem
   const topics: string[] = [];
   if (announcement.visibleToAdmins) topics.push(ANNOUNCEMENT_PUSH_TOPICS.admins(prefix, businessId));
 
-  const memberRoles: Array<'teachers' | 'students'> = [];
-  if (announcement.visibleToTeachers) memberRoles.push('teachers');
-  if (announcement.visibleToStudents) memberRoles.push('students');
+  const memberRoles: AnnouncementPushMemberRole[] = [];
+  if (announcement.visibleToTeachers) memberRoles.push(ANNOUNCEMENT_PUSH_MEMBER_ROLES.TEACHERS);
+  if (announcement.visibleToStudents) memberRoles.push(ANNOUNCEMENT_PUSH_MEMBER_ROLES.STUDENTS);
   if (memberRoles.length === 0) return topics;
 
   const targetsEveryone =
@@ -64,13 +74,24 @@ async function topicsForAnnouncement(businessId: number, announcement: Announcem
   return topics;
 }
 
-async function sendAnnouncementPush(businessId: number, announcement: AnnouncementForPush, kind: PushKind): Promise<void> {
+function buildPushTitle(heading: string, kind: AnnouncementPushKind): string {
+  return kind === ANNOUNCEMENT_PUSH_KIND.UPDATED ? `${ANNOUNCEMENT_PUSH_CONTENT.UPDATED_TITLE_PREFIX}${heading}` : heading;
+}
+
+async function sendAnnouncementPush(
+  businessId: number,
+  announcement: AnnouncementForPush,
+  kind: AnnouncementPushKind,
+): Promise<void> {
   const topics = await topicsForAnnouncement(businessId, announcement);
-  logger.info(`[push] announcement id=${announcement.id} kind=${kind} businessId=${businessId} topics=${topics.length}`);
+  logger.info(`${PUSH_LOG_TAG} announcement id=${announcement.id} kind=${kind} businessId=${businessId} topics=${topics.length}`);
   await fcmPushService.sendToTopics(topics, {
-    title: kind === 'updated' ? `Updated: ${announcement.heading}` : announcement.heading,
+    title: buildPushTitle(announcement.heading, kind),
     body: truncate(announcement.content, pushConfig.bodyMaxLength),
-    data: { type: 'announcement', announcementId: String(announcement.id), businessId: String(businessId) },
+    data: {
+      type: ANNOUNCEMENT_PUSH_CONTENT.DATA_TYPE,
+      announcementId: String(announcement.id), businessId: String(businessId),
+    },
   });
 }
 
@@ -82,13 +103,13 @@ export const announcementPushService = {
    * Push for a just-created/updated announcement, only if it is live right now (future ones are
    * sent by the scheduled check when they start). Runs in the background and never throws.
    */
-  notifySaved(businessId: number, announcement: AnnouncementForPush, kind: 'created' | 'updated'): void {
+  notifySaved(businessId: number, announcement: AnnouncementForPush, kind: AnnouncementSaveKind): void {
     if (!isLiveNow(announcement)) {
-      logger.info(`[push] announcement id=${announcement.id} kind=${kind} not live yet; push deferred to start time`);
+      logger.info(`${PUSH_LOG_TAG} announcement id=${announcement.id} kind=${kind} not live yet; push deferred to start time`);
       return;
     }
     sendAnnouncementPush(businessId, announcement, kind).catch((error) =>
-      logger.error(`[push] announcement id=${announcement.id} kind=${kind} failed: ${(error as Error).message}`),
+      logger.error(`${PUSH_LOG_TAG} announcement id=${announcement.id} kind=${kind} failed: ${(error as Error).message}`),
     );
   },
 
@@ -105,11 +126,11 @@ export const announcementPushService = {
         await requestContext.run({ user: undefined, tenant }, async () => {
           const started = await announcementRepo.findAnnouncementsStartedBetween(business.id, windowStart, windowEnd);
           for (const announcement of started) {
-            await sendAnnouncementPush(business.id, announcement, 'started');
+            await sendAnnouncementPush(business.id, announcement, ANNOUNCEMENT_PUSH_KIND.STARTED);
           }
         });
       } catch (error) {
-        logger.error(`[push] scheduled start check failed businessId=${business.id}: ${(error as Error).message}`);
+        logger.error(`${PUSH_LOG_TAG} scheduled start check failed businessId=${business.id}: ${(error as Error).message}`);
       }
     }
   },

@@ -1,4 +1,5 @@
 export const HTTP_HEADERS = {
+  AUTHORIZATION: 'Authorization',
   CONTENT_TYPE: 'Content-Type',
   CONTENT_LENGTH: 'Content-Length',
   CONTENT_DISPOSITION: 'Content-Disposition',
