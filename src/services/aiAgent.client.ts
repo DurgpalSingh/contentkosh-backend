@@ -48,6 +48,10 @@ export class AiAgentClient {
     return this.request<TResponse>(path, contentType, Buffer.from(await encoded.arrayBuffer()));
   }
 
+  async postEmpty<TResponse>(path: string): Promise<TResponse> {
+    return this.request<TResponse>(path, 'application/json', Buffer.alloc(0));
+  }
+
   private async request<TResponse>(path: string, contentType: string, payload: Buffer): Promise<TResponse> {
     const startedAt = Date.now();
     logger.info('AiAgentClient: Request started', {
@@ -182,3 +186,4 @@ export class AiAgentClient {
 }
 
 export const aiAgentClient = new AiAgentClient();
+export const aiAgentQueryClient = new AiAgentClient({ timeoutMs: config.aiAgent.queryTimeoutMs });

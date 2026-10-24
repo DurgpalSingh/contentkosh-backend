@@ -75,6 +75,18 @@ describe('AiAgentClient', () => {
     expect(body).toContain('%PDF-1.4 body');
   });
 
+  it('sends an empty-body POST for control calls like stopping a query job', async () => {
+    respond = jsonResponse(200, { job_id: 'job-1', status: 'cancelled' });
+    const client = new AiAgentClient({ baseUrl, timeoutMs: 1000 });
+
+    const response = await client.postEmpty<{ job_id: string; status: string }>('/query/job-1/stop');
+
+    expect(response).toEqual({ job_id: 'job-1', status: 'cancelled' });
+    expect(captured.method).toBe('POST');
+    expect(captured.url).toBe('/query/job-1/stop');
+    expect(captured.body.length).toBe(0);
+  });
+
   it('maps non-2xx agent responses to AiAgentError', async () => {
     respond = jsonResponse(500, { detail: 'agent failed' });
     const client = new AiAgentClient({ baseUrl, timeoutMs: 1000 });

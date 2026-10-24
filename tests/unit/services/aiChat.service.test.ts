@@ -12,7 +12,7 @@ const flushBackgroundWork = () => new Promise((resolve) => setImmediate(resolve)
 
 describe('AIChatService', () => {
   let service: AIChatService;
-  const knowledgeBaseService = { queryKnowledgeBase: jest.fn() };
+  const knowledgeBaseService = { queryKnowledgeBase: jest.fn(), stopQuery: jest.fn() };
   const student = { id: 7, email: 's@test.com', role: UserRole.STUDENT, businessId: 1 };
 
   beforeEach(() => {
@@ -265,6 +265,47 @@ describe('AIChatService', () => {
       });
 
       expect(aiChatRepo.deleteAIChatById).toHaveBeenCalledWith(1);
+      expect(knowledgeBaseService.stopQuery).not.toHaveBeenCalled();
+    });
+
+    it('stops the agent job when deleting a chat that is still being answered', async () => {
+      const pendingChat = {
+        id: 11,
+        userId: 7,
+        businessId: 1,
+        userMessage: 'What is photosynthesis?',
+        assistantResponse: null,
+        source: null,
+        status: 'PENDING',
+        errorMessage: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      let resolveQuery: (value: unknown) => void = () => undefined;
+      knowledgeBaseService.queryKnowledgeBase.mockReturnValue(
+        new Promise((resolve) => {
+          resolveQuery = resolve;
+        }),
+      );
+      (batchRepo.findUserBatchAndCourseMembership as jest.Mock).mockResolvedValue({
+        batchIds: [1],
+        courseIds: [2],
+      });
+      (aiChatRepo.findPendingAIChatByUser as jest.Mock).mockResolvedValue(null);
+      (aiChatRepo.createPendingAIChat as jest.Mock).mockResolvedValue(pendingChat);
+      (aiChatRepo.findAIChatById as jest.Mock).mockResolvedValue(pendingChat);
+
+      await service.submitQuery({ businessId: 1, user: student, query: 'What is photosynthesis?' });
+      // Let answerPendingChat start and register its job id, without the query resolving yet.
+      await flushBackgroundWork();
+
+      await service.deleteChat({ businessId: 1, chatId: 11, user: student });
+
+      expect(knowledgeBaseService.stopQuery).toHaveBeenCalledWith(expect.any(String));
+      expect(aiChatRepo.deleteAIChatById).toHaveBeenCalledWith(11);
+
+      resolveQuery({ answer: 'ignored' });
+      await flushBackgroundWork();
     });
 
     it('rejects delete of chat not owned by user', async () => {

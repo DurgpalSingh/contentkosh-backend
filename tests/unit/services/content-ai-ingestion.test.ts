@@ -50,6 +50,7 @@ describe('ContentService AI ingestion', () => {
         type: ContentType.PDF,
         filePath: 'uploads/content/file.pdf',
         fileSize: 100,
+        subjectId: 5,
       },
       user,
     );
@@ -60,6 +61,7 @@ describe('ContentService AI ingestion', () => {
       filePath: 'uploads/content/file.pdf',
       businessId: 1,
       courseId: 4,
+      subjectId: 5,
       contentType: ContentType.PDF,
     });
     expect(contentRepo.updateAgentUploadStatus).toHaveBeenCalledWith(
@@ -78,6 +80,7 @@ describe('ContentService AI ingestion', () => {
       type: ContentType.PDF,
       filePath: 'uploads/content/file.pdf',
       fileSize: 100,
+      subjectId: 5,
     }, user);
 
     await new Promise<void>((resolve) => setImmediate(resolve));
@@ -107,5 +110,28 @@ describe('ContentService AI ingestion', () => {
 
     expect(aiKnowledgeBaseService.uploadPdfToKnowledgeBase).not.toHaveBeenCalled();
     expect(contentRepo.createContent).toHaveBeenCalled();
+  });
+
+  it('skips agent upload for PDF content with no subject assigned', async () => {
+    const service = new ContentService(aiKnowledgeBaseService as any);
+
+    await service.createContent(
+      3,
+      {
+        title: 'PDF',
+        type: ContentType.PDF,
+        filePath: 'uploads/content/file.pdf',
+        fileSize: 100,
+      },
+      user,
+    );
+
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(contentRepo.createContent).toHaveBeenCalledWith(
+      expect.objectContaining({ agentUploadStatus: ContentAgentUploadStatus.NOT_APPLICABLE }),
+      1,
+    );
+    expect(aiKnowledgeBaseService.uploadPdfToKnowledgeBase).not.toHaveBeenCalled();
+    expect(contentRepo.updateAgentUploadStatus).not.toHaveBeenCalled();
   });
 });
