@@ -39,7 +39,7 @@ export class ContentService {
     }
 
     try {
-      const shouldUploadToAgent = data.type === ContentType.PDF && data.subjectId !== undefined;
+      const shouldUploadToAgent = data.type === ContentType.PDF;
 
       const createData: Prisma.ContentCreateInput = {
         title: data.title,
@@ -84,7 +84,7 @@ export class ContentService {
           filePath: data.filePath,
           businessId: batchContext.businessId,
           courseId: batchContext.courseId,
-          subjectId: data.subjectId!,
+          subjectId: data.subjectId,
         });
       }
 
@@ -119,7 +119,7 @@ export class ContentService {
     filePath: string;
     businessId: number;
     courseId: number;
-    subjectId: number;
+    subjectId?: number | undefined;
   }): Promise<void> {
     try {
       logger.info('ContentService: CK Agent upload job processing started', {
@@ -133,19 +133,44 @@ export class ContentService {
         params.businessId,
         ContentAgentUploadStatus.PROCESSING,
       );
-      await this.aiKnowledgeBaseService.uploadPdfToKnowledgeBase({
-        filePath: params.filePath,
-        businessId: params.businessId,
-        courseId: params.courseId,
-        subjectId: params.subjectId,
-        contentType: ContentType.PDF,
-      });
+
+      const subjectIds = params.subjectId !== undefined
+        ? [params.subjectId]
+        : (await subjectRepo.findSubjectsByCourseId(params.courseId)).map((s) => s.id);
+
+      if (subjectIds.length === 0) {
+        throw new Error('This course has no subjects to tag the content with');
+      }
+
+      const uploadErrors: string[] = [];
+      for (const subjectId of subjectIds) {
+        try {
+          await this.aiKnowledgeBaseService.uploadPdfToKnowledgeBase({
+            filePath: params.filePath,
+            businessId: params.businessId,
+            courseId: params.courseId,
+            subjectId,
+            contentType: ContentType.PDF,
+          });
+        } catch (error) {
+          uploadErrors.push(error instanceof Error ? error.message : String(error));
+        }
+      }
+
+      if (uploadErrors.length === subjectIds.length) {
+        throw new Error(uploadErrors[0] ?? 'CK Agent upload failed');
+      }
+
       await contentRepo.updateAgentUploadStatus(
         params.contentId,
         params.businessId,
         ContentAgentUploadStatus.SUCCEEDED,
       );
-      logger.info('ContentService: CK Agent upload completed', { contentId: params.contentId });
+      logger.info('ContentService: CK Agent upload completed', {
+        contentId: params.contentId,
+        subjectIds,
+        failedSubjectCount: uploadErrors.length,
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'CK Agent upload failed';
       try {
@@ -339,7 +364,6 @@ export class ContentService {
       );
     }
   }
-
 
   private getMimeType(
     type: ContentType,
