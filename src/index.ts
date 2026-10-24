@@ -21,6 +21,8 @@ import { registerAnnouncementSocket } from './sockets/announcement.socket';
 import { FILE_STORAGE_CONFIG } from './config/fileStorage.config';
 import { authenticate } from './middlewares/auth.middleware';
 import { authorizeUploadedFileAccess } from './middlewares/uploadedFileAccess.middleware';
+import { pushConfig } from './config/push.config';
+import { announcementPushService } from './services/announcementPush.service';
 
 // Load environment variables
 dotenv.config();
@@ -68,6 +70,15 @@ async function start() {
         logger.info(`Audit cleanup complete. Deleted ${deletedCount} old logs.`);
       } catch (error) {
         logger.error('Audit cleanup failed:', error);
+      }
+    });
+
+    // Push notifications for scheduled announcements once their start time arrives
+    cron.schedule(pushConfig.scheduledStartCron, async () => {
+      try {
+        await announcementPushService.notifyScheduledStarts();
+      } catch (error) {
+        logger.error('Scheduled announcement push failed:', error);
       }
     });
 

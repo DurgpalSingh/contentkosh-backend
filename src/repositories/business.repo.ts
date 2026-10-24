@@ -110,3 +110,11 @@ export function findBusinessByLogoPath(logoPath: string) {
     select: { id: true },
   });
 }
+
+/** Active businesses that have their own tenant schema (for background jobs that run per tenant). */
+export function findActiveBusinessesWithSchema() {
+  return prisma.business.findMany({
+    where: { status: BusinessStatus.ACTIVE, schemaName: { not: null } },
+    select: { id: true, slug: true, schemaName: true },
+  });
+}

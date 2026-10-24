@@ -1,5 +1,10 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.44] - firebase push notification
+**P.R Raised by** : shubh404-SE on **Date** : 2026-10-25
+
+### Added
+  - added firebase push notification for student and teacher, now student and teacher will get push notification for new content, new test, new announcement and new message.
 ## Version [1.2.43] - subjective test paper
 **P.R Raised by** : shubh404-SE on **Date** : 2026-10-06
 

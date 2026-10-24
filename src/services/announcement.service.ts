@@ -27,6 +27,8 @@ import {
   validateTargetRequirements,
 } from '../utils/announceUtils';
 import logger from '../utils/logger';
+import { announcementPushService } from './announcementPush.service';
+import { ANNOUNCEMENT_PUSH_KIND } from '../constants/push.constants';
 import {
     parseIsoDate,
   requireBusinessId,
@@ -277,6 +279,7 @@ export const announcementService = {
       targets: created.targets.map((t) => ({ courseId: t.courseId, batchId: t.batchId })),
     });
     emitAnnouncementCreated(businessId, batchIdsForEmit, { id: created.id, businessId });
+    announcementPushService.notifySaved(businessId, created, ANNOUNCEMENT_PUSH_KIND.CREATED);
 
     logger.info(`[announcement] create success id=${created.id} userId=${user.id}`);
     return created;
@@ -413,6 +416,7 @@ export const announcementService = {
         targets: updated.targets.map((t) => ({ courseId: t.courseId, batchId: t.batchId })),
       });
       emitAnnouncementUpdated(businessId, batchIdsForEmit, { id: updated.id, businessId });
+      announcementPushService.notifySaved(businessId, updated, ANNOUNCEMENT_PUSH_KIND.UPDATED);
 
       logger.info(`[announcement] update success id=${updated.id} userId=${user.id}`);
       return updated;
