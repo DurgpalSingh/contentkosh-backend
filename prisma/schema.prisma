@@ -38,6 +38,7 @@ model User {
   batchUsers      BatchUser[]
   rolePermissions RolePermission[]
   refreshTokens   RefreshToken[]
+  emailVerificationToken EmailVerificationToken?
   contentUploads  Content[]        @relation("ContentUploader")
   contentUpdates  Content[]        @relation("ContentUpdater")
   teacher         Teacher?
@@ -70,6 +71,24 @@ model RefreshToken {
   @@index([userId])
   @@index([token])
   @@map("refresh_tokens")
+}
+
+// One magic-link row per self-registered user. Only the sha256 hash of the emailed token is stored.
+// `pendingBusiness` holds the business details for an admin signup: the business is only
+// created once the link is opened (null for guest signups, which join an existing business).
+model EmailVerificationToken {
+  id              Int       @id @default(autoincrement())
+  userId          Int       @unique @map("user_id")
+  tokenHash       String    @unique @map("token_hash")
+  expiresAt       DateTime  @map("expires_at")
+  lastSentAt      DateTime  @map("last_sent_at")
+  verifiedAt      DateTime? @map("verified_at")
+  pendingBusiness Json?     @map("pending_business")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("email_verification_tokens")
 }
 
 model Business {

@@ -2,13 +2,28 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { config } from '../config/config';
-import { IUser, RegisterRequest, LoginRequest, AuthResponse } from '../dtos/auth.dto';
+import { IUser, RegisterRequest, RegisterResponse, VerifyEmailResponse, LoginRequest, AuthResponse } from '../dtos/auth.dto';
 import logger from '../utils/logger';
 import * as userRepo from '../repositories/user.repo';
 import * as refreshTokenRepo from '../repositories/refreshToken.repo';
 import * as businessRepo from '../repositories/business.repo';
 import { UserStatus, UserRole, BusinessStatus } from '@prisma/client';
-import { AlreadyExistsError, AuthError, BusinessSuspendedError, ForbiddenError, NotFoundError, SessionAlreadyActiveError } from '../errors/api.errors';
+import * as emailVerificationTokenRepo from '../repositories/emailVerificationToken.repo';
+import {
+  AlreadyExistsError,
+  AuthError,
+  BadRequestError,
+  BusinessSuspendedError,
+  EmailNotVerifiedError,
+  ForbiddenError,
+  NotFoundError,
+  SessionAlreadyActiveError,
+  VerificationLinkExpiredError,
+  VerificationLinkInvalidError,
+} from '../errors/api.errors';
+import { EMAIL_VERIFICATION_MESSAGES } from '../constants/emailVerification.constants';
+import { BusinessService } from './business.service';
+import * as emailVerificationService from './emailVerification.service';
 import { BUSINESS_STATUS_ACTION } from '../constants/business.constants';
 
 function buildBusinessSuspendedError(business: { status: BusinessStatus; statusReason: string | null }): BusinessSuspendedError {
@@ -90,39 +105,67 @@ export class AuthService {
   }
 
   /**
-   * Handles both public signup flows behind one endpoint:
-   * - `slug` provided: join an existing business as a guest (role USER) — used by the
+   * Handles both public signup flows behind one endpoint. Neither issues a session: the
+   * account is unusable until the emailed magic link is opened (see verifyEmail).
+   * - `slug` provided: join an existing business as a guest (role USER) - used by the
    *   business-locked mobile app's "Create account" flow.
-   * - `slug` omitted: bootstrap a new institute owner (role ADMIN, no business yet) — the
-   *   caller creates the Business separately via POST /api/business.
+   * - `slug` omitted: new institute owner (role ADMIN). Their business details travel with
+   *   the signup and are stored with the link; the Business itself is only created on verify.
    */
-  static async register(data: RegisterRequest): Promise<AuthResponse> {
+  static async register(data: RegisterRequest): Promise<RegisterResponse> {
     const slug = data.slug?.trim();
     if (slug) {
       return this.registerGuestForBusiness(data, slug);
     }
 
-    logger.info(`Registering new public user: ${data.email}`);
-    const existingUser = await userRepo.findByEmail(data.email);
-    if (existingUser) {
-      logger.warn(`Signup rejected: email already exists`, { email: data.email });
-      throw new AlreadyExistsError('User with this email already exists');
+    logger.info(`Registering new institute owner: ${data.email}`);
+    if (!data.business) {
+      throw new BadRequestError(EMAIL_VERIFICATION_MESSAGES.BUSINESS_DETAILS_REQUIRED);
+    }
+    const pendingBusiness = BusinessService.toCreateInput(data.business);
+    const businessSlug = data.business.slug.trim();
+    if (await BusinessService.checkSlugExists(businessSlug)) {
+      logger.warn(`Signup rejected: business slug already exists`, { slug: businessSlug });
+      throw new AlreadyExistsError(`Business with slug '${businessSlug}' already exists`);
     }
 
     const hashedPassword = await this.hashPassword(data.password);
-    const newUser = await userRepo.createUser({
-      name: data.name,
-      email: data.email,
-      password: hashedPassword,
-      mobile: data.mobile,
-      role: data.role || UserRole.ADMIN,
-      status: UserStatus.ACTIVE,
-    });
+    const existingUser = await userRepo.findByEmail(data.email);
 
-    return this.issueAuthResponse({ ...newUser, businessId: newUser.businessId ?? null });
+    let owner: { id: number; email: string; name: string; role: UserRole; businessId: number | null };
+    if (existingUser && !existingUser.emailVerified && !existingUser.businessId) {
+      // Abandoned earlier signup for this email: take it over instead of blocking the email forever.
+      logger.info(`Re-signup of unverified institute owner`, { userId: existingUser.id });
+      owner = await userRepo.updateUser(existingUser.id, {
+        name: data.name,
+        password: hashedPassword,
+        ...(data.mobile !== undefined && { mobile: data.mobile }),
+      });
+    } else if (existingUser) {
+      logger.warn(`Signup rejected: email already exists`, { email: data.email });
+      throw new AlreadyExistsError('User with this email already exists');
+    } else {
+      owner = await userRepo.createUser({
+        name: data.name,
+        email: data.email,
+        password: hashedPassword,
+        mobile: data.mobile,
+        role: UserRole.ADMIN,
+        status: UserStatus.ACTIVE,
+        emailVerified: false,
+      });
+    }
+
+    const emailSent = await emailVerificationService.sendVerificationEmail(
+      { id: owner.id, name: owner.name, email: owner.email, businessId: owner.businessId },
+      // JSON round-trip drops class-transformer prototypes and undefined fields.
+      JSON.parse(JSON.stringify(pendingBusiness)),
+    );
+
+    return { user: this.toRegisteredUser(owner), emailSent };
   }
 
-  private static async registerGuestForBusiness(data: RegisterRequest, slug: string): Promise<AuthResponse> {
+  private static async registerGuestForBusiness(data: RegisterRequest, slug: string): Promise<RegisterResponse> {
     logger.info(`Guest signup attempt for email: ${data.email}`, { slug });
 
     const business = await businessRepo.findBusinessBySlug(slug);
@@ -146,12 +189,80 @@ export class AuthService {
       role: UserRole.USER,
       businessId: business.id,
       status: UserStatus.ACTIVE,
+      emailVerified: false,
     });
 
-    return this.issueAuthResponse({ ...newUser, businessId: newUser.businessId ?? null }, business);
+    const emailSent = await emailVerificationService.sendVerificationEmail({
+      id: newUser.id,
+      name: newUser.name,
+      email: newUser.email,
+      businessId: newUser.businessId,
+    });
+
+    return { user: this.toRegisteredUser(newUser), emailSent };
   }
 
-  private static async issueAuthResponse(
+  private static toRegisteredUser(user: { id: number; email: string; name: string; role: UserRole; businessId: number | null }) {
+    return { id: user.id, email: user.email, name: user.name, role: user.role, businessId: user.businessId };
+  }
+
+  /**
+   * Opens a magic link. New institute owners get their business created now and are logged in
+   * (first use only); guests are just marked verified. A link that was already used never logs
+   * anyone in, since links are otherwise valid credentials until they expire.
+   */
+  static async verifyEmail(rawToken: string): Promise<VerifyEmailResponse> {
+    const record = await emailVerificationService.findRecordByRawToken(rawToken);
+    if (!record) {
+      logger.warn(`Verify rejected: unknown token`);
+      throw new VerificationLinkInvalidError();
+    }
+
+    const { user } = record;
+    const currentBusiness = user.businessId ? await businessRepo.findBusinessById(user.businessId) : null;
+
+    if (record.verifiedAt || user.emailVerified) {
+      logger.info(`Verify skipped: already verified`, { userId: user.id });
+      return { verified: true, alreadyVerified: true, autoLogin: false, slug: currentBusiness?.slug ?? null };
+    }
+    if (new Date() > record.expiresAt) {
+      logger.warn(`Verify rejected: link expired`, { userId: user.id });
+      throw new VerificationLinkExpiredError(user.email);
+    }
+
+    // New institute owner: create the business now. A retry after a partial failure finds the
+    // business already linked and skips straight to marking the account verified.
+    let business = currentBusiness;
+    if (!business && record.pendingBusiness) {
+      business = await BusinessService.createBusiness(
+        record.pendingBusiness as unknown as Parameters<typeof BusinessService.createBusiness>[0],
+        user.id,
+      );
+    }
+
+    await userRepo.updateUser(user.id, { emailVerified: true });
+    await emailVerificationTokenRepo.markVerified(user.id);
+    logger.info(`Email verified`, { userId: user.id, businessId: business?.id ?? null });
+
+    const slug = business?.slug ?? null;
+    if (!record.pendingBusiness || !business) {
+      return { verified: true, alreadyVerified: false, autoLogin: false, slug };
+    }
+
+    const session = await this.issueSession(
+      { id: user.id, email: user.email, name: user.name, role: UserRole.ADMIN, businessId: business.id },
+      business,
+    );
+    return {
+      verified: true,
+      alreadyVerified: false,
+      autoLogin: true,
+      slug,
+      tokens: { accessToken: session.accessToken, refreshToken: session.refreshToken },
+    };
+  }
+
+  private static async issueSession(
     user: { id: number; email: string; name: string; role: UserRole; businessId: number | null },
     business?: { slug: string | null; schemaName: string | null },
   ): Promise<AuthResponse> {
@@ -165,7 +276,7 @@ export class AuthService {
     });
     const refreshToken = await this.generateRefreshToken(user.id);
 
-    logger.info(`Signup successful`, { userId: user.id, email: user.email, businessId: user.businessId });
+    logger.info(`Session issued after email verification`, { userId: user.id, businessId: user.businessId });
 
     return {
       accessToken,
@@ -216,6 +327,11 @@ export class AuthService {
           businessStatus: candidate.business.status,
         });
         throw buildBusinessSuspendedError(candidate.business);
+      }
+
+      if (!candidate.emailVerified) {
+        logger.warn(`Login rejected: email not verified`, { userId: candidate.id, email: candidate.email });
+        throw new EmailNotVerifiedError(candidate.email);
       }
 
       // Enforce one active session per account: reject the login outright rather than
@@ -279,6 +395,11 @@ export class AuthService {
     if (user.businessId && user.business && user.business.status !== BusinessStatus.ACTIVE) {
       logger.warn(`Refresh rejected: business not active`, { userId: user.id, businessId: user.businessId });
       throw buildBusinessSuspendedError(user.business);
+    }
+
+    if (!user.emailVerified) {
+      logger.warn(`Refresh rejected: email not verified`, { userId: user.id });
+      throw new EmailNotVerifiedError(user.email);
     }
 
     await refreshTokenRepo.revokeToken(refreshToken);

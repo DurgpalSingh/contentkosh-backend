@@ -8,6 +8,7 @@ import { config } from '../config/config';
 import { mailConfig } from '../config/mail.config';
 import logger from '../utils/logger';
 import { sendMail } from './mail.service';
+import { CreateBusinessDto } from '../dtos/business.dto';
 import { buildBusinessSignupEmailHtml, buildBusinessSignupEmailSubject } from '../templates/businessSignupEmail.template';
 import {
   ensureTenantSchema,
@@ -39,6 +40,19 @@ async function notifyBusinessSignup(business: Business, admin: { name: string; e
 }
 
 export class BusinessService {
+  /** Maps the public CreateBusinessDto fields to the DB column names used by createBusiness. */
+  static toCreateInput(dto: CreateBusinessDto): businessRepo.BusinessCreateInput {
+    const { instituteName, slug, logo_url, phone, email, ...otherData } = dto;
+    return {
+      instituteName,
+      slug,
+      logo: logo_url ?? null,
+      contactNumber: phone ?? null,
+      email: email ?? null,
+      ...otherData,
+    };
+  }
+
   static async createBusiness(data: businessRepo.BusinessCreateInput, userId: number) {
     if (!data.slug) {
       throw new BadRequestError('Slug is required');

@@ -33,6 +33,7 @@ export const createUserForBusiness = async (businessId: number, userData: Create
         role: UserRole;
         businessId: number;
         status: UserStatus;
+        emailVerified: boolean;
         mobile?: string;
     } = {
         name: userData.name,
@@ -40,7 +41,9 @@ export const createUserForBusiness = async (businessId: number, userData: Create
         password: await AuthService.hashPassword(userData.password),
         role: userData.role,
         businessId,
-        status: UserStatus.ACTIVE
+        status: UserStatus.ACTIVE,
+        // Created by a business admin, who vouches for the address: no magic link needed.
+        emailVerified: true
     };
     if (userData.mobile !== undefined) createData.mobile = userData.mobile;
 
