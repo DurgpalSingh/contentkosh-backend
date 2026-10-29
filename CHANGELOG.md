@@ -1,5 +1,10 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.43] - Updated readme for gmail api setup
+**P.R Raised by** : shubh404-SE on **Date** : 2026-10-30
+
+### Changed
+  - updated readme for gmail api setup, added more error and solution in readme.
 ## Version [1.2.43] - subjective test paper
 **P.R Raised by** : shubh404-SE on **Date** : 2026-10-06
 
