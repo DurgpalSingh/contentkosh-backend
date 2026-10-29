@@ -38,6 +38,7 @@ export async function findByToken(token: string) {
                     role: true,
                     businessId: true,
                     status: true,
+                    emailVerified: true,
                     business: {
                         select: {
                             slug: true,
