@@ -8,23 +8,15 @@ import { CreateBusinessDto, UpdateBusinessDto } from '../dtos/business.dto';
 
 export const createBusiness = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { instituteName, slug, logo_url, phone, email, ...otherData } = req.body as CreateBusinessDto;
+    const dto = req.body as CreateBusinessDto;
     const user = req.user;
-    logger.info(`Creating business: ${instituteName} for user: ${user?.id}`);
+    logger.info(`Creating business: ${dto.instituteName} for user: ${user?.id}`);
 
     if (!user) {
       throw new BadRequestError('User context required');
     }
 
-    // Map incoming fields to DB fields
-    const businessData = {
-      instituteName,
-      slug,
-      logo: logo_url ?? null,
-      contactNumber: phone ?? null,
-      email: email ?? null,
-      ...otherData
-    };
+    const businessData = BusinessService.toCreateInput(dto);
 
     const business = await BusinessService.createBusiness(businessData, user.id);
 

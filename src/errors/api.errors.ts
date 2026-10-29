@@ -2,6 +2,7 @@
 import { Response } from 'express';
 import { ApiResponseHandler, ApiCode } from '../utils/apiResponse';
 import { HTTP_STATUS } from '../constants/httpStatus.constants';
+import { EMAIL_VERIFICATION_MESSAGES } from '../constants/emailVerification.constants';
 
 export class ApiError extends Error {
   statusCode: number;
@@ -94,6 +95,55 @@ export class SessionAlreadyActiveError extends ApiError {
       success: false,
       apiCode: ApiCode.ERR_SESSION_ALREADY_ACTIVE,
       message: this.message,
+    });
+  }
+}
+
+export class EmailNotVerifiedError extends ApiError {
+  email: string;
+
+  constructor(email: string, message: string = EMAIL_VERIFICATION_MESSAGES.EMAIL_NOT_VERIFIED) {
+    super(message, HTTP_STATUS.FORBIDDEN);
+    this.name = 'EmailNotVerifiedError';
+    this.email = email;
+  }
+
+  override respond(res: Response): void {
+    res.status(this.statusCode).json({
+      success: false,
+      apiCode: ApiCode.ERR_EMAIL_NOT_VERIFIED,
+      message: this.message,
+      email: this.email,
+    });
+  }
+}
+
+export class VerificationLinkInvalidError extends ApiError {
+  constructor(message: string = EMAIL_VERIFICATION_MESSAGES.LINK_INVALID) {
+    super(message, HTTP_STATUS.BAD_REQUEST);
+    this.name = 'VerificationLinkInvalidError';
+  }
+
+  override respond(res: Response): void {
+    ApiResponseHandler.error(res, this.message, this.statusCode, ApiCode.ERR_VERIFICATION_LINK_INVALID);
+  }
+}
+
+export class VerificationLinkExpiredError extends ApiError {
+  email: string;
+
+  constructor(email: string, message: string = EMAIL_VERIFICATION_MESSAGES.LINK_EXPIRED) {
+    super(message, HTTP_STATUS.GONE);
+    this.name = 'VerificationLinkExpiredError';
+    this.email = email;
+  }
+
+  override respond(res: Response): void {
+    res.status(this.statusCode).json({
+      success: false,
+      apiCode: ApiCode.ERR_VERIFICATION_LINK_EXPIRED,
+      message: this.message,
+      email: this.email,
     });
   }
 }

@@ -2,7 +2,9 @@
 import { Request, Response } from 'express';
 import { AuthService } from '../services/auth.service';
 import { ApiResponseHandler } from '../utils/apiResponse';
-import { RegisterRequest, LoginRequest, AuthRequest } from '../dtos/auth.dto';
+import { RegisterRequest, LoginRequest, AuthRequest, VerifyEmailRequest, ResendVerificationRequest } from '../dtos/auth.dto';
+import { resendVerificationEmail } from '../services/emailVerification.service';
+import { EMAIL_VERIFICATION_MESSAGES } from '../constants/emailVerification.constants';
 import * as userService from '../services/user.service';
 import { clearAuthCookies, getRefreshTokenFromRequest, setAuthCookies } from '../utils/authCookies';
 import { handleControllerError } from '../utils/controllerErrorHandler';
@@ -11,10 +13,34 @@ export const register = async (req: Request, res: Response) => {
     try {
         const data: RegisterRequest = req.body;
         const result = await AuthService.register(data);
-        setAuthCookies(res, result.accessToken, result.refreshToken);
-        ApiResponseHandler.success(res, result.user, 'User registered successfully', 201);
+        // No cookies: the account cannot log in until the emailed link is opened.
+        ApiResponseHandler.success(res, result, EMAIL_VERIFICATION_MESSAGES.SIGNUP_SUCCESS, 201);
     } catch (error) {
         handleControllerError(res, error, 'Error registering user', 'Error registering user');
+    }
+};
+
+export const verifyEmail = async (req: Request, res: Response) => {
+    try {
+        const { token }: VerifyEmailRequest = req.body;
+        const { tokens, ...result } = await AuthService.verifyEmail(token);
+        if (tokens) {
+            setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
+        }
+        ApiResponseHandler.success(res, result, EMAIL_VERIFICATION_MESSAGES.VERIFIED);
+    } catch (error) {
+        handleControllerError(res, error, 'Error verifying email', 'Error verifying email');
+    }
+};
+
+export const resendVerification = async (req: Request, res: Response) => {
+    try {
+        const { email }: ResendVerificationRequest = req.body;
+        await resendVerificationEmail(email);
+        // Same answer whether or not the account exists, is verified, or is cooling down.
+        ApiResponseHandler.success(res, null, EMAIL_VERIFICATION_MESSAGES.RESEND_GENERIC);
+    } catch (error) {
+        handleControllerError(res, error, 'Error resending verification email', 'Error resending verification email');
     }
 };
 

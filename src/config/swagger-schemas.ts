@@ -170,7 +170,25 @@ export const swaggerSchemas = {
       },
       slug: {
         type: 'string',
-        description: 'Optional slug of an existing business to join as a guest (role USER). Omit to bootstrap a new institute owner (role ADMIN, no business yet).'
+        description: 'Optional slug of an existing business to join as a guest (role USER). Omit to register a new institute owner (role ADMIN); then `business` is required.'
+      },
+      business: {
+        type: 'object',
+        description: 'Institute details, required when `slug` is omitted. The business is only created once the emailed verification link is opened.',
+        required: ['instituteName', 'slug'],
+        properties: {
+          instituteName: { type: 'string', maxLength: 100 },
+          slug: { type: 'string', pattern: '^[a-z0-9-]+$' },
+          logo_url: { type: 'string', format: 'uri' },
+          phone: { type: 'string', description: 'E.164 phone number' },
+          email: { type: 'string', format: 'email' },
+          tagline: { type: 'string' },
+          address: { type: 'string' },
+          youtubeUrl: { type: 'string', format: 'uri' },
+          instagramUrl: { type: 'string', format: 'uri' },
+          linkedinUrl: { type: 'string', format: 'uri' },
+          facebookUrl: { type: 'string', format: 'uri' }
+        }
       }
     }
   },

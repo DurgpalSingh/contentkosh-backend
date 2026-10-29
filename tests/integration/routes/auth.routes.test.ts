@@ -6,12 +6,23 @@ import authRoutes from '../../../src/routes/auth.routes';
 import { AuthService } from '../../../src/services/auth.service';
 import * as UserService from '../../../src/services/user.service';
 import { errorHandler } from '../../../src/middlewares/error.middleware';
-import { AuthError, ForbiddenError, AlreadyExistsError, NotFoundError, SessionAlreadyActiveError } from '../../../src/errors/api.errors';
+import * as EmailVerificationService from '../../../src/services/emailVerification.service';
+import {
+    AuthError,
+    ForbiddenError,
+    AlreadyExistsError,
+    NotFoundError,
+    SessionAlreadyActiveError,
+    EmailNotVerifiedError,
+    VerificationLinkInvalidError,
+    VerificationLinkExpiredError,
+} from '../../../src/errors/api.errors';
 
 // Mock dependencies
 jest.mock('../../../src/services/auth.service');
 jest.mock('../../../src/repositories/user.repo');
 jest.mock('../../../src/services/user.service');
+jest.mock('../../../src/services/emailVerification.service');
 jest.mock('../../../src/utils/logger');
 
 /**
@@ -55,30 +66,49 @@ describe('Auth Routes', () => {
             mobile: '9876543210'
         };
 
-        it('should register a new user successfully and set auth cookies', async () => {
+        const validBusiness = { instituteName: 'Test Institute', slug: 'test-institute' };
+
+        it('should register an institute owner without logging them in', async () => {
             (AuthService.register as jest.Mock).mockResolvedValue({
-                accessToken: 'jwt-access-token',
-                refreshToken: 'jwt-refresh-token',
-                user: {
-                    id: 1,
-                    email: 'test@test.com',
-                    name: 'Test User',
-                    role: 'USER',
-                    businessId: null
-                }
+                user: { id: 1, email: 'test@test.com', name: 'Test User', role: 'ADMIN', businessId: null },
+                emailSent: true,
             });
 
             const res = await request(app)
                 .post('/auth/signup')
-                .send(validSignupData);
+                .send({ ...validSignupData, business: validBusiness });
 
             expect(res.status).toBe(201);
-            // Tokens are in httpOnly cookies, not in response body
-            expect(res.body.data).toHaveProperty('email', 'test@test.com');
+            expect(res.body.data).toHaveProperty('emailSent', true);
+            expect(res.body.data.user).toHaveProperty('email', 'test@test.com');
             expect(res.body.data).not.toHaveProperty('accessToken');
-            expect(res.body.message).toContain('User registered successfully');
-            // Cookies should be set
-            expect(res.headers['set-cookie']).toBeDefined();
+            // No session until the emailed link is opened
+            expect(res.headers['set-cookie']).toBeUndefined();
+            expect(AuthService.register).toHaveBeenCalledWith(
+                expect.objectContaining({ business: expect.objectContaining({ slug: 'test-institute' }) }),
+            );
+        });
+
+        it('should report emailSent=false when the verification mail could not be sent', async () => {
+            (AuthService.register as jest.Mock).mockResolvedValue({
+                user: { id: 1, email: 'test@test.com', name: 'Test User', role: 'ADMIN', businessId: null },
+                emailSent: false,
+            });
+
+            const res = await request(app)
+                .post('/auth/signup')
+                .send({ ...validSignupData, business: validBusiness });
+
+            expect(res.status).toBe(201);
+            expect(res.body.data).toHaveProperty('emailSent', false);
+        });
+
+        it('should return 400 if the nested business slug is invalid', async () => {
+            const res = await request(app)
+                .post('/auth/signup')
+                .send({ ...validSignupData, business: { instituteName: 'X', slug: 'Bad Slug!' } });
+
+            expect(res.status).toBe(400);
         });
 
         it('should return 400 if name is missing', async () => {
@@ -141,17 +171,10 @@ describe('Auth Routes', () => {
             slug: 'vidit-publication'
         };
 
-        it('should create a guest account successfully and set auth cookies', async () => {
+        it('should create a guest account without logging them in', async () => {
             (AuthService.register as jest.Mock).mockResolvedValue({
-                accessToken: 'jwt-access-token',
-                refreshToken: 'jwt-refresh-token',
-                user: {
-                    id: 2,
-                    email: 'guest@test.com',
-                    name: 'Guest User',
-                    role: 'USER',
-                    businessId: 1
-                }
+                user: { id: 2, email: 'guest@test.com', name: 'Guest User', role: 'USER', businessId: 1 },
+                emailSent: true,
             });
 
             const res = await request(app)
@@ -159,10 +182,10 @@ describe('Auth Routes', () => {
                 .send(validGuestSignupData);
 
             expect(res.status).toBe(201);
-            expect(res.body.data).toHaveProperty('email', 'guest@test.com');
-            expect(res.body.data).toHaveProperty('role', 'USER');
+            expect(res.body.data.user).toHaveProperty('email', 'guest@test.com');
+            expect(res.body.data.user).toHaveProperty('role', 'USER');
             expect(res.body.data).not.toHaveProperty('accessToken');
-            expect(res.headers['set-cookie']).toBeDefined();
+            expect(res.headers['set-cookie']).toBeUndefined();
             expect(AuthService.register).toHaveBeenCalledWith(expect.objectContaining({ slug: 'vidit-publication' }));
         });
 
@@ -193,6 +216,112 @@ describe('Auth Routes', () => {
 
             expect(res.status).toBe(409);
             expect(res.body.message).toContain('User with this email already exists');
+        });
+    });
+
+    // ==================== EMAIL VERIFICATION ====================
+
+    describe('POST /auth/verify-email', () => {
+        it('should verify, set cookies and auto-login a new institute owner', async () => {
+            (AuthService.verifyEmail as jest.Mock).mockResolvedValue({
+                verified: true,
+                alreadyVerified: false,
+                autoLogin: true,
+                slug: 'test-institute',
+                tokens: { accessToken: 'jwt-access-token', refreshToken: 'jwt-refresh-token' },
+            });
+
+            const res = await request(app).post('/auth/verify-email').send({ token: 'raw-token' });
+
+            expect(res.status).toBe(200);
+            expect(res.body.data).toMatchObject({ verified: true, autoLogin: true, slug: 'test-institute' });
+            // Tokens only travel in httpOnly cookies
+            expect(res.body.data).not.toHaveProperty('tokens');
+            expect(res.headers['set-cookie']).toBeDefined();
+            expect(AuthService.verifyEmail).toHaveBeenCalledWith('raw-token');
+        });
+
+        it('should only verify a guest, without cookies', async () => {
+            (AuthService.verifyEmail as jest.Mock).mockResolvedValue({
+                verified: true,
+                alreadyVerified: false,
+                autoLogin: false,
+                slug: 'vidit-publication',
+            });
+
+            const res = await request(app).post('/auth/verify-email').send({ token: 'raw-token' });
+
+            expect(res.status).toBe(200);
+            expect(res.body.data).toMatchObject({ verified: true, autoLogin: false });
+            expect(res.headers['set-cookie']).toBeUndefined();
+        });
+
+        it('should not log in again when the link was already used', async () => {
+            (AuthService.verifyEmail as jest.Mock).mockResolvedValue({
+                verified: true,
+                alreadyVerified: true,
+                autoLogin: false,
+                slug: 'test-institute',
+            });
+
+            const res = await request(app).post('/auth/verify-email').send({ token: 'raw-token' });
+
+            expect(res.status).toBe(200);
+            expect(res.body.data).toMatchObject({ alreadyVerified: true, autoLogin: false });
+            expect(res.headers['set-cookie']).toBeUndefined();
+        });
+
+        it('should return 400 with ERR_VERIFICATION_LINK_INVALID for an unknown token', async () => {
+            (AuthService.verifyEmail as jest.Mock).mockRejectedValue(new VerificationLinkInvalidError());
+
+            const res = await request(app).post('/auth/verify-email').send({ token: 'nope' });
+
+            expect(res.status).toBe(400);
+            expect(res.body.apiCode).toBe('ERR_VERIFICATION_LINK_INVALID');
+        });
+
+        it('should return 410 with the email for an expired link', async () => {
+            (AuthService.verifyEmail as jest.Mock).mockRejectedValue(new VerificationLinkExpiredError('test@test.com'));
+
+            const res = await request(app).post('/auth/verify-email').send({ token: 'old' });
+
+            expect(res.status).toBe(410);
+            expect(res.body.apiCode).toBe('ERR_VERIFICATION_LINK_EXPIRED');
+            expect(res.body.email).toBe('test@test.com');
+        });
+
+        it('should return 409 when the institute slug was taken before the link was opened', async () => {
+            (AuthService.verifyEmail as jest.Mock).mockRejectedValue(
+                new AlreadyExistsError("Business with slug 'test-institute' already exists"),
+            );
+
+            const res = await request(app).post('/auth/verify-email').send({ token: 'raw-token' });
+
+            expect(res.status).toBe(409);
+        });
+
+        it('should return 400 if token is missing', async () => {
+            const res = await request(app).post('/auth/verify-email').send({});
+
+            expect(res.status).toBe(400);
+        });
+    });
+
+    describe('POST /auth/resend-verification', () => {
+        it('should always answer with the same generic success', async () => {
+            (EmailVerificationService.resendVerificationEmail as jest.Mock).mockResolvedValue(undefined);
+
+            const res = await request(app).post('/auth/resend-verification').send({ email: 'anyone@test.com' });
+
+            expect(res.status).toBe(200);
+            expect(res.body.message).toContain('If an unverified account exists');
+            expect(EmailVerificationService.resendVerificationEmail).toHaveBeenCalledWith('anyone@test.com');
+        });
+
+        it('should return 400 for an invalid email', async () => {
+            const res = await request(app).post('/auth/resend-verification').send({ email: 'not-an-email' });
+
+            expect(res.status).toBe(400);
         });
     });
 
@@ -278,6 +407,20 @@ describe('Auth Routes', () => {
             expect(res.status).toBe(409);
             expect(res.body.apiCode).toBe('ERR_SESSION_ALREADY_ACTIVE');
             expect(res.body.message).toMatch(/already logged in/i);
+            expect(res.headers['set-cookie']).toBeUndefined();
+        });
+
+        it('should return 403 with ERR_EMAIL_NOT_VERIFIED and the email when the address is unverified', async () => {
+            (AuthService.login as jest.Mock).mockRejectedValue(new EmailNotVerifiedError('test@test.com'));
+
+            const res = await request(app)
+                .post('/auth/login')
+                .send(validLoginData);
+
+            expect(res.status).toBe(403);
+            expect(res.body.apiCode).toBe('ERR_EMAIL_NOT_VERIFIED');
+            expect(res.body.message).toMatch(/verify your email/i);
+            expect(res.body.email).toBe('test@test.com');
             expect(res.headers['set-cookie']).toBeUndefined();
         });
     });
