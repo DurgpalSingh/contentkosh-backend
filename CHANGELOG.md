@@ -1,5 +1,14 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.45] - SMTP mail via nodemailer
+**P.R Raised by** : shubh404-SE on **Date** : 2026-10-30
+
+### Changed
+  - replaced Gmail API (OAuth2) mail sending with SMTP via nodemailer (Hostinger). Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM_NAME`, `MAIL_FROM_EMAIL`.
+
+### Removed
+  - removed `GMAIL_*` env variables, `google-auth-library` dependency and `scripts/getGmailRefreshToken.ts`.
+---
 ## Version [1.2.44] - Updated readme for gmail api setup
 **P.R Raised by** : shubh404-SE on **Date** : 2026-10-30
 
