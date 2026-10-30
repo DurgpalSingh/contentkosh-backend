@@ -21,6 +21,16 @@ export const requestContext = {
     return asyncLocalStorage.getStore();
   },
 
+  /**
+   * Wraps a callback so it runs inside the current request context. Needed for libraries
+   * that invoke callbacks outside it (e.g. multer with a body that has no file part).
+   */
+  bind<A extends unknown[]>(fn: (...args: A) => void): (...args: A) => void {
+    const store = asyncLocalStorage.getStore();
+    if (!store) return fn;
+    return (...args: A) => asyncLocalStorage.run(store, () => fn(...args));
+  },
+
   setUser(user: RequestContextData['user']) {
     const store = asyncLocalStorage.getStore();
     if (store) store.user = user;

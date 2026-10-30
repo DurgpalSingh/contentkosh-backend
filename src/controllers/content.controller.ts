@@ -1,13 +1,12 @@
 import { Response } from 'express';
 import { ApiResponseHandler } from '../utils/apiResponse';
-import logger from '../utils/logger';
 import { ValidationUtils } from '../utils/validation';
 import { plainToInstance } from 'class-transformer';
 import { CreateContentDto, UpdateContentDto, ContentQueryDto } from '../dtos/content.dto';
 import { ContentService } from '../services/content.service';
 import { AuthRequest } from '../dtos/auth.dto';
 import { handleControllerError } from '../utils/controllerErrorHandler';
-import * as fs from 'fs';
+import { uploadsFileStorage } from '../services/fileStorage.service';
 
 export class ContentController {
   private contentService: ContentService;
@@ -96,34 +95,8 @@ export class ContentController {
       const id = ValidationUtils.validateId(req.params.contentId, 'Content ID');
       const user = req.user!;
 
-      const fileInfo = await this.contentService.getContentFile(id, user);
-
-      // Set appropriate headers
-      res.setHeader('Content-Type', fileInfo.mimeType);
-      res.setHeader('Content-Disposition', `inline; filename="${fileInfo.fileName}"`);
-
-      // Stream the file
-      const fileStream = fs.createReadStream(fileInfo.filePath);
-      fileStream.pipe(res);
-
-      // Properly close the stream when response ends
-      res.on('finish', () => {
-        fileStream.destroy();
-      });
-
-      res.on('close', () => {
-        if (!fileStream.destroyed) {
-          fileStream.destroy();
-        }
-      });
-
-      fileStream.on('error', (error) => {
-        logger.error(`Error streaming file: ${error.message}`);
-        if (!res.headersSent) {
-          ApiResponseHandler.error(res, 'Failed to stream file');
-        }
-        fileStream.destroy();
-      });
+      const contentFileDownload = await this.contentService.getContentFileDownload(id, user);
+      await uploadsFileStorage.streamToResponse(res, contentFileDownload);
 
     } catch (error) {
       handleControllerError(res, error, 'Failed to get content file', 'Error getting content file');

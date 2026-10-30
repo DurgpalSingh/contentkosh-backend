@@ -1,5 +1,61 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.45] - SMTP mail via nodemailer
+**P.R Raised by** : shubh404-SE on **Date** : 2026-10-30
+
+### Changed
+  - replaced Gmail API (OAuth2) mail sending with SMTP via nodemailer (Hostinger). Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM_NAME`, `MAIL_FROM_EMAIL`.
+
+### Removed
+  - removed `GMAIL_*` env variables, `google-auth-library` dependency and `scripts/getGmailRefreshToken.ts`.
+---
+## Version [1.2.44] - Updated readme for gmail api setup
+**P.R Raised by** : shubh404-SE on **Date** : 2026-10-30
+
+### Changed
+  - updated readme for gmail api setup, added more error and solution in readme.
+## Version [1.2.43] - subjective test paper
+**P.R Raised by** : shubh404-SE on **Date** : 2026-10-06
+
+### Added
+  - added new subjective test table and api end points for admin/teacher/student to create and attempt subjective test and get result of subjective test.
+---
+## Version [1.2.42] - Single Session Login
+**P.R Raised by** : shubh404-SE on **Date** : 2026-09-27
+
+### Added
+  - added a new feature to restrict user to login in one place only, if user try to login in another place then it will show error message "You're already logged in on another device or browser. Please log out there first, or wait for that session to expire before signing in again."
+---
+## Version [1.2.41] - email template improved
+**P.R Raised by** : shubh404-SE on **Date** : 2026-09-27
+
+### Changed
+  - email template improved for better look and feel.
+---
+## Version [1.2.40] - restrict batch detail access from unknown user
+**P.R Raised by** : shubh404-SE on **Date** : 2026-09-25
+
+### Fixed
+  - fixed issue in batch detail api, now only student and teacher of that batch can access the batch details.
+---
+## Version [1.2.39] - notify bussiness when it is on hold by superadmin
+**P.R Raised by** : shubh404-SE on **Date** : 2026-09-25
+
+### Added
+  - added a new logic to notify bussiness when it is on hold by superadmin, this will send email to bussiness admin.
+---
+## Version [1.2.38] - superadmin cookie modification for workspace access
+**P.R Raised by** : shubh404-SE on **Date** : 2026-09-11
+
+### Changes
+  - superadmin cookie modified to admin of a bussiness so he can access that bussiness.
+---
+## Version [1.2.37] - Mail notification on new bussiness signup
+**P.R Raised by** : shubh404-SE on **Date** : 2026-09-09
+
+### Added
+  - add gmail service to send email on every bussiness signup
+---
 ## Version [1.2.36] - BusinessSuspendedError responce updated
 **P.R Raised by** : shubh404-SE on **Date** : 2026-08-25
 

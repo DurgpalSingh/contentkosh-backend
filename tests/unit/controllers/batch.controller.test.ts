@@ -277,7 +277,7 @@ describe('Batch Controller', () => {
 
             await batchController.getUsersByBatch(req as Request, res as Response);
 
-            expect(getUsersByBatchSpy).toHaveBeenCalledWith(1, undefined);
+            expect(getUsersByBatchSpy).toHaveBeenCalledWith(1, req.user, undefined);
             expect(ApiResponseHandler.success).toHaveBeenCalledWith(res, mockData, 'Batch users fetched successfully');
         });
     });

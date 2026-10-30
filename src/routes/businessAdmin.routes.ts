@@ -8,6 +8,7 @@ import {
   listBusinesses,
   getBusinessDetail,
   updateBusinessStatus,
+  impersonateBusiness,
 } from '../controllers/businessAdmin.controller';
 
 const router = Router();
@@ -113,5 +114,34 @@ router.get('/businesses/:id', validateIdParam(), getBusinessDetail);
  *         description: Business not found
  */
 router.patch('/businesses/:id/status', validateIdParam(), validateDto(UpdateBusinessStatusDto), updateBusinessStatus);
+
+/**
+ * @swagger
+ * /api/superadmin/businesses/{id}/impersonate:
+ *   post:
+ *     summary: Open a business and act as its admin (Super Admin only)
+ *     description: >
+ *       Mints a short-lived session (60 minutes) scoped to this business with full ADMIN
+ *       capabilities, without ending the Super Admin's own session. Only active, fully
+ *       provisioned businesses can be opened this way. Call POST /api/auth/refresh to leave
+ *       the workspace and return to the Super Admin's real session.
+ *     tags: [SuperAdmin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Now viewing business
+ *       400:
+ *         description: Business is not active
+ *       404:
+ *         description: Business not found
+ */
+router.post('/businesses/:id/impersonate', validateIdParam(), impersonateBusiness);
 
 export default router;

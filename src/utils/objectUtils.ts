@@ -2,13 +2,25 @@ export function hasOwnProperties<T extends Record<string, unknown>>(obj?: T | nu
   return !!obj && Object.keys(obj).length > 0;
 }
 
-export function pickDefined<T extends Record<string, any>, K extends readonly (keyof T)[]>(
+/** `Pick<T, K>` where keys that may be `undefined` become optional (and never hold `undefined`). */
+export type PickedDefined<T, K extends keyof T> = {
+  [P in K as undefined extends T[P] ? never : P]: T[P];
+} & {
+  [P in K as undefined extends T[P] ? P : never]?: Exclude<T[P], undefined>;
+};
+
+/**
+ * Copies only the listed keys whose value is not `undefined`. Required keys stay required in the type,
+ * so a validated create DTO can go straight into a Prisma create (Prisma would otherwise need
+ * `...(x !== undefined ? { x } : {})` per field under exactOptionalPropertyTypes).
+ */
+export function pickDefined<T extends Record<string, any>, K extends keyof T>(
   source: T,
-  keys: ReadonlyArray<K[number]>
-): Partial<T> {
-  const out: Partial<T> = {};
+  keys: ReadonlyArray<K>
+): PickedDefined<T, K> {
+  const out: Partial<Record<K, unknown>> = {};
   for (const k of keys) {
-    if (k in source && (source as any)[k] !== undefined) out[k] = (source as any)[k];
+    if (k in source && source[k] !== undefined) out[k] = source[k];
   }
-  return out;
+  return out as unknown as PickedDefined<T, K>;
 }

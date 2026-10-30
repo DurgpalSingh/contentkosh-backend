@@ -414,3 +414,12 @@ export function hasAttemptsForExamTest(businessId: number, examTestId: string) {
 }
 
 
+
+/** A question or option in the current tenant schema whose media URL points at this upload path. */
+export async function findQuestionMediaReference(mediaPath: string) {
+  const [question, option] = await Promise.all([
+    prisma.testQuestion.findFirst({ where: { mediaUrl: { endsWith: mediaPath } }, select: { id: true } }),
+    prisma.testOption.findFirst({ where: { mediaUrl: { endsWith: mediaPath } }, select: { id: true } }),
+  ]);
+  return question ?? option;
+}

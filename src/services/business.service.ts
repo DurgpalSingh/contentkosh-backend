@@ -1,9 +1,14 @@
-import { UserRole, UserStatus, BusinessProvisioningStatus } from '@prisma/client';
+import { Business, UserRole, UserStatus, BusinessProvisioningStatus } from '@prisma/client';
 import * as businessRepo from '../repositories/business.repo';
 import * as userRepo from '../repositories/user.repo';
+import * as refreshTokenRepo from '../repositories/refreshToken.repo';
 import { AlreadyExistsError, BadRequestError, NotFoundError } from '../errors/api.errors';
 import { prisma, publicPrisma } from '../config/database';
+import { config } from '../config/config';
+import { mailConfig } from '../config/mail.config';
 import logger from '../utils/logger';
+import { sendMail } from './mail.service';
+import { buildBusinessSignupEmailHtml, buildBusinessSignupEmailSubject } from '../templates/businessSignupEmail.template';
 import {
   ensureTenantSchema,
   migrateTenantSchema,
@@ -12,6 +17,26 @@ import {
   dropTenantSchema,
   seedTenantDefaults,
 } from './tenantProvisioning.service';
+
+async function notifyBusinessSignup(business: Business, admin: { name: string; email: string }): Promise<void> {
+  try {
+    await sendMail({
+      to: mailConfig.businessSignupNotificationEmail,
+      subject: buildBusinessSignupEmailSubject(business.instituteName),
+      html: buildBusinessSignupEmailHtml({
+        instituteName: business.instituteName,
+        slug: business.slug,
+        adminName: admin.name,
+        adminEmail: admin.email,
+        registeredOn: business.provisionedAt ?? new Date(),
+        dashboardUrl: `${config.server.frontendUrl}/superadmin/businesses`,
+        privacyUrl: `${config.server.frontendUrl}/privacy-policy`,
+      }),
+    });
+  } catch (error) {
+    logger.error('Failed to send business signup notification email', { businessId: business.id, error });
+  }
+}
 
 export class BusinessService {
   static async createBusiness(data: businessRepo.BusinessCreateInput, userId: number) {
@@ -65,16 +90,23 @@ export class BusinessService {
       }
 
       // 4) Link the creating user's public-schema row to this business
-      await userRepo.updateUser(userId, {
+      const adminUser = await userRepo.updateUser(userId, {
         businessId: business.id,
         role: UserRole.ADMIN,
         status: UserStatus.ACTIVE,
       });
+      
+      await refreshTokenRepo.revokeAllUserTokens(userId);
 
-      return await businessRepo.updateBusiness(business.id, {
+      const activeBusiness = await businessRepo.updateBusiness(business.id, {
         provisioningStatus: BusinessProvisioningStatus.ACTIVE,
         provisionedAt: new Date(),
       });
+
+      // Fire-and-forget: a notification failure must not fail signup itself.
+      void notifyBusinessSignup(activeBusiness, { name: adminUser.name, email: adminUser.email });
+
+      return activeBusiness;
     } catch (error) {
       logger.error('Business provisioning failed', { businessId: business.id, schemaName, error });
 
