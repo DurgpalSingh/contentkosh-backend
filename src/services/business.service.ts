@@ -1,6 +1,7 @@
 import { Business, UserRole, UserStatus, BusinessProvisioningStatus } from '@prisma/client';
 import * as businessRepo from '../repositories/business.repo';
 import * as userRepo from '../repositories/user.repo';
+import * as refreshTokenRepo from '../repositories/refreshToken.repo';
 import { AlreadyExistsError, BadRequestError, NotFoundError } from '../errors/api.errors';
 import { prisma, publicPrisma } from '../config/database';
 import { config } from '../config/config';
@@ -94,6 +95,8 @@ export class BusinessService {
         role: UserRole.ADMIN,
         status: UserStatus.ACTIVE,
       });
+      
+      await refreshTokenRepo.revokeAllUserTokens(userId);
 
       const activeBusiness = await businessRepo.updateBusiness(business.id, {
         provisioningStatus: BusinessProvisioningStatus.ACTIVE,
