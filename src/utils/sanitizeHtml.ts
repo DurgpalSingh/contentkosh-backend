@@ -17,7 +17,7 @@ import {
   QUIll_SANITIZE_LINK_TARGET,
 } from '../config/quillSanitizeConfig';
 
-type RichTextField = 'questionText' | 'explanation';
+type RichTextField = 'questionText' | 'explanation' | string;
 
 /** Options passed to `sanitize-html` for rich-text content; built from `quillSanitizeConfig`. */
 function buildQuillSanitizeHtmlOptions(): Record<string, unknown> {
@@ -30,6 +30,9 @@ function buildQuillSanitizeHtmlOptions(): Record<string, unknown> {
     allowedTags: [...QUIll_SANITIZE_ALLOWED_TAGS],
     allowedAttributes,
     allowedSchemes: [...QUIll_SANITIZE_ALLOWED_SCHEMES],
+    allowedSchemesByTag: {
+      img: [...QUIll_SANITIZE_ALLOWED_SCHEMES],
+    },
     transformTags: {
       a: sanitizeHtml.simpleTransform('a', {
         target: QUIll_SANITIZE_LINK_TARGET,
@@ -38,6 +41,17 @@ function buildQuillSanitizeHtmlOptions(): Record<string, unknown> {
     },
     disallowedTagsMode: QUIll_SANITIZE_DISALLOWED_TAGS_MODE,
     allowedClasses: QUIll_SANITIZE_ALLOWED_CLASSES,
+    allowedStyles: {
+      '*': {
+        // Allow alignment and sizing styles used by the editor
+        'text-align': [/^left$/, /^right$/, /^center$/, /^justify$/],
+        'float': [/^left$/, /^right$/, /^none$/],
+        'margin': [/^.*$/],
+        'display': [/^.*$/],
+        'width': [/^.*$/],
+        'height': [/^.*$/],
+      },
+    },
   };
 }
 
@@ -56,6 +70,7 @@ function getMeaningfulTextLength(html: string): number {
     .replace(/\s+/g, ' ')
     .trim();
   const combined = `${textFromTags} ${latexParts}`.replace(/\s+/g, ' ').trim();
+  
   return combined.length;
 }
 
@@ -117,4 +132,3 @@ export function sanitizeOptionalQuillHtml(
   const sanitized = sanitizeQuillHtmlInternal(input, fieldLabel, false, context);
   return sanitized.length ? sanitized : null;
 }
-

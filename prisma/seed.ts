@@ -1,4 +1,11 @@
-import { PrismaClient, UserRole, UserStatus, CourseStatus, SubjectStatus } from '@prisma/client';
+import {
+  PrismaClient,
+  UserRole,
+  UserStatus,
+  CourseStatus,
+  SubjectStatus,
+  AnnouncementScope,
+} from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { PERMISSIONS } from '../src/constants/permission.constants';
 
@@ -27,19 +34,11 @@ async function main() {
   // Hash password for all users
   const hashedPassword = await bcrypt.hash('Password#123', 10);
 
-  // Create users with direct business and role assignment
+  // Create users with direct business and role assignment.
+  // Note: SUPERADMIN is intentionally not seeded here - it's a platform-level account
+  // (businessId: null) not tied to this or any business. Run `npm run db:seed:superadmin`
+  // separately to create it.
   const users = await Promise.all([
-    // SUPERADMIN
-    prisma.user.create({
-      data: {
-        email: 'superadmin@contentkosh.com',
-        password: hashedPassword,
-        name: 'Super Admin',
-        businessId: business.id,
-        role: UserRole.SUPERADMIN,
-        status: UserStatus.ACTIVE,
-      },
-    }),
     // ADMIN
     prisma.user.create({
       data: {
@@ -313,7 +312,7 @@ async function main() {
     // Teacher assigned to UPSC batch
     prisma.batchUser.create({
       data: {
-        userId: users[2].id, // TEACHER
+        userId: users[1].id, // TEACHER
         batchId: batches[0].id, // UPSC batch
         isActive: true,
       },
@@ -321,7 +320,7 @@ async function main() {
     // Student assigned to UPSC batch
     prisma.batchUser.create({
       data: {
-        userId: users[3].id, // STUDENT
+        userId: users[2].id, // STUDENT
         batchId: batches[0].id, // UPSC batch
         isActive: true,
       },
@@ -343,7 +342,9 @@ async function main() {
   );
   console.log('✅ Seeding permissions:', permissions.map(p => p.code));
 
-  // Create announcements
+  const adminUserId = users[0].id;
+
+  // Create announcements (scope + targeting + audit fields)
   const announcements = await Promise.all([
     prisma.announcement.create({
       data: {
@@ -356,6 +357,10 @@ async function main() {
         visibleToAdmins: true,
         visibleToTeachers: true,
         visibleToStudents: true,
+        scope: AnnouncementScope.BATCH,
+        targetAllCourses: false,
+        targetAllBatches: true,
+        createdBy: adminUserId,
       },
     }),
     prisma.announcement.create({
@@ -369,6 +374,13 @@ async function main() {
         visibleToAdmins: true,
         visibleToTeachers: true,
         visibleToStudents: true,
+        scope: AnnouncementScope.COURSE,
+        targetAllCourses: false,
+        targetAllBatches: false,
+        createdBy: adminUserId,
+        targets: {
+          create: [{ courseId: courses[0].id }],
+        },
       },
     }),
     prisma.announcement.create({
@@ -382,6 +394,10 @@ async function main() {
         visibleToAdmins: true,
         visibleToTeachers: true,
         visibleToStudents: false,
+        scope: AnnouncementScope.BATCH,
+        targetAllCourses: false,
+        targetAllBatches: true,
+        createdBy: adminUserId,
       },
     }),
   ]);
@@ -391,7 +407,7 @@ async function main() {
   console.log('🎉 Database seeding completed successfully!');
   console.log('\n📊 Summary:');
   console.log(`- 1 Business: ${business.instituteName}`);
-  console.log(`- ${users.length} Users (SUPERADMIN, ADMIN, TEACHER, STUDENT, USER)`);
+  console.log(`- ${users.length} Users (ADMIN, TEACHER, STUDENT, USER)`);
   console.log(`- ${exams.length} Exams`);
   console.log(`- ${courses.length} Courses`);
   console.log(`- ${subjects.length} Subjects`);
@@ -400,11 +416,11 @@ async function main() {
   console.log(`- ${announcements.length} Announcements`);
 
   console.log('\n🔑 Test Credentials (Password: Password#123):');
-  console.log('- Super Admin: superadmin@contentkosh.com');
   console.log('- Admin: admin@contentkosh.com');
   console.log('- Teacher: teacher@contentkosh.com');
   console.log('- Student: student@contentkosh.com');
   console.log('- User: user@contentkosh.com');
+  console.log('\nRun `npm run db:seed:superadmin` to create the platform Super Admin account.');
 }
 
 main()

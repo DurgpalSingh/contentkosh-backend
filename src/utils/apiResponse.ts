@@ -9,6 +9,8 @@ export enum ApiCode {
     ERR_UNAUTHORIZED = 'ERR_UNAUTHORIZED',
     ERR_FORBIDDEN = 'ERR_FORBIDDEN',
     ERR_SERVER_ERROR = 'ERR_SERVER_ERROR',
+    ERR_BUSINESS_SUSPENDED = 'ERR_BUSINESS_SUSPENDED',
+    ERR_SESSION_ALREADY_ACTIVE = 'ERR_SESSION_ALREADY_ACTIVE',
 }
 
 export interface ApiResponse<T = any> {
@@ -16,6 +18,7 @@ export interface ApiResponse<T = any> {
     message?: string;
     data?: T;
     apiCode: ApiCode;
+    reason?: string;
 }
 export class ApiResponseHandler {
     static success<T>(res: Response, data?: T, message?: string, statusCode: number = 200): void {

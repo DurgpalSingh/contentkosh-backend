@@ -87,6 +87,10 @@ export const swaggerSchemas = {
         type: 'string',
         description: 'Mobile number'
       },
+      profilePicture: {
+        type: 'string',
+        description: 'Profile picture URL'
+      },
       role: {
         type: 'string',
         enum: ['ADMIN', 'TEACHER', 'STUDENT', 'USER'],
@@ -121,7 +125,7 @@ export const swaggerSchemas = {
       },
       role: {
         type: 'string',
-        enum: ['ADMIN', 'TEACHER', 'STUDENT', 'USER'],
+        enum: ['SUPERADMIN', 'ADMIN', 'TEACHER', 'STUDENT', 'USER'],
         description: 'User role'
       },
       status: {
@@ -159,6 +163,14 @@ export const swaggerSchemas = {
         type: 'string',
         minLength: 1,
         description: 'User full name'
+      },
+      mobile: {
+        type: 'string',
+        description: 'Optional mobile number'
+      },
+      slug: {
+        type: 'string',
+        description: 'Optional slug of an existing business to join as a guest (role USER). Omit to bootstrap a new institute owner (role ADMIN, no business yet).'
       }
     }
   },
@@ -646,9 +658,16 @@ export const swaggerSchemas = {
         type: 'string',
         description: 'Description of the course'
       },
-      duration: {
+      thumbnail: {
         type: 'string',
-        description: 'Duration of the course (e.g., 6 months, 1 year)'
+        nullable: true,
+        description: 'Course thumbnail URL or file path'
+      },
+      price: {
+        type: 'integer',
+        minimum: 0,
+        default: 0,
+        description: 'Course price as a whole number. Use 0 for free courses.'
       },
       status: {
         type: 'string',
@@ -691,9 +710,16 @@ export const swaggerSchemas = {
         type: 'string',
         description: 'Description of the course'
       },
-      duration: {
+      thumbnail: {
         type: 'string',
-        description: 'Duration of the course (e.g., 6 months, 1 year)'
+        nullable: true,
+        description: 'Course thumbnail URL or file path'
+      },
+      price: {
+        type: 'integer',
+        minimum: 0,
+        default: 0,
+        description: 'Course price as a whole number. Use 0 for free courses.'
       },
       status: {
         type: 'string',
@@ -719,9 +745,19 @@ export const swaggerSchemas = {
         type: 'string',
         description: 'Description of the course'
       },
-      duration: {
+      thumbnail: {
         type: 'string',
-        description: 'Duration of the course (e.g., 6 months, 1 year)'
+        nullable: true,
+        description: 'Course thumbnail URL or file path'
+      },
+      removeThumbnail: {
+        type: 'boolean',
+        description: 'Clear the existing course thumbnail'
+      },
+      price: {
+        type: 'integer',
+        minimum: 0,
+        description: 'Course price as a whole number. Use 0 for free courses.'
       },
       status: {
         type: 'string',
@@ -745,9 +781,16 @@ export const swaggerSchemas = {
         type: 'string',
         description: 'Description of the course'
       },
-      duration: {
+      thumbnail: {
         type: 'string',
-        description: 'Duration of the course'
+        nullable: true,
+        description: 'Course thumbnail URL or file path'
+      },
+      price: {
+        type: 'integer',
+        minimum: 0,
+        default: 0,
+        description: 'Course price as a whole number. Use 0 for free courses.'
       },
       status: {
         type: 'string',
@@ -861,6 +904,19 @@ export const swaggerSchemas = {
   },
 
   // Announcement Schemas
+  AnnouncementTarget: {
+    type: 'object',
+    properties: {
+      id: { type: 'integer' },
+      announcementId: { type: 'integer' },
+      courseId: { type: 'integer', nullable: true },
+      batchId: { type: 'integer', nullable: true },
+      createdAt: {
+        type: 'string',
+        format: 'date-time',
+      },
+    },
+  },
   Announcement: {
     type: 'object',
     properties: {
@@ -906,6 +962,29 @@ export const swaggerSchemas = {
         type: 'boolean',
         description: 'Whether the announcement is visible to students'
       },
+      scope: {
+        type: 'string',
+        enum: ['COURSE', 'BATCH'],
+        description: 'COURSE targets courses (all batches); BATCH targets specific batches'
+      },
+      targetAllCourses: {
+        type: 'boolean',
+        description: 'When scope is COURSE, apply to all courses in the business'
+      },
+      targetAllBatches: {
+        type: 'boolean',
+        description: 'When scope is BATCH, apply to all batches in the business'
+      },
+      createdBy: {
+        type: 'integer',
+        nullable: true,
+        description: 'Creator user id'
+      },
+      updatedBy: {
+        type: 'integer',
+        nullable: true,
+        description: 'Last updater user id'
+      },
       createdAt: {
         type: 'string',
         format: 'date-time',
@@ -915,6 +994,21 @@ export const swaggerSchemas = {
         type: 'string',
         format: 'date-time',
         description: 'Announcement last update timestamp'
+      },
+      targets: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/AnnouncementTarget',
+        },
+      },
+      createdByUser: {
+        type: 'object',
+        nullable: true,
+        properties: {
+          id: { type: 'integer' },
+          name: { type: 'string' },
+          email: { type: 'string' },
+        },
       },
       business: {
         type: 'object',
@@ -933,7 +1027,7 @@ export const swaggerSchemas = {
   },
   CreateAnnouncementRequest: {
     type: 'object',
-    required: ['heading', 'content', 'startDate', 'endDate', 'businessId'],
+    required: ['heading', 'content', 'startDate', 'endDate', 'scope'],
     properties: {
       heading: {
         type: 'string',
@@ -960,10 +1054,6 @@ export const swaggerSchemas = {
         default: true,
         description: 'Whether the announcement is active'
       },
-      businessId: {
-        type: 'integer',
-        description: 'ID of the business this announcement belongs to (required)'
-      },
       visibleToAdmins: {
         type: 'boolean',
         default: false,
@@ -978,7 +1068,32 @@ export const swaggerSchemas = {
         type: 'boolean',
         default: false,
         description: 'Whether the announcement is visible to students'
-      }
+      },
+      scope: {
+        type: 'string',
+        enum: ['COURSE', 'BATCH'],
+        description: 'Targeting mode (required)'
+      },
+      targetAllCourses: {
+        type: 'boolean',
+        default: false,
+        description: 'When scope is COURSE, target all courses'
+      },
+      targetAllBatches: {
+        type: 'boolean',
+        default: false,
+        description: 'When scope is BATCH, target all batches'
+      },
+      courseIds: {
+        type: 'array',
+        items: { type: 'integer' },
+        description: 'When scope is COURSE and targetAllCourses is false'
+      },
+      batchIds: {
+        type: 'array',
+        items: { type: 'integer' },
+        description: 'When scope is BATCH and targetAllBatches is false'
+      },
     }
   },
   UpdateAnnouncementRequest: {
@@ -1019,7 +1134,25 @@ export const swaggerSchemas = {
       visibleToStudents: {
         type: 'boolean',
         description: 'Whether the announcement is visible to students'
-      }
+      },
+      scope: {
+        type: 'string',
+        enum: ['COURSE', 'BATCH'],
+      },
+      targetAllCourses: {
+        type: 'boolean',
+      },
+      targetAllBatches: {
+        type: 'boolean',
+      },
+      courseIds: {
+        type: 'array',
+        items: { type: 'integer' },
+      },
+      batchIds: {
+        type: 'array',
+        items: { type: 'integer' },
+      },
     }
   },
 
@@ -1346,6 +1479,16 @@ export const swaggerSchemas = {
       batchId: {
         type: 'integer',
         description: 'Batch ID to add user to (required)'
+      }
+    }
+  },
+  SelfEnrollBatchRequest: {
+    type: 'object',
+    required: ['batchId'],
+    properties: {
+      batchId: {
+        type: 'integer',
+        description: 'Batch ID to self-enroll into (required)'
       }
     }
   },
@@ -1875,6 +2018,20 @@ export const swaggerSchemas = {
           }
         },
         description: 'Recently added content available to student'
+      },
+      recentExams: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', description: 'Exam test ID' },
+            name: { type: 'string', description: 'Exam test name' },
+            batchName: { type: 'string', description: 'Batch display name' },
+            startAt: { type: 'string', format: 'date-time', description: 'Exam start time' },
+            deadlineAt: { type: 'string', format: 'date-time', description: 'Exam deadline time' }
+          }
+        },
+        description: 'Recent live or upcoming exam tests for the student dashboard'
       }
     }
   },
@@ -2506,7 +2663,246 @@ export const swaggerSchemas = {
       totalScore: { type: 'number', minimum: 0 },
       percentage: { type: 'number', minimum: 0, maximum: 100 }
     }
-  }
+  },
+  // ==================== Subjective tests ====================
+  SubjectiveDisplayStatus: {
+    type: 'string',
+    enum: ['NOT_STARTED', 'IN_PROGRESS', 'SUBMITTED', 'CHECKED', 'EXPIRED'],
+    description: 'Derived, never stored. EXPIRED means started but not submitted before the effective end time.',
+  },
+  SubjectiveAvailability: {
+    type: 'string',
+    enum: ['UPCOMING', 'OPEN', 'CLOSED'],
+  },
+  SubjectiveTest: {
+    type: 'object',
+    required: ['id', 'businessId', 'batchId', 'name', 'paperType', 'status', 'isPublished', 'totalMarks', 'durationMinutes', 'startAt', 'deadlineAt', 'hasQuestionPaper'],
+    properties: {
+      id: { type: 'string' },
+      businessId: { type: 'integer' },
+      batchId: { type: 'integer' },
+      batchName: { type: 'string' },
+      subjectId: { type: 'integer', nullable: true },
+      subjectName: { type: 'string', nullable: true },
+      name: { type: 'string' },
+      paperType: { type: 'string', example: 'GS Paper I' },
+      description: { type: 'string', nullable: true },
+      instructions: { type: 'string', nullable: true },
+      status: { $ref: '#/components/schemas/TestStatus' },
+      isPublished: { type: 'boolean' },
+      totalMarks: { type: 'number' },
+      durationMinutes: { type: 'integer' },
+      startAt: { type: 'string', format: 'date-time' },
+      deadlineAt: { type: 'string', format: 'date-time' },
+      hasQuestionPaper: { type: 'boolean' },
+      questionPaperName: { type: 'string', nullable: true, description: 'Download name, from the paper type' },
+      createdBy: { type: 'integer' },
+      updatedBy: { type: 'integer', nullable: true },
+      createdAt: { type: 'string', format: 'date-time' },
+      updatedAt: { type: 'string', format: 'date-time' },
+    },
+  },
+  SubjectiveSubmissionCounts: {
+    type: 'object',
+    description: 'Count of batch students per display status',
+    required: ['NOT_STARTED', 'IN_PROGRESS', 'SUBMITTED', 'CHECKED', 'EXPIRED'],
+    properties: {
+      NOT_STARTED: { type: 'integer' },
+      IN_PROGRESS: { type: 'integer' },
+      SUBMITTED: { type: 'integer' },
+      CHECKED: { type: 'integer' },
+      EXPIRED: { type: 'integer' },
+    },
+  },
+  SubjectiveTestDetail: {
+    allOf: [
+      { $ref: '#/components/schemas/SubjectiveTest' },
+      {
+        type: 'object',
+        required: ['submissionCounts'],
+        properties: {
+          submissionCounts: { $ref: '#/components/schemas/SubjectiveSubmissionCounts' },
+        },
+      },
+    ],
+  },
+  SubjectiveAvailableTest: {
+    type: 'object',
+    required: ['id', 'batchId', 'name', 'paperType', 'totalMarks', 'durationMinutes', 'startAt', 'deadlineAt', 'hasQuestionPaper', 'availability', 'displayStatus'],
+    properties: {
+      id: { type: 'string' },
+      batchId: { type: 'integer' },
+      batchName: { type: 'string' },
+      subjectId: { type: 'integer', nullable: true },
+      subjectName: { type: 'string', nullable: true },
+      name: { type: 'string' },
+      paperType: { type: 'string' },
+      description: { type: 'string', nullable: true },
+      instructions: { type: 'string', nullable: true },
+      totalMarks: { type: 'number' },
+      durationMinutes: { type: 'integer' },
+      startAt: { type: 'string', format: 'date-time' },
+      deadlineAt: { type: 'string', format: 'date-time' },
+      hasQuestionPaper: { type: 'boolean' },
+      questionPaperName: { type: 'string', nullable: true, description: 'Download name, from the paper type' },
+      availability: { $ref: '#/components/schemas/SubjectiveAvailability' },
+      displayStatus: { $ref: '#/components/schemas/SubjectiveDisplayStatus' },
+      submissionId: { type: 'string', nullable: true },
+      effectiveDeadlineAt: { type: 'string', format: 'date-time', nullable: true },
+    },
+  },
+  SubjectiveStartResult: {
+    type: 'object',
+    required: ['submissionId', 'displayStatus', 'startedAt', 'effectiveDeadlineAt'],
+    properties: {
+      submissionId: { type: 'string' },
+      displayStatus: { $ref: '#/components/schemas/SubjectiveDisplayStatus' },
+      startedAt: { type: 'string', format: 'date-time' },
+      effectiveDeadlineAt: { type: 'string', format: 'date-time' },
+    },
+  },
+  SubjectiveSubmitResult: {
+    type: 'object',
+    required: ['submissionId', 'displayStatus', 'submittedAt'],
+    properties: {
+      submissionId: { type: 'string' },
+      displayStatus: { $ref: '#/components/schemas/SubjectiveDisplayStatus' },
+      submittedAt: { type: 'string', format: 'date-time' },
+    },
+  },
+  SubjectiveResult: {
+    type: 'object',
+    required: ['marksAwarded', 'totalMarks', 'hasCheckedAnswerSheet'],
+    properties: {
+      marksAwarded: { type: 'number' },
+      totalMarks: { type: 'number' },
+      remarks: { type: 'string', nullable: true },
+      checkedAt: { type: 'string', format: 'date-time', nullable: true },
+      hasCheckedAnswerSheet: { type: 'boolean' },
+    },
+  },
+  SubjectiveStudentSubmission: {
+    type: 'object',
+    required: ['submissionId', 'test', 'displayStatus', 'startedAt', 'effectiveDeadlineAt', 'hasAnswerSheet'],
+    properties: {
+      submissionId: { type: 'string' },
+      test: { $ref: '#/components/schemas/SubjectiveAvailableTest' },
+      displayStatus: { $ref: '#/components/schemas/SubjectiveDisplayStatus' },
+      startedAt: { type: 'string', format: 'date-time' },
+      effectiveDeadlineAt: { type: 'string', format: 'date-time' },
+      submittedAt: { type: 'string', format: 'date-time', nullable: true },
+      hasAnswerSheet: { type: 'boolean' },
+      answerSheetName: { type: 'string', nullable: true, description: "The student's original PDF name" },
+      result: {
+        allOf: [{ $ref: '#/components/schemas/SubjectiveResult' }],
+        nullable: true,
+        description: 'Present only once the submission is CHECKED',
+      },
+    },
+  },
+  SubjectiveStaffSubmission: {
+    type: 'object',
+    required: ['id', 'subjectiveTestId', 'displayStatus', 'startedAt', 'effectiveDeadlineAt', 'hasAnswerSheet', 'hasCheckedAnswerSheet'],
+    properties: {
+      id: { type: 'string' },
+      subjectiveTestId: { type: 'string' },
+      student: {
+        type: 'object',
+        nullable: true,
+        properties: {
+          id: { type: 'integer' },
+          name: { type: 'string' },
+          email: { type: 'string' },
+        },
+      },
+      displayStatus: { $ref: '#/components/schemas/SubjectiveDisplayStatus' },
+      startedAt: { type: 'string', format: 'date-time' },
+      effectiveDeadlineAt: { type: 'string', format: 'date-time' },
+      submittedAt: { type: 'string', format: 'date-time', nullable: true },
+      hasAnswerSheet: { type: 'boolean' },
+      answerSheetName: { type: 'string', nullable: true, description: "The student's original PDF name" },
+      marksAwarded: { type: 'number', nullable: true },
+      remarks: { type: 'string', nullable: true },
+      hasCheckedAnswerSheet: { type: 'boolean' },
+      checkedBy: { type: 'integer', nullable: true },
+      checkedAt: { type: 'string', format: 'date-time', nullable: true },
+    },
+  },
+  SubjectiveRosterRow: {
+    type: 'object',
+    required: ['studentId', 'studentName', 'studentEmail', 'displayStatus', 'hasCheckedAnswerSheet'],
+    properties: {
+      studentId: { type: 'integer' },
+      studentName: { type: 'string' },
+      studentEmail: { type: 'string' },
+      submissionId: { type: 'string', nullable: true },
+      displayStatus: { $ref: '#/components/schemas/SubjectiveDisplayStatus' },
+      startedAt: { type: 'string', format: 'date-time', nullable: true },
+      submittedAt: { type: 'string', format: 'date-time', nullable: true },
+      answerSheetName: { type: 'string', nullable: true, description: "The student's original PDF name" },
+      marksAwarded: { type: 'number', nullable: true },
+      remarks: { type: 'string', nullable: true },
+      hasCheckedAnswerSheet: { type: 'boolean' },
+      checkedAt: { type: 'string', format: 'date-time', nullable: true },
+    },
+  },
+  SubjectiveSubmissionList: {
+    type: 'object',
+    required: ['items', 'total', 'page', 'limit'],
+    properties: {
+      items: { type: 'array', items: { $ref: '#/components/schemas/SubjectiveRosterRow' } },
+      total: { type: 'integer' },
+      page: { type: 'integer' },
+      limit: { type: 'integer' },
+    },
+  },
+  CreateSubjectiveTestRequest: {
+    type: 'object',
+    required: ['batchId', 'name', 'paperType', 'totalMarks', 'durationMinutes', 'startAt', 'deadlineAt'],
+    properties: {
+      batchId: { type: 'integer', minimum: 1 },
+      subjectId: { type: 'integer', minimum: 1 },
+      name: { type: 'string', minLength: 1 },
+      paperType: { type: 'string', minLength: 1, example: 'GS Paper I' },
+      description: { type: 'string' },
+      instructions: { type: 'string' },
+      totalMarks: { type: 'number', exclusiveMinimum: 0 },
+      durationMinutes: { type: 'integer', minimum: 1 },
+      startAt: { type: 'string', format: 'date-time' },
+      deadlineAt: { type: 'string', format: 'date-time' },
+    },
+  },
+  UpdateSubjectiveTestRequest: {
+    type: 'object',
+    description: 'Only the fields being changed. Draft tests only.',
+    properties: {
+      batchId: { type: 'integer', minimum: 1 },
+      subjectId: { type: 'integer', minimum: 1, nullable: true },
+      name: { type: 'string', minLength: 1 },
+      paperType: { type: 'string', minLength: 1 },
+      description: { type: 'string', nullable: true },
+      instructions: { type: 'string', nullable: true },
+      totalMarks: { type: 'number', exclusiveMinimum: 0 },
+      durationMinutes: { type: 'integer', minimum: 1 },
+      startAt: { type: 'string', format: 'date-time' },
+      deadlineAt: { type: 'string', format: 'date-time' },
+    },
+  },
+  PublishSubjectiveTestRequest: {
+    type: 'object',
+    required: ['subjectiveTestId'],
+    properties: {
+      subjectiveTestId: { type: 'string' },
+    },
+  },
+  GradeSubjectiveSubmissionRequest: {
+    type: 'object',
+    required: ['marksAwarded'],
+    properties: {
+      marksAwarded: { type: 'number', minimum: 0, description: 'Between 0 and the test total marks' },
+      remarks: { type: 'string', maxLength: 5000, nullable: true },
+    },
+  },
 };
 
 export const swaggerParameters = {

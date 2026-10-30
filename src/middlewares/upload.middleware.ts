@@ -2,11 +2,18 @@ import { Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import * as path from 'path';
 import * as fs from 'fs';
-import { BadRequestError } from '../errors/api.errors';
-import { ContentType } from '@prisma/client';
+import { ApiError, BadRequestError } from '../errors/api.errors';
+import { ContentType, UserRole } from '@prisma/client';
 import { AuthRequest } from '../dtos/auth.dto';
+import logger from '../utils/logger';
 
-import { FILE_TYPE_CONFIG, IMAGE_UPLOAD_CONFIG } from '../config/file-type';
+import { EDITOR_IMAGE_UPLOAD_CONFIG, FILE_TYPE_CONFIG, IMAGE_UPLOAD_CONFIG } from '../config/file-type';
+import { SUBJECTIVE_TEST_CONFIG } from '../config/subjectiveTest.config';
+import { FILE_STORAGE_CONFIG, UPLOAD_FOLDERS, uploadFolderDir } from '../config/fileStorage.config';
+import { createUniqueFileName } from '../services/fileStorage.service';
+import { hasPdfSignature } from '../utils/fileSignature.util';
+import { FILE_NAME_RULES, FILE_PATH_REGEX } from '../constants/file.constants';
+import { requestContext } from '../contexts/request-context';
 
 const BYTES_IN_MB = 1024 * 1024;
 
@@ -95,22 +102,29 @@ const setRejectedUploadMessage = (req: Request, message: string): void => {
   (req as any).__uploadRejectedMessage = message;
 };
 
-// Ensure upload directory exists
-const uploadDir = process.env.UPLOAD_DIR || 'uploads/content';
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-// Configure multer storage
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
-    cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
+/**
+ * Common utility to parse JSON from FormData body
+ */
+export const parseMultipartData = (req: Request) => {
+  if (req.is('multipart/form-data') && req.body.data) {
+    try {
+      const parsed = JSON.parse(req.body.data);
+      req.body = { ...req.body, ...parsed };
+    } catch (e) {
+      logger.error('[upload-middleware] Failed to parse JSON from FormData', e);
+      throw new BadRequestError('Invalid JSON data in multipart request');
+    }
   }
+};
+
+// ─── General content upload ───────────────────────────────────────────────────
+
+const contentUploadDir = uploadFolderDir(UPLOAD_FOLDERS.content);
+ensureDirExists(contentUploadDir);
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, contentUploadDir),
+  filename: (_req, file, cb) => cb(null, createUniqueFileName(file.fieldname, path.extname(file.originalname))),
 });
 
 const fileFilter: multer.Options['fileFilter'] = (
@@ -155,7 +169,7 @@ const normalizeUploadError = (error: any, next: NextFunction) => {
     }
 
     if (error.code === 'LIMIT_UNEXPECTED_FILE') {
-      return next(new BadRequestError('Unexpected file field. Use field name "file".'));
+      return next(new BadRequestError('Unexpected file field.'));
     }
 
     return next(new BadRequestError(`Upload error: ${error.message}`));
@@ -166,120 +180,136 @@ const normalizeUploadError = (error: any, next: NextFunction) => {
 
 // Middleware to handle single file upload with explicit error bridging
 export const uploadSingleFile = (req: Request, res: Response, next: NextFunction) => {
-  upload.single('file')(req, res, (error: any) => {
-    if (error) {
-      return normalizeUploadError(error, next);
-    }
-
-    const rejectedMessage = getRejectedUploadMessage(req);
-    if (rejectedMessage) {
-      return next(new BadRequestError(rejectedMessage));
-    }
-
+  upload.single('file')(req, res, requestContext.bind((error: any) => {
+    if (error) return normalizeUploadError(error, next);
+    const msg = getRejectedUploadMessage(req);
+    if (msg) return next(new BadRequestError(msg));
     next();
-  });
+  }));
 };
 
-// Middleware to validate file size based on resolved content type
 export const validateFileSize = (req: Request, res: Response, next: NextFunction) => {
-  if (!req.file) {
-    return next(new BadRequestError('No file uploaded'));
-  }
+  if (!req.file) return next(new BadRequestError('No file uploaded'));
 
   const rule = getRuleByOriginalName(req.file.originalname);
-
   if (!rule) {
     removeUploadedFile(req.file.path);
-    return next(
-      new BadRequestError(
-        `File type is not accepted. Allowed types: ${acceptedExtensionsLabel}.`
-      )
-    );
+    return next(new BadRequestError(`File type is not accepted. Allowed types: ${acceptedExtensionsLabel}.`));
   }
-
   if (req.file.size > rule.maxSizeBytes) {
     removeUploadedFile(req.file.path);
-
     return next(
       new BadRequestError(
-        `File size cannot exceed ${formatSizeInMb(rule.maxSizeBytes)} for ${rule.contentType} files.`
-      )
+        `File size cannot exceed ${formatSizeInMb(rule.maxSizeBytes)} for ${rule.contentType} files.`,
+      ),
     );
   }
 
   req.body.type = rule.contentType;
   req.body.filePath = req.file.path;
   req.body.fileSize = req.file.size;
-
   next();
 };
+
+// ─── Editor image upload ──────────────────────────────────────────────────────
+
+ensureDirExists(EDITOR_IMAGE_UPLOAD_CONFIG.tempDir);
+
+const editorImageStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, EDITOR_IMAGE_UPLOAD_CONFIG.tempDir),
+  filename: (_req, file, cb) => {
+    const extension = path.extname(file.originalname).toLowerCase() || EDITOR_IMAGE_UPLOAD_CONFIG.defaultExtension;
+    cb(null, createUniqueFileName(FILE_NAME_RULES.TEMP_FILE_PREFIX, extension));
+  },
+});
+
+const editorImageMulter = multer({
+  storage: editorImageStorage,
+  limits: { fileSize: EDITOR_IMAGE_UPLOAD_CONFIG.maxSizeBytes },
+  fileFilter: (_req, file, cb) => {
+    if (EDITOR_IMAGE_UPLOAD_CONFIG.allowedMimeTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new BadRequestError('Only JPEG, PNG, WebP and GIF images are allowed'));
+    }
+  },
+});
+
+/**
+ * Multer middleware for editor image uploads.
+ * Accepts a single `image` field, saves to a temp directory.
+ * The controller (editorImage.controller) converts it to WebP via sharp.
+ */
+export const uploadEditorImageFile = (req: Request, res: Response, next: NextFunction) => {
+  editorImageMulter.single(EDITOR_IMAGE_UPLOAD_CONFIG.fieldName)(req, res, requestContext.bind((error: any) => {
+    if (error) return normalizeUploadError(error, next);
+    next();
+  }));
+};
+
+// ─── Profile / business-logo upload ──────────────────────────────────────────
 
 const profileFieldConfigs = {
   [IMAGE_UPLOAD_CONFIG.profilePicture.fieldName]: IMAGE_UPLOAD_CONFIG.profilePicture,
   profilePhoto: IMAGE_UPLOAD_CONFIG.profilePicture,
-  [IMAGE_UPLOAD_CONFIG.businessLogo.fieldName]: IMAGE_UPLOAD_CONFIG.businessLogo
+  [IMAGE_UPLOAD_CONFIG.businessLogo.fieldName]: IMAGE_UPLOAD_CONFIG.businessLogo,
 } as const;
 
 type ProfileFieldName = keyof typeof profileFieldConfigs;
-const PROFILE_PICTURE_FIELD_ALIASES = [IMAGE_UPLOAD_CONFIG.profilePicture.fieldName, 'profilePhoto'] as const;
+const PROFILE_PICTURE_FIELD_ALIASES = [
+  IMAGE_UPLOAD_CONFIG.profilePicture.fieldName,
+  'profilePhoto',
+] as const;
 const BUSINESS_LOGO_FIELD_NAMES = [IMAGE_UPLOAD_CONFIG.businessLogo.fieldName] as const;
-
-const createImageFieldsUpload = () =>
-  multer({
-    storage: profileStorage,
-    fileFilter: (req, file, cb) => {
-      const authReq = req as AuthRequest;
-      if (file.fieldname === IMAGE_UPLOAD_CONFIG.businessLogo.fieldName && authReq.user?.role !== 'ADMIN') {
-        return cb(new BadRequestError('Only admin can upload business logo'));
-      }
-      const field = file.fieldname as ProfileFieldName;
-      const config = profileFieldConfigs[field];
-      if (!config) {
-        return cb(new BadRequestError('Unexpected image field'));
-      }
-      const ext = path.extname(file.originalname).toLowerCase();
-      if (!config.extensions.includes(ext)) {
-        return cb(new BadRequestError(`Invalid file type for ${file.fieldname}`));
-      }
-      if (!config.mimeTypes.includes(file.mimetype)) {
-        return cb(new BadRequestError(`Invalid mime type for ${file.fieldname}`));
-      }
-      cb(null, true);
-    },
-    limits: {
-      fileSize: Math.max(
-        IMAGE_UPLOAD_CONFIG.profilePicture.maxSizeBytes,
-        IMAGE_UPLOAD_CONFIG.businessLogo.maxSizeBytes
-      )
-    }
-  });
 
 for (const cfg of Object.values(profileFieldConfigs)) {
   ensureDirExists(cfg.uploadDir);
 }
 
 const profileStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const field = file.fieldname as ProfileFieldName;
-    const config = profileFieldConfigs[field];
+  destination: (_req, file, cb) => {
+    const config = profileFieldConfigs[file.fieldname as ProfileFieldName];
     if (!config) return cb(new BadRequestError('Unexpected image field'), '');
     cb(null, config.uploadDir);
   },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
-    cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
-  }
+  filename: (_req, file, cb) => cb(null, createUniqueFileName(file.fieldname, path.extname(file.originalname))),
 });
 
-const profileUpload = createImageFieldsUpload();
+const profileUpload = multer({
+  storage: profileStorage,
+  fileFilter: (req, file, cb) => {
+    const authReq = req as AuthRequest;
+    if (
+      file.fieldname === IMAGE_UPLOAD_CONFIG.businessLogo.fieldName &&
+      authReq.user?.role !== UserRole.ADMIN
+    ) {
+      return cb(new BadRequestError('Only admin can upload business logo'));
+    }
+    const config = profileFieldConfigs[file.fieldname as ProfileFieldName];
+    if (!config) return cb(new BadRequestError('Unexpected image field'));
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (!config.extensions.includes(ext)) {
+      return cb(new BadRequestError(`Invalid file type for ${file.fieldname}`));
+    }
+    if (!config.mimeTypes.includes(file.mimetype as any)) {
+      return cb(new BadRequestError(`Invalid mime type for ${file.fieldname}`));
+    }
+    cb(null, true);
+  },
+  limits: {
+    fileSize: Math.max(
+      IMAGE_UPLOAD_CONFIG.profilePicture.maxSizeBytes,
+      IMAGE_UPLOAD_CONFIG.businessLogo.maxSizeBytes,
+    )
+  },
+});
 
 export const uploadProfileAssets = (req: Request, res: Response, next: NextFunction) => {
   profileUpload.fields([
     { name: IMAGE_UPLOAD_CONFIG.profilePicture.fieldName, maxCount: 1 },
     { name: 'profilePhoto', maxCount: 1 },
     { name: IMAGE_UPLOAD_CONFIG.businessLogo.fieldName, maxCount: 1 }
-  ])(req, res, (error: any) => {
+  ])(req, res, requestContext.bind((error: any) => {
     if (error) return normalizeUploadError(error, next);
 
     const files = req.files as Record<string, Express.Multer.File[]> | undefined;
@@ -294,12 +324,12 @@ export const uploadProfileAssets = (req: Request, res: Response, next: NextFunct
     }
 
     next();
-  });
+  }));
 };
 
 const toPublicAssetPath = (filePath: string): string => {
-  const normalized = filePath.replace(/\\/g, '/');
-  return normalized.startsWith('/') ? normalized : `/${normalized}`;
+  const normalized = filePath.replace(FILE_PATH_REGEX.BACKSLASHES, FILE_NAME_RULES.PATH_SEPARATOR);
+  return normalized.startsWith(FILE_NAME_RULES.PATH_SEPARATOR) ? normalized : `${FILE_NAME_RULES.PATH_SEPARATOR}${normalized}`;
 };
 
 const parseBodyJsonObject = (value: unknown): Record<string, unknown> => {
@@ -337,3 +367,173 @@ export const mapProfileUploadToSettingsPayload = (req: Request, res: Response, n
 
   next();
 };
+
+// ---------------------------------------------------------------------------
+// Course thumbnail upload
+// ---------------------------------------------------------------------------
+
+const courseThumbnailConfig = IMAGE_UPLOAD_CONFIG.courseThumbnail;
+ensureDirExists(courseThumbnailConfig.uploadDir);
+
+const courseThumbnailStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, courseThumbnailConfig.uploadDir),
+  filename: (_req, file, cb) =>
+    cb(null, createUniqueFileName(courseThumbnailConfig.fieldName, path.extname(file.originalname))),
+});
+
+const courseThumbnailUpload = multer({
+  storage: courseThumbnailStorage,
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (!(courseThumbnailConfig.extensions as readonly string[]).includes(ext)) {
+      return cb(new BadRequestError('Invalid file type for course thumbnail'));
+    }
+    if (!(courseThumbnailConfig.mimeTypes as readonly string[]).includes(file.mimetype)) {
+      return cb(new BadRequestError('Invalid mime type for course thumbnail'));
+    }
+    cb(null, true);
+  },
+  limits: {
+    fileSize: courseThumbnailConfig.maxSizeBytes,
+  },
+});
+
+export const uploadCourseThumbnail = (req: Request, res: Response, next: NextFunction) => {
+  courseThumbnailUpload.single(courseThumbnailConfig.fieldName)(req, res, requestContext.bind((error: any) => {
+    if (error) return normalizeUploadError(error, next);
+    next();
+  }));
+};
+
+export const mapCourseThumbnailToPayload = (req: Request, res: Response, next: NextFunction) => {
+  try {
+    parseMultipartData(req);
+  } catch (error) {
+    return next(error);
+  }
+
+  if (req.file) {
+    if (req.file.size > courseThumbnailConfig.maxSizeBytes) {
+      removeUploadedFile(req.file.path);
+      return next(new BadRequestError(`File size cannot exceed ${formatSizeInMb(courseThumbnailConfig.maxSizeBytes)} for course thumbnail`));
+    }
+
+    req.body.thumbnail = toPublicAssetPath(req.file.path);
+  }
+
+  if (req.body.removeThumbnail === 'true') {
+    req.body.removeThumbnail = true;
+  }
+
+  next();
+};
+// ---------------------------------------------------------------------------
+// Bulk question upload — memory storage, MIME-type validation
+// ---------------------------------------------------------------------------
+import { BULK_UPLOAD_FILE_CONFIG } from '../config/file-type';
+
+const bulkUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: BULK_UPLOAD_FILE_CONFIG.maxSizeBytes },
+  fileFilter: (_req, file, cb) => {
+    if (BULK_UPLOAD_FILE_CONFIG.allowedMimeTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('INVALID_FILE_TYPE'));
+    }
+  },
+});
+
+/**
+ * Memory-storage upload middleware for bulk question import.
+ * Validates MIME type and file size, normalises errors using the same
+ * pattern as uploadSingleFile — no multer concerns leak into the controller.
+ */
+export const uploadBulkFile = (req: Request, res: Response, next: NextFunction): void => {
+  bulkUpload.single('file')(req, res, requestContext.bind((error: any) => {
+    if (!error) return next();
+
+    if (error instanceof multer.MulterError) {
+      if (error.code === 'LIMIT_FILE_SIZE') {
+        return next(
+          new BadRequestError(
+            `File size cannot exceed ${formatSizeInMb(BULK_UPLOAD_FILE_CONFIG.maxSizeBytes)}`,
+          ),
+        );
+      }
+      return next(new BadRequestError(`Upload error: ${error.message}`));
+    }
+
+    if (error instanceof Error && error.message === 'INVALID_FILE_TYPE') {
+      return next(new BadRequestError(BULK_UPLOAD_FILE_CONFIG.errorMessage));
+    }
+
+    next(error);
+  }));
+};
+
+// ---------------------------------------------------------------------------
+// Private PDF upload (subjective tests) — stored in `uploads/subjective`, which is never served by URL
+// ---------------------------------------------------------------------------
+ensureDirExists(FILE_STORAGE_CONFIG.uploadsTempDir);
+
+const privatePdfUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, FILE_STORAGE_CONFIG.uploadsTempDir),
+    filename: (_req, _file, cb) => cb(null, createUniqueFileName(FILE_NAME_RULES.TEMP_FILE_PREFIX, SUBJECTIVE_TEST_CONFIG.pdfExtension)),
+  }),
+  limits: { fileSize: SUBJECTIVE_TEST_CONFIG.maxPdfSizeBytes },
+  fileFilter: (_req, file, cb) => {
+    const extension = path.extname(file.originalname).toLowerCase();
+    if (extension !== SUBJECTIVE_TEST_CONFIG.pdfExtension || file.mimetype !== SUBJECTIVE_TEST_CONFIG.pdfMimeType) {
+      return cb(new BadRequestError('Only PDF files are allowed'));
+    }
+    cb(null, true);
+  },
+});
+
+const removeTempFileWhenResponseEnds = (res: Response, tempFilePath: string) => {
+  res.on('finish', () => {
+    fs.promises.rm(tempFilePath, { force: true }).catch((cleanupError) => {
+      logger.error(`[upload-middleware] temp cleanup failed path=${tempFilePath}`, cleanupError);
+    });
+  });
+};
+
+type PrivatePdfUploadOptions = {
+  fieldName: string;
+  /** When set, a request without a file is rejected with this message. */
+  missingFileMessage?: string;
+};
+
+/**
+ * Accepts one PDF in `fieldName` (plus an optional `data` JSON field) into a temp folder and
+ * checks the file really is a PDF. The temp file is removed when the response finishes unless
+ * the service already moved it to its final storage key, so failures never leave files behind.
+ * Run access checks BEFORE this middleware so unauthorized requests never write to disk.
+ */
+export const createPrivatePdfUpload = ({ fieldName, missingFileMessage }: PrivatePdfUploadOptions) =>
+  (req: Request, res: Response, next: NextFunction) => {
+    // Multer can call back outside the request context, which would send tenant queries to the public schema.
+    privatePdfUpload.single(fieldName)(req, res, requestContext.bind(async (error: any) => {
+      if (req.file) removeTempFileWhenResponseEnds(res, req.file.path);
+
+      if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
+        return next(new BadRequestError(`File size cannot exceed ${SUBJECTIVE_TEST_CONFIG.maxPdfSizeMb}MB`));
+      }
+      if (error instanceof ApiError) return next(error);
+      if (error) return normalizeUploadError(error, next);
+
+      if (!req.file && missingFileMessage) return next(new BadRequestError(missingFileMessage));
+      if (req.file && !(await hasPdfSignature(req.file.path))) {
+        return next(new BadRequestError('The uploaded file is not a valid PDF'));
+      }
+
+      try {
+        parseMultipartData(req);
+      } catch (parseError) {
+        return next(parseError);
+      }
+      next();
+    }));
+  };

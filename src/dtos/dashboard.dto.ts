@@ -89,4 +89,11 @@ export interface StudentDashboardResponse {
         type: string;
         createdAt: Date;
     }>;
+    recentExams: Array<{
+        id: string;
+        name: string;
+        batchName: string;
+        startAt: Date;
+        deadlineAt: Date;
+    }>;
 }

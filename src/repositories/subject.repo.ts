@@ -1,6 +1,10 @@
-import { Prisma, SubjectStatus, UserRole } from '@prisma/client';
+import { CourseStatus, ExamStatus, Prisma, SubjectStatus, UserRole } from '@prisma/client';
 import { prisma } from '../config/database';
 import type { IUser } from '../dtos/auth.dto';
+import {
+  ACTIVE_SUBJECT_WHERE,
+  activeCourseWhereForBusiness,
+} from '../constants/hierarchyFilters';
 
 export interface SubjectFindOptions {
   select?: Prisma.SubjectSelect;
@@ -30,6 +34,7 @@ export async function findSubjectsByCourseId(courseId: number, options: SubjectF
   return prisma.subject.findMany({
     where: {
       courseId,
+      ...ACTIVE_SUBJECT_WHERE,
       ...where,
     },
     orderBy: options.orderBy || { name: 'asc' },
@@ -59,9 +64,10 @@ export async function findSubjectsByUserId(
       // - TEACHER/STUDENT: subjects from active batches where user is a member
       // - ADMIN/SUPERADMIN: subjects from active batches in their business (no batch membership required)
       course: {
+        status: CourseStatus.ACTIVE,
         ...(requestingUser.role !== UserRole.SUPERADMIN
-          ? { exam: { businessId: requestingUser.businessId! } }
-          : {}),
+          ? activeCourseWhereForBusiness(requestingUser.businessId!)
+          : { exam: { status: ExamStatus.ACTIVE } }),
         batches: {
           some: {
             isActive: true,

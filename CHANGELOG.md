@@ -1,5 +1,247 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.45] - SMTP mail via nodemailer
+**P.R Raised by** : shubh404-SE on **Date** : 2026-10-30
+
+### Changed
+  - replaced Gmail API (OAuth2) mail sending with SMTP via nodemailer (Hostinger). Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM_NAME`, `MAIL_FROM_EMAIL`.
+
+### Removed
+  - removed `GMAIL_*` env variables, `google-auth-library` dependency and `scripts/getGmailRefreshToken.ts`.
+---
+## Version [1.2.44] - Updated readme for gmail api setup
+**P.R Raised by** : shubh404-SE on **Date** : 2026-10-30
+
+### Changed
+  - updated readme for gmail api setup, added more error and solution in readme.
+## Version [1.2.43] - subjective test paper
+**P.R Raised by** : shubh404-SE on **Date** : 2026-10-06
+
+### Added
+  - added new subjective test table and api end points for admin/teacher/student to create and attempt subjective test and get result of subjective test.
+---
+## Version [1.2.42] - Single Session Login
+**P.R Raised by** : shubh404-SE on **Date** : 2026-09-27
+
+### Added
+  - added a new feature to restrict user to login in one place only, if user try to login in another place then it will show error message "You're already logged in on another device or browser. Please log out there first, or wait for that session to expire before signing in again."
+---
+## Version [1.2.41] - email template improved
+**P.R Raised by** : shubh404-SE on **Date** : 2026-09-27
+
+### Changed
+  - email template improved for better look and feel.
+---
+## Version [1.2.40] - restrict batch detail access from unknown user
+**P.R Raised by** : shubh404-SE on **Date** : 2026-09-25
+
+### Fixed
+  - fixed issue in batch detail api, now only student and teacher of that batch can access the batch details.
+---
+## Version [1.2.39] - notify bussiness when it is on hold by superadmin
+**P.R Raised by** : shubh404-SE on **Date** : 2026-09-25
+
+### Added
+  - added a new logic to notify bussiness when it is on hold by superadmin, this will send email to bussiness admin.
+---
+## Version [1.2.38] - superadmin cookie modification for workspace access
+**P.R Raised by** : shubh404-SE on **Date** : 2026-09-11
+
+### Changes
+  - superadmin cookie modified to admin of a bussiness so he can access that bussiness.
+---
+## Version [1.2.37] - Mail notification on new bussiness signup
+**P.R Raised by** : shubh404-SE on **Date** : 2026-09-09
+
+### Added
+  - add gmail service to send email on every bussiness signup
+---
+## Version [1.2.36] - BusinessSuspendedError responce updated
+**P.R Raised by** : shubh404-SE on **Date** : 2026-08-25
+
+### Changed
+  - updated BusinessSuspendedError responce to include action and reason, now frontend can show proper message to user.
+## Version [1.2.35] - Super admin Flow
+**P.R Raised by** : shubh404-SE on **Date** : 2026-08-21
+
+### Added
+  - added super admin flow to manage all business, 
+  - super admin can pause/resume or delete any business,
+  - created apis to get bussiness list, get business details, pause/resume business, delete business.
+---
+## Version [1.2.34] - Batch Thumbnail added
+**P.R Raised by** : shubh404-SE on **Date** : 2026-08-19
+
+### Added
+  - in batch added thumbnail picture from course.
+---
+## Version [1.2.33] - Common Error Handling for code improvment
+**P.R Raised by** : shubh404-SE on **Date** : 2026-08-18
+
+### Fixed
+  - added a common error handler to handle all errors in one place, 
+  - this will improve code quality and reduce code duplication.
+---
+## Version [1.2.32] - Guest user Self enroll Bug
+**P.R Raised by** : shubh404-SE on **Date** : 2026-08-14
+
+### Fixed
+  - fixed cross db issue in guest user self enroll api, now guest user can enroll in free batches.
+---
+## Version [1.2.31] - Guest user Flow
+**P.R Raised by** : shubh404-SE on **Date** : 2026-08-12
+
+### Added
+  - added guest user register method in existing bussiness signup flow.
+  - added a new api to get all batches along with their course price to show guest users.
+  - added a new api to enroll in free batches.
+---
+## Version [1.2.30] - Database migration Issue Fix
+**P.R Raised by** : shubh404-SE on **Date** : 2026-08-10
+
+### Fixed
+  - fixed issue in migration script for new tenant, now we will use prisma migrate and db:setup command to setup new tenant in DB.
+--- 
+## Version [1.2.29] - Price tag for course
+**P.R Raised by** : shubh404-SE on **Date** : 2026-08-01
+
+### Added
+  - added a new field in course to add price tag for course.
+---
+## Version [1.2.28] - migration script for new tenant
+**P.R Raised by** : shubh404-SE on **Date** : 2026-07-29
+
+### Added
+  - added a new migration script to create new tenant in DB, this script will create new schema for new tenant and also add default data in that schema.
+---
+## Version [1.2.27] - seprate schema for new signup business
+**P.R Raised by** : shubh404-SE on **Date** : 2026-06-17
+
+### Added
+  - added new DB schema flow for business signup, now we have separate schema for businesses and public
+## Version [1.2.26] - course thumbnail feature
+**P.R Raised by** : shubh404-SE on **Date** : 2026-6-27
+
+### Change
+  - added a new field in course to add thumbnail picture
+---
+## Version [1.2.25] - Refresh token expiry time updated + exam test update rule
+**P.R Raised by** : shubh404-SE on **Date** : 2026-6-26
+
+### Changed 
+  - Refresh token time upddated to 1 hour,
+  - exam test won't updated once exam start.
+---
+## Version [1.2.24] - Bulk import questions with doc/excel
+**P.R Raised by** : shubh404-SE on **Date** : 2026-04-23
+
+### Added
+  - Implimented apis to import questions directly from doc and excel.
+  - used `officeparser` to parse doc and excel files and extract all required fields for a question. 
+  - providing a preview api to see parsed questions before adding.
+---
+## Version [1.2.23] - added exam in responce of student dashboard api
+**P.R Raised by** : shubh404-SE on **Date** : 2026-06-19
+
+### Changes
+  - added exam details in responce of student dashboard api, now student can see their upcoming exam details in dashboard.
+
+## Version [1.2.22] - 10 digit number validation
+**P.R Raised by** : shubh404-SE on **Date** : 2026-06-13
+
+### Changed
+  - Validation added in for mobile numbers.
+  - added `ol` html tag in sanitize config to support roman list 
+## Version [1.2.21] - editor image upload api 
+**P.R Raised by** : shubh404-SE on **Date** : 2026-06-09
+
+### Changed
+  - made 2 new api endpoints to upload or remove editor image.
+---
+## Version [1.2.20] - profile setting permission 
+**P.R Raised by** : shubh404-SE on **Date** : 2026-06-02
+
+### Changed
+  - permission check for profile setting api, teacher and student can create their own profile from settings.
+---
+## Version [1.2.19] - test analytics question text instead of question id
+**P.R Raised by** : shubh404-SE on
+**Date** : 2026-06-02
+
+### Changed
+  - updated test analytics to check question text instead of question id,
+---
+## Version [1.2.18] - subject optional for test and content
+**Date** : 2026-05-29
+
+### Changed
+  - subject field  is now optional for test and content.
+  - removed duplicte "already exists" stetment in error message.
+
+## Version [1.2.17] - Test guards, hierarchy filters, and exam-delete visibility
+**Date** : 2026-05-26
+
+### Added
+  - Shared hierarchy filters in `src/constants/hierarchyFilters.ts` for consistent parent-chain checks.
+  - `assertCanModifyTestQuestions` in `src/utils/test.utils.ts` to block create/update/delete of test questions after any student attempt exists (practice and exam tests).
+
+### Changed
+  - used hierarchyFilters in all repo to add parent active chain checks.
+---
+## Version [1.2.16] - Readme file updated
+**P.R Raised by** : shubh404-SE on **Date** : 2026-05-27
+
+### Changed
+  - `Readme.md` updated
+
+## Version [1.2.15] - UAT cookie domain added
+**P.R Raised by** : shubh404-SE on **Date** : 2026-05-21
+### Changed
+  - updated uat config file to add cookie domain.
+---
+## Version [1.2.14] - UAT frontend url for COPS
+**P.R Raised by** : shubh404-SE on **Date** : 2026-05-21
+### Changed
+  - updated uat config file for frontend url for cops.
+---
+## Version [1.2.13] - Announcement access fixes + profile response improvements
+**P.R Raised by** : shubh404-SE on **Date** : 2026-05-15
+### Changed
+  - fixed announcement access by ID for teacher/student to enforce audience visibility, active window, and batch/course target membership.
+  - fixed announcement realtime delivery mismatch by securing announcement detail fetch path used by socket flow.
+  - added shared controller error handler utility and applied it in announcement controller catch blocks.
+  - added `profilePicture` in student/teacher profile API user payload by updating shared user select and mappers.
+---
+## Version [1.2.12] - UAT config update for cross-origin requests
+**P.R Raised by** : shubh404-SE on **Date** : 2026-05-10
+### Changed
+  - updated uat config file for `COOKIE_SAME_SITE=none` for cross-origin requests.
+---
+## Version [1.2.11] - Test module controller test cases fixed
+**P.R Raised by** : shubh404-SE on **Date** : 2026-05-08
+
+### Changed
+  - fixed test cases for test module controller, Added a check to 
+
+## Version [1.2.10] - Profile picture filed added in responce
+**P.R Raised by** : dpsingh-SE on **Date** : 2026-05-08
+### Changed
+  - add uat config file.
+---------------------------------------------------------------
+
+---
+## Version [1.2.9] - Profile picture filed added in responce
+**P.R Raised by** : shubh404-SE on **Date** : 2026-05-05
+### Changed
+  - added profile picture field in response of get profile api.
+---
+## Version [1.2.8] - Announcements Module + Websocket Integration
+**P.R Raised by** : shubh404-SE on **Date** : 2026-04-10
+
+### Added
+  - implimented announcement service logic + updated announcement schema
+  - implimented websockets to get announcements in real time.
+---
 ## Version [1.2.7] - Settings Profile API
 **P.R raised by**  : Shubh404-SE 
 **Date** : 2026-04-21

@@ -35,6 +35,20 @@ app.use((req: any, res, next) => {
 app.use('/api/batches', batchRoutes);
 app.use(errorHandler);
 
+// Second app instance simulating a STUDENT/USER (guest) caller, for the
+// self-service browse/self-enroll routes which are gated to those roles.
+function buildAppAsUser(role: 'STUDENT' | 'USER', userId = 5, businessId = 1) {
+    const a = express();
+    a.use(express.json());
+    a.use((req: any, res, next) => {
+        req.user = { id: userId, businessId, role };
+        next();
+    });
+    a.use('/api/batches', batchRoutes);
+    a.use(errorHandler);
+    return a;
+}
+
 describe('Batch Routes', () => {
     beforeEach(() => {
         jest.clearAllMocks();
@@ -150,6 +164,40 @@ describe('Batch Routes', () => {
         });
     });
 
+
+    describe('GET /api/batches/browse', () => {
+        it('should return all business batches with isEnrolled flags for a STUDENT', async () => {
+            const mockBatches = [
+                { id: 1, codeName: 'BATCH001', course: { id: 1, name: 'Course A', price: 0 } },
+                { id: 2, codeName: 'BATCH002', course: { id: 2, name: 'Course B', price: 500 } }
+            ];
+            (BatchRepo.findBrowsableBatchesForBusiness as jest.Mock).mockResolvedValue(mockBatches);
+            (BatchRepo.findActiveBatchIdsForUser as jest.Mock).mockResolvedValue([1]);
+
+            const res = await request(buildAppAsUser('STUDENT')).get('/api/batches/browse');
+
+            expect(res.status).toBe(200);
+            expect(res.body.data).toHaveLength(2);
+            expect(res.body.data[0]).toMatchObject({ id: 1, isEnrolled: true });
+            expect(res.body.data[1]).toMatchObject({ id: 2, isEnrolled: false });
+        });
+
+        it('should allow a USER (guest) to browse batches', async () => {
+            (BatchRepo.findBrowsableBatchesForBusiness as jest.Mock).mockResolvedValue([]);
+            (BatchRepo.findActiveBatchIdsForUser as jest.Mock).mockResolvedValue([]);
+
+            const res = await request(buildAppAsUser('USER')).get('/api/batches/browse');
+
+            expect(res.status).toBe(200);
+            expect(res.body.data).toEqual([]);
+        });
+
+        it('should return 403 for a role other than STUDENT/USER', async () => {
+            const res = await request(app).get('/api/batches/browse'); // ADMIN
+
+            expect(res.status).toBe(403);
+        });
+    });
 
     describe('GET /api/batches/course/:courseId', () => {
         it('should return batches for a course', async () => {
@@ -372,6 +420,86 @@ describe('Batch Routes', () => {
 
             expect(res.status).toBe(400);
             expect(res.body.message).toContain('User is not part of this business');
+        });
+    });
+
+    describe('POST /api/batches/self-enroll', () => {
+        it('should enroll a USER (guest) into a free batch and promote them to STUDENT', async () => {
+            (BatchRepo.findBatchForSelfEnroll as jest.Mock).mockResolvedValue({
+                id: 1,
+                course: { price: 0, exam: { businessId: 1 } }
+            });
+            (BatchRepo.findBatchUser as jest.Mock).mockResolvedValue(null);
+            (BatchRepo.enrollUserAndMaybePromote as jest.Mock).mockResolvedValue({ batchUserId: 10, roleChanged: true });
+
+            const res = await request(buildAppAsUser('USER')).post('/api/batches/self-enroll').send({ batchId: 1 });
+
+            expect(res.status).toBe(201);
+            expect(res.body.data).toMatchObject({ batchId: 1, roleChanged: true });
+            expect(BatchRepo.enrollUserAndMaybePromote).toHaveBeenCalledWith(1, 5, 1, true);
+        });
+
+        it('should enroll an existing STUDENT into a free batch without promoting', async () => {
+            (BatchRepo.findBatchForSelfEnroll as jest.Mock).mockResolvedValue({
+                id: 1,
+                course: { price: 0, exam: { businessId: 1 } }
+            });
+            (BatchRepo.findBatchUser as jest.Mock).mockResolvedValue(null);
+            (BatchRepo.enrollUserAndMaybePromote as jest.Mock).mockResolvedValue({ batchUserId: 11, roleChanged: false });
+
+            const res = await request(buildAppAsUser('STUDENT')).post('/api/batches/self-enroll').send({ batchId: 1 });
+
+            expect(res.status).toBe(201);
+            expect(res.body.data).toMatchObject({ batchId: 1, roleChanged: false });
+        });
+
+        it('should return 400 if the batch is paid', async () => {
+            (BatchRepo.findBatchForSelfEnroll as jest.Mock).mockResolvedValue({
+                id: 1,
+                course: { price: 999, exam: { businessId: 1 } }
+            });
+
+            const res = await request(buildAppAsUser('USER')).post('/api/batches/self-enroll').send({ batchId: 1 });
+
+            expect(res.status).toBe(400);
+            expect(res.body.message).toContain('requires payment');
+        });
+
+        it('should return 409 if already enrolled', async () => {
+            (BatchRepo.findBatchForSelfEnroll as jest.Mock).mockResolvedValue({
+                id: 1,
+                course: { price: 0, exam: { businessId: 1 } }
+            });
+            (BatchRepo.findBatchUser as jest.Mock).mockResolvedValue({ id: 1, userId: 5, batchId: 1 });
+
+            const res = await request(buildAppAsUser('USER')).post('/api/batches/self-enroll').send({ batchId: 1 });
+
+            expect(res.status).toBe(409);
+        });
+
+        it('should return 400 if batch belongs to a different business', async () => {
+            (BatchRepo.findBatchForSelfEnroll as jest.Mock).mockResolvedValue({
+                id: 1,
+                course: { price: 0, exam: { businessId: 2 } }
+            });
+
+            const res = await request(buildAppAsUser('USER')).post('/api/batches/self-enroll').send({ batchId: 1 });
+
+            expect(res.status).toBe(400);
+        });
+
+        it('should return 404 if batch does not exist', async () => {
+            (BatchRepo.findBatchForSelfEnroll as jest.Mock).mockResolvedValue(null);
+
+            const res = await request(buildAppAsUser('USER')).post('/api/batches/self-enroll').send({ batchId: 999 });
+
+            expect(res.status).toBe(404);
+        });
+
+        it('should return 400 if batchId is missing', async () => {
+            const res = await request(buildAppAsUser('USER')).post('/api/batches/self-enroll').send({});
+
+            expect(res.status).toBe(400);
         });
     });
 

@@ -89,7 +89,7 @@ describe('Teacher Controller', () => {
             const controller = new TeacherController(new TeacherService());
             await controller.createTeacher(req as any, res as any);
 
-            expect(ApiResponseHandler.error).toHaveBeenCalledWith(res, 'Invalid data', 400);
+            expect(ApiResponseHandler.badRequest).toHaveBeenCalledWith(res, 'Invalid data');
         });
 
         it('should return 404 if service throws NotFoundError', async () => {
@@ -101,7 +101,7 @@ describe('Teacher Controller', () => {
             const controller = new TeacherController(new TeacherService());
             await controller.createTeacher(req as any, res as any);
 
-            expect(ApiResponseHandler.error).toHaveBeenCalledWith(res, 'User not found', 404);
+            expect(ApiResponseHandler.notFound).toHaveBeenCalledWith(res, 'User not found');
         });
 
         it('should return 403 if service throws ForbiddenError', async () => {
@@ -113,7 +113,7 @@ describe('Teacher Controller', () => {
             const controller = new TeacherController(new TeacherService());
             await controller.createTeacher(req as any, res as any);
 
-            expect(ApiResponseHandler.error).toHaveBeenCalledWith(res, 'Not allowed', 403);
+            expect(ApiResponseHandler.forbidden).toHaveBeenCalledWith(res, 'Not allowed');
         });
     });
 
@@ -153,7 +153,7 @@ describe('Teacher Controller', () => {
             const controller = new TeacherController(new TeacherService());
             await controller.getTeacher(req as any, res as any);
 
-            expect(ApiResponseHandler.error).toHaveBeenCalledWith(res, 'No access', 403);
+            expect(ApiResponseHandler.forbidden).toHaveBeenCalledWith(res, 'No access');
         });
     });
 
@@ -196,7 +196,7 @@ describe('Teacher Controller', () => {
             const controller = new TeacherController(new TeacherService());
             await controller.updateTeacher(req as any, res as any);
 
-            expect(ApiResponseHandler.error).toHaveBeenCalledWith(res, 'Invalid experience years', 400);
+            expect(ApiResponseHandler.badRequest).toHaveBeenCalledWith(res, 'Invalid experience years');
         });
 
         it('should return 403 if forbidden', async () => {
@@ -209,7 +209,7 @@ describe('Teacher Controller', () => {
             const controller = new TeacherController(new TeacherService());
             await controller.updateTeacher(req as any, res as any);
 
-            expect(ApiResponseHandler.error).toHaveBeenCalledWith(res, 'Not allowed', 403);
+            expect(ApiResponseHandler.forbidden).toHaveBeenCalledWith(res, 'Not allowed');
         });
     });
 });

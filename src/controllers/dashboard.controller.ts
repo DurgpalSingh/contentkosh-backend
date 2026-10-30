@@ -3,7 +3,7 @@ import { ApiResponseHandler } from '../utils/apiResponse';
 import logger from '../utils/logger';
 import * as dashboardService from '../services/dashboard.service';
 import { AuthRequest } from '../dtos/auth.dto';
-import { BadRequestError, ForbiddenError, NotFoundError } from '../errors/api.errors';
+import { handleControllerError } from '../utils/controllerErrorHandler';
 
 export const getDashboard = async (req: AuthRequest, res: Response) => {
     try {
@@ -16,17 +16,7 @@ export const getDashboard = async (req: AuthRequest, res: Response) => {
     const dashboard = await dashboardService.getDashboardByRole(req.user);
 
     ApiResponseHandler.success(res, dashboard, 'Dashboard data fetched successfully');
-    } catch (error: any) {
-        if (error instanceof BadRequestError) {
-        return ApiResponseHandler.error(res, error.message, 400);
-      }
-      if (error instanceof NotFoundError) {
-        return ApiResponseHandler.error(res, error.message, 404);
-      }
-      if (error instanceof ForbiddenError) {
-        return ApiResponseHandler.error(res, error.message, 403);
-      }
-      logger.error(`Error fetching dashboard: ${error.message}`);
-      ApiResponseHandler.error(res, 'Failed to fetch dashboard');
+    } catch (error) {
+        handleControllerError(res, error, 'Failed to fetch dashboard', 'Error fetching dashboard');
     }
 };

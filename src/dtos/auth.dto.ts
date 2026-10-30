@@ -22,7 +22,16 @@ export class RegisterRequest {
 
     @IsEnum(UserRole)
     @IsOptional()
-    role?: UserRole; // Optional, defaults to USER
+    role?: UserRole; // Ignored when `slug` is provided (guest joins as USER). Defaults to ADMIN otherwise.
+
+    /**
+     * Slug of an existing business to join as a guest (role USER).
+     * Omit this to bootstrap a new institute owner (ADMIN, no business yet) — the web/mobile
+     * "create institute" flow creates the Business separately via POST /api/business.
+     */
+    @IsString()
+    @IsOptional()
+    slug?: string;
 }
 
 export class LoginRequest {
@@ -35,7 +44,11 @@ export class LoginRequest {
 
     @IsOptional()
     @IsString()
-    businessId?: string; // Optional if we support multi-tenant login
+    slug?: string;
+
+    @IsOptional()
+    @IsString()
+    businessSlug?: string;
 }
 
 export class RefreshTokenRequest {
@@ -49,6 +62,8 @@ export interface IUser {
     email: string;
     role: UserRole;
     businessId?: number | null;
+    businessSlug?: string | null;
+    tenantSchema?: string | null;
 }
 
 export interface AuthRequest extends Request {

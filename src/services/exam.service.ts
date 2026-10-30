@@ -5,6 +5,8 @@ import { NotFoundError, BadRequestError, ForbiddenError } from '../errors/api.er
 import { IUser } from '../dtos/auth.dto';
 import logger from '../utils/logger';
 import { ExamMapper } from '../mappers/exam.mapper';
+import { translatePrismaError } from '../utils/prismaError';
+import { PRISMA_ERROR_CODES } from '../constants/prismaErrorCodes.constants';
 
 export class ExamService {
 
@@ -30,10 +32,9 @@ export class ExamService {
             const exam = await examRepo.createExam(createData);
             return ExamMapper.toDomain(exam);
         } catch (error: any) {
-            if (error.code === 'P2002') {
-                throw new BadRequestError('Exam with this name already exists for this business');
-            }
-            throw error;
+            translatePrismaError(error, {
+                [PRISMA_ERROR_CODES.UNIQUE_CONSTRAINT_VIOLATION]: () => new BadRequestError('Exam with this name already exists for this business'),
+            });
         }
     }
 
@@ -100,16 +101,11 @@ export class ExamService {
             logger.info(`ExamService: Exam updated successfully: ${exam.name}`);
             return ExamMapper.toDomain(exam);
         } catch (error: any) {
-            if (error.code === 'P2002') {
-                throw new BadRequestError('Exam with this name already exists for this business');
-            }
-            // Assuming updateExam might throw if not found, or returns null. 
-            // Repo 'updateExam' usually throws if ID invalid in Prisma.
-            // We can check existence first if needed, but Prisma will throw P2025.
-            if (error.code === 'P2025') {
-                throw new NotFoundError('Exam not found');
-            }
-            throw error;
+            // Repo 'updateExam' throws P2025 if the ID is invalid in Prisma.
+            translatePrismaError(error, {
+                [PRISMA_ERROR_CODES.UNIQUE_CONSTRAINT_VIOLATION]: () => new BadRequestError('Exam with this name already exists for this business'),
+                [PRISMA_ERROR_CODES.RECORD_NOT_FOUND]: () => new NotFoundError('Exam not found'),
+            });
         }
     }
 
@@ -119,10 +115,9 @@ export class ExamService {
             await examRepo.deleteExam(id);
             logger.info(`ExamService: Exam deleted successfully: ID ${id}`);
         } catch (error: any) {
-            if (error.code === 'P2025') {
-                throw new NotFoundError('Exam not found');
-            }
-            throw error;
+            translatePrismaError(error, {
+                [PRISMA_ERROR_CODES.RECORD_NOT_FOUND]: () => new NotFoundError('Exam not found'),
+            });
         }
     }
 

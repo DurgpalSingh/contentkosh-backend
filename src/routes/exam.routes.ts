@@ -9,6 +9,7 @@ import { UserRole } from '@prisma/client';
 import { CreateExamDto, UpdateExamDto } from '../dtos/exam.dto';
 import { CreateCourseDto, UpdateCourseDto } from '../dtos/course.dto';
 import { CreateSubjectDto, UpdateSubjectDto } from '../dtos/subject.dto';
+import { mapCourseThumbnailToPayload, uploadCourseThumbnail } from '../middlewares/upload.middleware';
 
 const router = Router();
 
@@ -44,6 +45,16 @@ const router = Router();
  *         application/json:
  *           schema:
  *             $ref: '#/components/schemas/CreateCourseRequest'
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               data:
+ *                 type: string
+ *                 description: JSON string matching CreateCourseRequest
+ *               thumbnail:
+ *                 type: string
+ *                 format: binary
  *     responses:
  *       201:
  *         description: Course created successfully
@@ -75,7 +86,7 @@ const router = Router();
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post('/:examId/courses', authorize(UserRole.ADMIN), validateIdParam('examId'), validateDto(CreateCourseDto), authorizeExamAccess, createCourse);
+router.post('/:examId/courses', authorize(UserRole.ADMIN), validateIdParam('examId'), uploadCourseThumbnail, mapCourseThumbnailToPayload, validateDto(CreateCourseDto), authorizeExamAccess, createCourse);
 
 /**
  * @swagger
@@ -226,6 +237,18 @@ router.get('/:examId/courses/:courseId', validateIdParam('examId'), validateIdPa
  *         application/json:
  *           schema:
  *             $ref: '#/components/schemas/UpdateCourseRequest'
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               data:
+ *                 type: string
+ *                 description: JSON string matching UpdateCourseRequest
+ *               thumbnail:
+ *                 type: string
+ *                 format: binary
+ *               removeThumbnail:
+ *                 type: boolean
  *     responses:
  *       200:
  *         description: Course updated successfully
@@ -257,7 +280,7 @@ router.get('/:examId/courses/:courseId', validateIdParam('examId'), validateIdPa
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.put('/:examId/courses/:courseId', authorize(UserRole.ADMIN), validateIdParam('examId'), validateIdParam('courseId'), validateDto(UpdateCourseDto), authorizeExamAccess, updateCourse);
+router.put('/:examId/courses/:courseId', authorize(UserRole.ADMIN), validateIdParam('examId'), validateIdParam('courseId'), uploadCourseThumbnail, mapCourseThumbnailToPayload, validateDto(UpdateCourseDto), authorizeExamAccess, updateCourse);
 
 /**
  * @swagger

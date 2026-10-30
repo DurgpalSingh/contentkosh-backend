@@ -1,6 +1,15 @@
-import { IsNotEmpty, IsString, IsOptional, IsEmail, MinLength, IsEnum } from 'class-validator';
+import { IsNotEmpty, IsString, IsOptional, IsEmail, MinLength, IsEnum, Matches } from 'class-validator';
 import { Transform } from 'class-transformer';
-import { UserRole, UserStatus } from '@prisma/client';
+import { Prisma, UserRole, UserStatus } from '@prisma/client';
+
+export const USER_BASIC_SELECT: Prisma.UserSelect = {
+    id: true,
+    name: true,
+    email: true,
+    mobile: true,
+    role: true,
+    profilePicture: true,
+};
 
 export class CreateUserDto {
     @IsNotEmpty({ message: 'User name is required' })
@@ -13,6 +22,7 @@ export class CreateUserDto {
 
     @IsOptional()
     @IsString()
+    @Matches(/^\d{10}$/, { message: 'Mobile number must be a valid 10-digit number' })
     mobile?: string;
 
     @IsNotEmpty({ message: 'Password is required' })
@@ -34,6 +44,7 @@ export class UpdateUserDto {
 
     @IsOptional()
     @IsString()
+    @Matches(/^\d{10}$/, { message: 'Mobile number must be a valid 10-digit number' })
     mobile?: string;
 
     @IsOptional()

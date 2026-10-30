@@ -9,6 +9,9 @@ import { IUser } from '../dtos/auth.dto';
 import logger from '../utils/logger';
 import { BatchMapper } from '../mappers/batch.mapper';
 import { QueryBuilder } from '../utils/queryBuilder';
+import { activeBatchWhereForBusiness } from '../constants/hierarchyFilters';
+import { translatePrismaError } from '../utils/prismaError';
+import { PRISMA_ERROR_CODES, POSTGRES_ERROR_CODES } from '../constants/prismaErrorCodes.constants';
 
 export class BatchService {
     private normalizeStudentBatchIncludes(options: any) {
@@ -30,7 +33,7 @@ export class BatchService {
                 select: {
                     batchUsers: {
                         where: {
-                            user: { role: UserRole.STUDENT }
+                            isActive: true
                         }
                     }
                 }
@@ -69,10 +72,9 @@ export class BatchService {
             const batch = await batchRepo.createBatch(createData);
             return BatchMapper.toDomain(batch);
         } catch (error: any) {
-            if (error.code === 'P2002') {
-                throw new AlreadyExistsError('Batch with this code name already exists');
-            }
-            throw error;
+            translatePrismaError(error, {
+                [PRISMA_ERROR_CODES.UNIQUE_CONSTRAINT_VIOLATION]: () => new AlreadyExistsError('Batch with this code name already exists'),
+            });
         }
     }
 
@@ -139,10 +141,9 @@ export class BatchService {
             const batch = await batchRepo.updateBatch(id, updateData);
             return BatchMapper.toDomain(batch);
         } catch (error: any) {
-            if (error.code === 'P2002') {
-                throw new AlreadyExistsError('Batch with this code name already exists');
-            }
-            throw error;
+            translatePrismaError(error, {
+                [PRISMA_ERROR_CODES.UNIQUE_CONSTRAINT_VIOLATION]: () => new AlreadyExistsError('Batch with this code name already exists'),
+            });
         }
     }
 
@@ -151,10 +152,9 @@ export class BatchService {
         try {
             await batchRepo.deleteBatch(id);
         } catch (error: any) {
-            if (error.code === 'P2025') {
-                throw new NotFoundError('Batch not found');
-            }
-            throw error;
+            translatePrismaError(error, {
+                [PRISMA_ERROR_CODES.RECORD_NOT_FOUND]: () => new NotFoundError('Batch not found'),
+            });
         }
     }
 
@@ -216,9 +216,20 @@ export class BatchService {
         return await batchRepo.findBatchesByUserId(userId);
     }
 
-    async getUsersByBatch(batchId: number, role?: UserRole) {
+    async getUsersByBatch(batchId: number, requestingUser: IUser, role?: UserRole) {
         logger.info('BatchService: Fetching users for batch', { batchId, role });
-        return await batchRepo.findUsersByBatchId(batchId, role);
+        const users = await batchRepo.findUsersByBatchId(batchId, role);
+
+        const canSeeEmail = requestingUser.role === UserRole.ADMIN
+            || requestingUser.role === UserRole.TEACHER
+            || requestingUser.role === UserRole.SUPERADMIN;
+        if (canSeeEmail) return users;
+
+        return users.map((batchUser: any) => {
+            if (!batchUser.user) return batchUser;
+            const { email: _email, ...userWithoutEmail } = batchUser.user;
+            return { ...batchUser, user: userWithoutEmail };
+        });
     }
 
     async getAllActiveBatches(user: IUser, query: ParsedQs = {}): Promise<Batch[]> {
@@ -238,7 +249,7 @@ export class BatchService {
 
         options.where = {
             ...(options.where || {}),
-            isActive: true,
+            ...activeBatchWhereForBusiness(user.businessId!),
         };
         const scopedOptions = batchRepo.applyBatchAccessFilters(options, {
             role: user.role,
@@ -259,24 +270,92 @@ export class BatchService {
         return await batchRepo.updateBatchUser(userId, batchId, data);
     }
 
+    async getBrowsableBatches(user: IUser): Promise<Array<Batch & { isEnrolled: boolean }>> {
+        logger.info('BatchService: Fetching browsable batches', { userId: user.id, role: user.role });
+
+        const allowedRoles: UserRole[] = [UserRole.STUDENT, UserRole.USER];
+        if (!allowedRoles.includes(user.role)) {
+            throw new ForbiddenError('You do not have access to browse batches');
+        }
+        if (!user.businessId) {
+            throw new ForbiddenError('User is not associated with a business');
+        }
+
+        const [batches, enrolledIds] = await Promise.all([
+            batchRepo.findBrowsableBatchesForBusiness(user.businessId),
+            batchRepo.findActiveBatchIdsForUser(user.businessId, user.id),
+        ]);
+
+        const enrolledSet = new Set(enrolledIds);
+        return batches.map((b: any) => ({
+            ...BatchMapper.toDomain(b),
+            isEnrolled: enrolledSet.has(b.id),
+        }));
+    }
+
+    /** Throws the error for the first guard whose condition is true; no-ops if all pass. */
+    private throwOnFirstMatch(guards: Array<{ when: boolean; error: Error }>): void {
+        const failed = guards.find((guard) => guard.when);
+        if (failed) throw failed.error;
+    }
+
+    async selfEnrollInBatch(user: IUser, batchId: number): Promise<{ batchId: number; roleChanged: boolean }> {
+        logger.info('BatchService: Self-enroll requested', { userId: user.id, batchId });
+
+        this.throwOnFirstMatch([
+            { when: user.role !== UserRole.STUDENT && user.role !== UserRole.USER, error: new ForbiddenError('Only students can enroll in a batch') },
+            { when: !user.businessId, error: new ForbiddenError('User is not associated with a business') },
+        ]);
+
+        const batch = await batchRepo.findBatchForSelfEnroll(batchId);
+        const batchBusinessId = batch?.course?.exam?.businessId;
+        const price = Number(batch?.course?.price ?? 0);
+
+        this.throwOnFirstMatch([
+            { when: !batch, error: new NotFoundError('Batch not found') },
+            { when: batchBusinessId !== user.businessId, error: new BadRequestError('Batch does not belong to your business') },
+            { when: price > 0, error: new BadRequestError('This batch requires payment. Enrollment is not available yet.') },
+        ]);
+
+        const existing = await batchRepo.findBatchUser(user.id, batchId);
+        if (existing) throw new AlreadyExistsError('You are already enrolled in this batch');
+
+        const promote = user.role === UserRole.USER;
+        try {
+            const result = await batchRepo.enrollUserAndMaybePromote(user.businessId!, user.id, batchId, promote);
+            return { batchId, roleChanged: result.roleChanged };
+        } catch (error: any) {
+            translatePrismaError(error, {
+                [PRISMA_ERROR_CODES.UNIQUE_CONSTRAINT_VIOLATION]: () => new AlreadyExistsError('You are already enrolled in this batch'),
+                [POSTGRES_ERROR_CODES.UNIQUE_VIOLATION]: () => new AlreadyExistsError('You are already enrolled in this batch'),
+            });
+        }
+    }
+
     async validateBatchAccess(batchId: number, user: IUser): Promise<void> {
         // Batch -> Course -> Exam -> Business
         const batchWithRelations = await batchRepo.findBatchById(batchId, {
             include: { course: { include: { exam: true } } }
         }) as any; // Cast for simplified access
 
-        if (!batchWithRelations) throw new NotFoundError('Batch not found');
+        const exam = batchWithRelations?.course?.exam;
+        this.throwOnFirstMatch([
+            { when: !batchWithRelations, error: new NotFoundError('Batch not found') },
+            { when: !exam, error: new ForbiddenError('Batch is not correctly associated with an exam') },
+            {
+                when: user.role !== UserRole.SUPERADMIN && exam?.businessId !== user.businessId,
+                error: new ForbiddenError('You do not have access to this batch')
+            },
+        ]);
 
-        const exam = batchWithRelations.course?.exam;
-        if (!exam) {
-            throw new ForbiddenError('Batch is not correctly associated with an exam');
-        }
+        const enrollmentRequired = new Set<string>([UserRole.USER, UserRole.STUDENT]).has(user.role);
+        const isMember = !enrollmentRequired || await batchRepo.isActiveUserInBatch(user.id, batchId);
 
-        const isSuperAdmin = user.role === UserRole.SUPERADMIN;
-        const hasBusinessAccess = exam.businessId === user.businessId;
-
-        if (!isSuperAdmin && !hasBusinessAccess) {
-            throw new ForbiddenError('You do not have access to this batch');
-        }
+        this.throwOnFirstMatch([
+            {
+                when: enrollmentRequired && !isMember,
+                error: new ForbiddenError('You must be enrolled in this batch to access it')
+            },
+        ]);
     }
 }

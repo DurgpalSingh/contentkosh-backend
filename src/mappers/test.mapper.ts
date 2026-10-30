@@ -25,6 +25,7 @@ export type PracticeTestResponse = {
   updatedBy?: number | null;
   createdAt: Date;
   updatedAt: Date;
+  hasAttempts?: boolean;
 };
 
 export type ExamTestResponse = {
@@ -55,6 +56,7 @@ export type ExamTestResponse = {
   updatedBy?: number | null;
   createdAt: Date;
   updatedAt: Date;
+  hasAttempts?: boolean;
 };
 
 export type TestOptionResponse = {

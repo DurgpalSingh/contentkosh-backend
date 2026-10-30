@@ -11,6 +11,8 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import { FILE_TYPE_CONFIG } from '../config/file-type';
 import { MIME_TYPES } from '../constants/file.constants';
+import { toUploadsStorageKey, type StoredFileDownload } from './fileStorage.service';
+import { UPLOAD_FOLDERS, uploadFolderDir } from '../config/fileStorage.config';
 
 export class ContentService {
 
@@ -30,7 +32,6 @@ export class ContentService {
     this.validateFilePath(data.filePath, data.type);
 
     try {
-      await this.validateSubjectForBatch(batchId, data.subjectId, user);
       const createData: Prisma.ContentCreateInput = {
         title: data.title,
         type: data.type,
@@ -40,14 +41,18 @@ export class ContentService {
         batch: {
           connect: { id: batchId }
         },
-        subject: {
-          connect: { id: data.subjectId }
-        },
         uploader: {
           connect: { id: user.id }
-        }
+        },
+        ...(data.subjectId !== undefined
+          ? {
+              subject: {
+                connect: { id: data.subjectId }
+              }
+            }
+          : {})
       };
-      const content = await contentRepo.createContent(createData);
+      const content = await contentRepo.createContent(createData, user.businessId!);
       logger.info('ContentService: Content created', {
         contentId: content.id,
         batchId,
@@ -119,18 +124,20 @@ export class ContentService {
       throw new ForbiddenError('You can only update content you uploaded');
     }
 
-    await this.validateSubjectForBatch(existingContent.batchId, data.subjectId, user);
-
     const updateData: Prisma.ContentUpdateInput = {
       ...(data.title && { title: data.title }),
       ...(data.status !== undefined && { status: data.status }),
-      subject: {
-        connect: { id: data.subjectId }
-      },
       updater: {
         connect: { id: user.id }
       },
-      updatedAt: new Date()
+      updatedAt: new Date(),
+      ...(data.subjectId !== undefined
+        ? {
+            subject: {
+              connect: { id: data.subjectId }
+            }
+          }
+        : {})
     };
 
     const content = await contentRepo.updateContent(id, updateData);
@@ -171,7 +178,8 @@ export class ContentService {
     }
   }
 
-  async getContentFile(id: number, user: IUser): Promise<{ filePath: string; fileName: string; mimeType: string }> {
+  /** Access is checked by `authorizeContentAccess` before this runs. Missing files become 404 when streamed. */
+  async getContentFileDownload(id: number, user: IUser): Promise<StoredFileDownload> {
     logger.info('ContentService: Getting content file', { contentId: id, userId: user.id });
 
     const content = await contentRepo.findContentById(id);
@@ -179,19 +187,11 @@ export class ContentService {
       throw new NotFoundError('Content not found');
     }
 
-    try {
-      await fs.access(content.filePath);
-    } catch {
-      throw new NotFoundError('File not found on server');
-    }
-
-    const fileName = path.basename(content.filePath);
-    const mimeType = this.getMimeType(content.type, fileName);
-
+    const storedFileName = path.basename(content.filePath);
     return {
-      filePath: content.filePath,
-      fileName: `${content.title}${path.extname(fileName)}`,
-      mimeType
+      storageKey: toUploadsStorageKey(content.filePath),
+      downloadFileName: `${content.title}${path.extname(storedFileName)}`,
+      contentType: this.getMimeType(content.type, storedFileName),
     };
   }
 
@@ -220,7 +220,7 @@ export class ContentService {
       throw new BadRequestError('File path is required');
     }
 
-    const uploadDir = path.resolve(process.env.UPLOAD_DIR || 'uploads/content');
+    const uploadDir = path.resolve(uploadFolderDir(UPLOAD_FOLDERS.content));
     const resolvedPath = path.resolve(filePath);
 
     if (!resolvedPath.startsWith(uploadDir + path.sep)) {
@@ -308,9 +308,13 @@ export class ContentService {
       userId: user.id
     });
 
-    const batch = await batchRepo.findBatchById(batchId, {
-      include: { course: { include: { exam: true } } }
-    }) as any;
+    const batch = (await batchRepo.findBatchById(batchId, {
+      requireActiveHierarchy: true,
+      include: { course: { include: { exam: true } } },
+    })) as {
+      courseId: number;
+      course?: { exam?: { businessId: number } };
+    } | null;
 
     if (!batch) {
       logger.warn('ContentService: Batch not found during subject validation', {
@@ -354,7 +358,10 @@ export class ContentService {
   }
 
   private async batchAccessContext(batchId: number, user: IUser) {
-    const batch = await batchRepo.findBatchById(batchId, { include: { course: { include: { exam: true } } } }) as any;
+    const batch = (await batchRepo.findBatchById(batchId, {
+      requireActiveHierarchy: true,
+      include: { course: { include: { exam: true } } },
+    })) as { course?: { exam?: { businessId: number; id: number } } } | null;
 
     if (!batch) {
       throw new NotFoundError('Batch not found');

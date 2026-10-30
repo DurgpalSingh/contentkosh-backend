@@ -1,5 +1,6 @@
-import { IsString, IsNotEmpty, IsOptional, IsInt, MaxLength, IsEnum, IsDateString } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsInt, MaxLength, IsEnum, IsDateString, IsBoolean, Min } from 'class-validator';
 import { CourseStatus } from '@prisma/client';
+import { Transform } from 'class-transformer';
 
 export class CreateCourseDto {
     @IsString()
@@ -11,6 +12,16 @@ export class CreateCourseDto {
     @IsOptional()
     @MaxLength(500)
     description?: string;
+
+    @IsString()
+    @IsOptional()
+    thumbnail?: string | null;
+
+    @Transform(({ value }) => value === undefined || value === null || value === '' ? undefined : Number(value))
+    @IsInt({ message: 'Price must be a whole number' })
+    @Min(0, { message: 'Price cannot be negative' })
+    @IsOptional()
+    price?: number;
 
     @IsDateString()
     @IsOptional()
@@ -40,6 +51,21 @@ export class UpdateCourseDto {
     @IsOptional()
     @MaxLength(500)
     description?: string;
+
+    @IsString()
+    @IsOptional()
+    thumbnail?: string | null;
+
+    @Transform(({ value }) => value === true || value === 'true')
+    @IsBoolean()
+    @IsOptional()
+    removeThumbnail?: boolean;
+
+    @Transform(({ value }) => value === undefined || value === null || value === '' ? undefined : Number(value))
+    @IsInt({ message: 'Price must be a whole number' })
+    @Min(0, { message: 'Price cannot be negative' })
+    @IsOptional()
+    price?: number;
 
     @IsDateString()
     @IsOptional()

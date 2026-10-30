@@ -9,12 +9,11 @@ import {
 } from '../../../src/errors/api.errors';
 import { ValidationUtils } from '../../../src/utils/validation';
 import { ContentType, ContentStatus } from '@prisma/client';
-import * as fs from 'fs';
 import { AuthRequest } from '../../../src/dtos/auth.dto';
+import { uploadsFileStorage } from '../../../src/services/fileStorage.service';
 
 jest.mock('../../../src/utils/apiResponse');
 jest.mock('../../../src/utils/logger');
-jest.mock('fs');
 
 describe('Content Controller (Comprehensive)', () => {
   let req: Partial<AuthRequest>;
@@ -103,10 +102,9 @@ describe('Content Controller (Comprehensive)', () => {
 
       await contentController.createContent(req as any, res as any);
 
-      expect(ApiResponseHandler.error).toHaveBeenCalledWith(
+      expect(ApiResponseHandler.badRequest).toHaveBeenCalledWith(
         res,
-        'Title is required',
-        400
+        'Title is required'
       );
     });
 
@@ -119,10 +117,9 @@ describe('Content Controller (Comprehensive)', () => {
 
       await contentController.createContent(req as any, res as any);
 
-      expect(ApiResponseHandler.error).toHaveBeenCalledWith(
+      expect(ApiResponseHandler.notFound).toHaveBeenCalledWith(
         res,
-        'Batch not found',
-        404
+        'Batch not found'
       );
     });
 
@@ -137,10 +134,9 @@ describe('Content Controller (Comprehensive)', () => {
 
       await contentController.createContent(req as any, res as any);
 
-      expect(ApiResponseHandler.error).toHaveBeenCalledWith(
+      expect(ApiResponseHandler.forbidden).toHaveBeenCalledWith(
         res,
-        'No permission to create content',
-        403
+        'No permission to create content'
       );
     });
 
@@ -203,10 +199,9 @@ describe('Content Controller (Comprehensive)', () => {
 
       await contentController.getContent(req as any, res as any);
 
-      expect(ApiResponseHandler.error).toHaveBeenCalledWith(
+      expect(ApiResponseHandler.forbidden).toHaveBeenCalledWith(
         res,
-        'Access denied',
-        403
+        'Access denied'
       );
     });
 
@@ -220,7 +215,7 @@ describe('Content Controller (Comprehensive)', () => {
 
       await contentController.getContent(req as any, res as any);
 
-      expect(ApiResponseHandler.error).toHaveBeenCalled();
+      expect(ApiResponseHandler.badRequest).toHaveBeenCalled();
     });
   });
 
@@ -261,10 +256,9 @@ describe('Content Controller (Comprehensive)', () => {
 
       await contentController.getContentsByBatch(req as any, res as any);
 
-      expect(ApiResponseHandler.error).toHaveBeenCalledWith(
+      expect(ApiResponseHandler.forbidden).toHaveBeenCalledWith(
         res,
-        'Forbidden',
-        403
+        'Forbidden'
       );
     });
   });
@@ -309,10 +303,9 @@ describe('Content Controller (Comprehensive)', () => {
 
       await contentController.updateContent(req as any, res as any);
 
-      expect(ApiResponseHandler.error).toHaveBeenCalledWith(
+      expect(ApiResponseHandler.badRequest).toHaveBeenCalledWith(
         res,
-        'Invalid status',
-        400
+        'Invalid status'
       );
     });
   });
@@ -338,50 +331,30 @@ describe('Content Controller (Comprehensive)', () => {
 
 
   describe('getContentFile', () => {
-    it('streams file correctly', async () => {
+    const contentFileDownload = {
+      storageKey: 'content/file-1.pdf',
+      downloadFileName: 'Polity Notes.pdf',
+      contentType: 'application/pdf',
+    };
+
+    it('streams the file through content file storage', async () => {
       req.params = { contentId: '1' };
-
-      jest
-        .spyOn(ContentService.prototype, 'getContentFile')
-        .mockResolvedValue({
-          filePath: '/tmp/file.pdf',
-          fileName: 'file.pdf',
-          mimeType: 'application/pdf'
-        });
-
-      const stream = { pipe: jest.fn(), on: jest.fn() };
-      (fs.createReadStream as jest.Mock).mockReturnValue(stream);
+      jest.spyOn(ContentService.prototype, 'getContentFileDownload').mockResolvedValue(contentFileDownload);
+      const streamToResponse = jest.spyOn(uploadsFileStorage, 'streamToResponse').mockResolvedValue();
 
       await contentController.getContentFile(req as any, res as any);
 
-      expect(res.setHeader).toHaveBeenCalledWith(
-        'Content-Type',
-        'application/pdf'
-      );
-      expect(stream.pipe).toHaveBeenCalledWith(res);
+      expect(streamToResponse).toHaveBeenCalledWith(res, contentFileDownload);
     });
 
-    it('handles stream error safely', async () => {
+    it('returns not found when the file is missing on disk', async () => {
       req.params = { contentId: '1' };
-
-      jest
-        .spyOn(ContentService.prototype, 'getContentFile')
-        .mockResolvedValue({
-          filePath: '/tmp/file.pdf',
-          fileName: 'file.pdf',
-          mimeType: 'application/pdf'
-        });
-
-      const stream = {
-        pipe: jest.fn(),
-        on: jest.fn((_, cb) => cb(new Error())),
-        destroy: jest.fn()
-      };
-      (fs.createReadStream as jest.Mock).mockReturnValue(stream);
+      jest.spyOn(ContentService.prototype, 'getContentFileDownload').mockResolvedValue(contentFileDownload);
+      jest.spyOn(uploadsFileStorage, 'streamToResponse').mockRejectedValue(new NotFoundError('File'));
 
       await contentController.getContentFile(req as any, res as any);
 
-      expect(stream.destroy).toHaveBeenCalled();
+      expect(ApiResponseHandler.notFound).toHaveBeenCalled();
     });
   });
 });

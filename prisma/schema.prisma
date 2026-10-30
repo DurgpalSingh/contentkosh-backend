@@ -47,6 +47,8 @@ model User {
   createdStudents Student[]        @relation("StudentCreatedBy")
   updatedStudents Student[]        @relation("StudentUpdatedBy")
   testAttempts    TestAttempt[]
+  createdAnnouncements Announcement[] @relation("AnnouncementCreatedBy")
+  updatedAnnouncements Announcement[] @relation("AnnouncementUpdatedBy")
 
   @@unique([businessId, email])
   @@unique([businessId, mobile])
@@ -74,6 +76,8 @@ model Business {
   id            Int      @id @default(autoincrement())
   instituteName String   @map("institute_name")
   slug          String?  @unique @map("slug")
+  schemaName    String?  @unique @map("schema_name")
+  provisioningStatus BusinessProvisioningStatus @default(PENDING) @map("provisioning_status")
   logo          String?  // URL or file path to logo
   tagline       String?
   contactNumber String?        @map("contact_number")
@@ -86,6 +90,16 @@ model Business {
   createdAt     DateTime       @default(now()) @map("created_at")
   updatedAt     DateTime       @updatedAt @map("updated_at")
   isDeleted     Boolean        @default(false) @map("is_deleted")
+  provisionedAt DateTime?      @map("provisioned_at")
+  archivedAt    DateTime?      @map("archived_at")
+
+  // Super Admin lifecycle control — independent of isDeleted/provisioningStatus above,
+  // which track tenant self-provisioning and an Admin's own self-delete flow.
+  status          BusinessStatus @default(ACTIVE) @map("status")
+  statusReason    String?        @map("status_reason")
+  statusChangedAt DateTime?      @map("status_changed_at")
+  statusChangedBy Int?           @map("status_changed_by")
+
   announcements Announcement[]
   exams         Exam[]
   users         User[]
@@ -93,8 +107,23 @@ model Business {
   students      Student[]
   practiceTests PracticeTest[]
   examTests     ExamTest[]
+  subjectiveTests SubjectiveTest[]
+  slugHistory   BusinessSlugHistory[]
 
   @@map("business")
+}
+
+model BusinessSlugHistory {
+  id         Int      @id @default(autoincrement())
+  businessId Int      @map("business_id")
+  slug       String
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([slug])
+  @@index([businessId])
+  @@map("business_slug_history")
 }
 
 model Batch {
@@ -114,6 +143,8 @@ model Batch {
   contents   Content[]
   practiceTests PracticeTest[]
   examTests     ExamTest[]
+  subjectiveTests SubjectiveTest[]
+  announcementTargets AnnouncementTarget[]
 
   @@index([courseId])
   @@map("batches")
@@ -134,24 +165,50 @@ model BatchUser {
 }
 
 model Announcement {
-  id                Int      @id @default(autoincrement())
+  id                Int               @id @default(autoincrement())
   heading           String
   content           String
-  startDate         DateTime @map("start_date")
-  endDate           DateTime @map("end_date")
-  isActive          Boolean  @default(true) @map("is_active")
-  businessId        Int      @map("business_id")
-  visibleToAdmins   Boolean  @default(false) @map("visible_to_admins")
-  visibleToTeachers Boolean  @default(false) @map("visible_to_teachers")
-  visibleToStudents Boolean  @default(false) @map("visible_to_students")
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  startDate         DateTime          @map("start_date")
+  endDate           DateTime          @map("end_date")
+  isActive          Boolean           @default(true) @map("is_active")
+  businessId        Int               @map("business_id")
+  visibleToAdmins   Boolean           @default(false) @map("visible_to_admins")
+  visibleToTeachers Boolean           @default(false) @map("visible_to_teachers")
+  visibleToStudents Boolean           @default(false) @map("visible_to_students")
+  scope             AnnouncementScope @default(BATCH)
+  targetAllCourses  Boolean           @default(false) @map("target_all_courses")
+  targetAllBatches  Boolean           @default(false) @map("target_all_batches")
+  createdBy         Int?              @map("created_by")
+  updatedBy         Int?              @map("updated_by")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
 
   // Relations
-  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  business        Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdByUser   User?                @relation("AnnouncementCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updatedByUser   User?                @relation("AnnouncementUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+  targets         AnnouncementTarget[]
 
   @@index([businessId])
+  @@index([createdBy])
   @@map("announcements")
+}
+
+model AnnouncementTarget {
+  id             Int      @id @default(autoincrement())
+  announcementId Int      @map("announcement_id")
+  courseId       Int?     @map("course_id")
+  batchId        Int?     @map("batch_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  announcement Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  course       Course?       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  batch        Batch?        @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@index([announcementId])
+  @@index([courseId])
+  @@index([batchId])
+  @@map("announcement_targets")
 }
 
 model Exam {
@@ -182,6 +239,8 @@ model Course {
   id          Int          @id @default(autoincrement())
   name        String
   description String?
+  thumbnail   String?
+  price       Int          @default(0)
   startDate   DateTime?    @map("start_date")
   endDate     DateTime?    @map("end_date")
   status      CourseStatus @default(ACTIVE)
@@ -191,6 +250,7 @@ model Course {
   batches     Batch[]
   exam        Exam         @relation(fields: [examId], references: [id], onDelete: Cascade)
   subjects    Subject[]
+  announcementTargets AnnouncementTarget[]
 
   @@unique([examId, name])
   @@index([examId])
@@ -209,6 +269,7 @@ model Subject {
   contents    Content[]
   practiceTests PracticeTest[]
   examTests     ExamTest[]
+  subjectiveTests SubjectiveTest[]
 
   @@unique([courseId, name])
   @@index([courseId])
@@ -264,6 +325,24 @@ enum CourseStatus {
 enum SubjectStatus {
   ACTIVE
   INACTIVE
+}
+
+enum AnnouncementScope {
+  COURSE
+  BATCH
+}
+
+enum BusinessProvisioningStatus {
+  PENDING
+  ACTIVE
+  FAILED
+  ARCHIVED
+}
+
+enum BusinessStatus {
+  ACTIVE
+  PAUSED
+  DELETED
 }
 
 enum ContentType {
@@ -485,10 +564,10 @@ model TestQuestion {
   examTestId     String? @map("exam_test_id")
 
   type                Int     @map("type") // 0..4
-  text                String  @map("text")
+  text                String  @map("text") @db.Text
   correctTextAnswer   String? @map("correct_text_answer")
   correctOptionIdsAnswers String[] @default([]) @map("correct_option_ids_answers")
-  explanation         String? @map("explanation")
+  explanation         String? @map("explanation") @db.Text
   mediaUrl            String? @map("media_url")
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -508,7 +587,7 @@ model TestQuestion {
 model TestOption {
   id         String  @id @default(cuid()) @map("id")
   questionId String  @map("question_id")
-  text       String  @map("text")
+  text       String  @map("text") @db.Text
   mediaUrl   String? @map("media_url")
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -572,4 +651,67 @@ model TestAttemptAnswer {
   @@index([attemptId])
   @@index([questionId])
   @@map("test_attempt_answers")
+}
+
+model SubjectiveTest {
+  id           String  @id @default(cuid()) @map("id")
+  businessId   Int     @map("business_id")
+  batchId      Int     @map("batch_id")
+  subjectId    Int?    @map("subject_id")
+  name         String  @map("name")
+  paperType    String  @map("paper_type")
+  description  String? @map("description") @db.Text
+  instructions String? @map("instructions") @db.Text
+  status       Int     @default(0) @map("status") // 0=DRAFT, 1=PUBLISHED
+
+  totalMarks      Float    @map("total_marks")
+  durationMinutes Int      @map("duration_minutes")
+  startAt         DateTime @map("start_at")
+  deadlineAt      DateTime @map("deadline_at")
+
+  questionPaperPath String? @map("question_paper_path") // private storage key; required to publish
+
+  createdBy Int      @map("created_by")
+  updatedBy Int?     @map("updated_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  business    Business                   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  batch       Batch                      @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  subject     Subject?                   @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  submissions SubjectiveTestSubmission[]
+
+  @@index([businessId, status])
+  @@index([batchId, status])
+  @@index([subjectId])
+  @@map("subjective_tests")
+}
+
+model SubjectiveTestSubmission {
+  id               String @id @default(cuid()) @map("id")
+  subjectiveTestId String @map("subjective_test_id")
+  studentId        Int    @map("student_id")
+  status           Int    @default(0) @map("status") // 0=IN_PROGRESS, 1=SUBMITTED, 2=CHECKED (EXPIRED is derived, never stored)
+
+  startedAt       DateTime  @map("started_at")
+  submittedAt     DateTime? @map("submitted_at")
+  answerSheetPath String?   @map("answer_sheet_path") // private storage key
+
+  marksAwarded           Float?    @map("marks_awarded")
+  remarks                String?   @map("remarks") @db.Text
+  checkedAnswerSheetPath String?   @map("checked_answer_sheet_path") // private storage key
+  checkedBy              Int?      @map("checked_by")
+  checkedAt              DateTime? @map("checked_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  test SubjectiveTest @relation(fields: [subjectiveTestId], references: [id], onDelete: Cascade)
+
+  @@unique([subjectiveTestId, studentId])
+  @@index([subjectiveTestId, status])
+  @@index([studentId, status])
+  @@map("subjective_test_submissions")
 }

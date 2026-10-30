@@ -22,9 +22,10 @@ export class CreatePracticeTestDto {
   @Min(1)
   batchId!: number;
 
+  @IsOptional()
   @IsInt()
   @Min(1)
-  subjectId!: number;
+  subjectId?: number;
 
   @IsString()
   @IsNotEmpty()
@@ -114,9 +115,10 @@ export class CreateExamTestDto {
   @Min(1)
   batchId!: number;
 
+  @IsOptional()
   @IsInt()
   @Min(1)
-  subjectId!: number;
+  subjectId?: number;
 
   @IsString()
   @IsNotEmpty()

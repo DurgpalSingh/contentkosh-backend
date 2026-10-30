@@ -2,13 +2,14 @@ import { Request, Response } from 'express';
 import { ApiResponseHandler } from '../utils/apiResponse';
 import * as businessRepo from '../repositories/business.repo';
 import logger from '../utils/logger';
-import { BadRequestError, NotFoundError } from '../errors/api.errors';
+import { BadRequestError } from '../errors/api.errors';
 import { ValidationUtils } from '../utils/validation';
 import { CreateExamDto, UpdateExamDto } from '../dtos/exam.dto';
 import { plainToInstance } from 'class-transformer';
 import { AuthRequest } from '../dtos/auth.dto';
 import { QueryBuilder } from '../utils/queryBuilder';
 import { ExamService } from '../services/exam.service';
+import { handleControllerError } from '../utils/controllerErrorHandler';
 
 export const examService = new ExamService();
 
@@ -37,12 +38,8 @@ export const createExam = async (req: Request, res: Response) => {
         const exam = await examService.createExam(examDataInput, userId);
 
         ApiResponseHandler.success(res, exam, 'Exam created successfully', 201);
-    } catch (error: any) {
-        if (error instanceof BadRequestError) {
-            return ApiResponseHandler.badRequest(res, error.message);
-        }
-        logger.error(`Error creating exam: ${error.message}`);
-        ApiResponseHandler.error(res, 'Failed to create exam');
+    } catch (error) {
+        handleControllerError(res, error, 'Failed to create exam', 'Error creating exam');
     }
 };
 
@@ -73,15 +70,8 @@ export const getExam = async (req: Request, res: Response) => {
         }
 
         ApiResponseHandler.success(res, exam, 'Exam fetched successfully');
-    } catch (error: any) {
-        if (error instanceof BadRequestError) {
-            return ApiResponseHandler.badRequest(res, error.message);
-        }
-        if (error instanceof NotFoundError || error.constructor.name === 'NotFoundError') {
-            return ApiResponseHandler.notFound(res, error.message);
-        }
-        logger.error(`Error fetching exam: ${error.message}`);
-        ApiResponseHandler.error(res, 'Failed to fetch exam');
+    } catch (error) {
+        handleControllerError(res, error, 'Failed to fetch exam', 'Error fetching exam');
     }
 };
 
@@ -106,12 +96,8 @@ export const getExamsByBusiness = async (req: Request, res: Response) => {
         const exams = await examService.getExamsByBusiness(businessId, user, options);
 
         ApiResponseHandler.success(res, exams, 'Exams fetched successfully');
-    } catch (error: any) {
-        if (error instanceof BadRequestError) {
-            return ApiResponseHandler.badRequest(res, error.message);
-        }
-        logger.error(`Error fetching exams by business: ${error.message}`);
-        ApiResponseHandler.error(res, 'Failed to fetch exams');
+    } catch (error) {
+        handleControllerError(res, error, 'Failed to fetch exams', 'Error fetching exams by business');
     }
 };
 
@@ -135,15 +121,8 @@ export const updateExam = async (req: Request, res: Response) => {
         const exam = await examService.updateExam(id, examDataInput, userId, businessId);
 
         ApiResponseHandler.success(res, exam, 'Exam updated successfully');
-    } catch (error: any) {
-        if (error instanceof BadRequestError) {
-            return ApiResponseHandler.badRequest(res, error.message);
-        }
-        if (error instanceof NotFoundError || error.constructor.name === 'NotFoundError') {
-            return ApiResponseHandler.notFound(res, error.message);
-        }
-        logger.error(`Error updating exam: ${error.message}`);
-        ApiResponseHandler.error(res, 'Failed to update exam');
+    } catch (error) {
+        handleControllerError(res, error, 'Failed to update exam', 'Error updating exam');
     }
 };
 
@@ -161,15 +140,7 @@ export const deleteExam = async (req: Request, res: Response) => {
         await examService.deleteExam(id);
 
         ApiResponseHandler.success(res, null, 'Exam deleted successfully');
-    } catch (error: any) {
-        if (error instanceof BadRequestError) {
-            return ApiResponseHandler.badRequest(res, error.message);
-        }
-        if (error instanceof NotFoundError || error.constructor.name === 'NotFoundError') {
-            return ApiResponseHandler.notFound(res, error.message);
-        }
-        logger.error(`Error deleting exam: ${error.message}`);
-        ApiResponseHandler.error(res, 'Failed to delete exam');
+    } catch (error) {
+        handleControllerError(res, error, 'Failed to delete exam', 'Error deleting exam');
     }
 };
-

@@ -5,9 +5,18 @@ import { TestStatus, ResultVisibilityExam } from '../constants/test-enums';
 import logger from '../utils/logger';
 import { CreateExamTestDto, CreateQuestionDto, UpdateExamTestDto, UpdateQuestionDto } from '../dtos/test.dto';
 import { UserRole } from '@prisma/client';
-import { validateQuestionPayload, assertBatchBelongsToBusiness } from '../utils/test.utils';
-import { assertTestBatchAccess, assertSubjectForBatch } from '../utils/test.utils';
-import { sanitizeQuestionFieldsForCreate, sanitizeQuestionFieldsForUpdate } from '../utils/test.utils';
+import {deleteQuestionImageFile} from '../utils/test.utils';
+import {
+  validateQuestionPayload,
+  assertBatchBelongsToBusiness,
+  assertTestBatchAccess,
+  assertSubjectForBatch,
+  assertCanModifyTestQuestions,
+  assertExamQuestionsMutableBeforeStart,
+  sanitizeQuestionFieldsForCreate,
+  sanitizeQuestionFieldsForUpdate,
+  sanitizeOptionsHtml,
+} from '../utils/test.utils';
 
 export class ExamTestService {
   private isElevated(role: UserRole) {
@@ -49,12 +58,14 @@ export class ExamTestService {
       entityId: 'create',
     });
 
-    await assertSubjectForBatch({
-      batchId: dto.batchId,
-      subjectId: dto.subjectId,
-      businessId,
-      userId: user.id,
-    });
+    if (dto.subjectId !== undefined && dto.subjectId !== null) {
+      await assertSubjectForBatch({
+        batchId: dto.batchId,
+        subjectId: dto.subjectId,
+        businessId,
+        userId: user.id,
+      });
+    }
 
     const startAt = new Date(dto.startAt);
     const deadlineAt = new Date(dto.deadlineAt);
@@ -65,7 +76,7 @@ export class ExamTestService {
     const createdExamTest = await examRepo.createExamTest({
       businessId,
       batchId: dto.batchId,
-      subjectId: dto.subjectId,
+      subjectId: dto.subjectId ?? null,
       name: dto.name,
       description: dto.description ?? null,
       status: dto.status ?? TestStatus.DRAFT,
@@ -100,12 +111,20 @@ export class ExamTestService {
   async get(businessId: number, examTestId: string, user: { id: number; role: UserRole }) {
     logger.info(`[exam-test] get businessId=${businessId} examTestId=${examTestId} userId=${user.id} role=${user.role}`);
     const examTestRecord = await this.getWithAccess(businessId, examTestId, user);
+    const hasAttempts = await questionRepo.hasAttemptsForExamTest(businessId, examTestId);
     const canSeeQuestions = this.isElevated(user.role) || user.role === UserRole.TEACHER;
     if (canSeeQuestions) {
       const questions = await questionRepo.listExamTestQuestions(businessId, examTestId);
-      return { ...examTestRecord, questions } as typeof examTestRecord & { questions: typeof questions };
+      return {
+        ...examTestRecord,
+        hasAttempts,
+        questions,
+      } as typeof examTestRecord & { hasAttempts: boolean; questions: typeof questions };
     }
-    return examTestRecord as typeof examTestRecord & { questions?: undefined };
+    return {
+      ...examTestRecord,
+      hasAttempts,
+    } as typeof examTestRecord & { hasAttempts: boolean; questions?: undefined };
   }
 
   async update(
@@ -214,9 +233,9 @@ export class ExamTestService {
     logger.info(
       `[exam-test] createQuestion businessId=${businessId} examTestId=${examTestId} type=${dto?.type} userId=${user.id}`,
     );
-    await this.getWithAccess(businessId, examTestId, user);
-    const hasAttempts = await questionRepo.hasAttemptsForExamTest(businessId, examTestId);
-    if (hasAttempts) throw new BadRequestError('Cannot modify questions after attempts have started');
+    const existing = await this.getWithAccess(businessId, examTestId, user);
+    assertExamQuestionsMutableBeforeStart(existing);
+    await assertCanModifyTestQuestions(businessId, examTestId, 'exam');
 
     validateQuestionPayload({
       type: dto.type,
@@ -228,37 +247,36 @@ export class ExamTestService {
     const { questionText: sanitizedQuestionText } =
       sanitizeQuestionFieldsForCreate(dto, { businessId, examTestId, userId: user.id });
 
+    const sanitizedOptions = sanitizeOptionsHtml(dto.options, { businessId, examTestId, userId: user.id }) ?? [];
+
     const createdQuestion = await questionRepo.createExamTestQuestionResolvingCorrect(businessId, examTestId, {
       type: dto.type,
       text: sanitizedQuestionText,
       mediaUrl: dto.mediaUrl ?? null,
       correctTextAnswer: dto.correctTextAnswer ?? null,
       correctOptionRefs: dto.correctOptionIdsAnswers ?? [],
-      options: dto.options?.map((o) => ({ text: o.text, mediaUrl: o.mediaUrl ?? null })) ?? [],
+      options: sanitizedOptions,
     });
     if (!createdQuestion) throw new NotFoundError('Exam test not found');
     return createdQuestion;
   }
 
-  async updateQuestion(businessId: number, questionId: string, dto: UpdateQuestionDto, user: { id: number; role: UserRole }) {
+  async updateQuestion(
+    businessId: number,
+    questionId: string,
+    dto: UpdateQuestionDto,
+    user: { id: number; role: UserRole },
+  ) {
     const existing = await questionRepo.findQuestionById(businessId, questionId);
     if (!existing) throw new NotFoundError('Question not found');
 
     const examTestId = existing.examTestId;
     if (!examTestId) throw new BadRequestError('Question does not belong to an exam test');
-    await this.getWithAccess(businessId, examTestId, user);
-
-    const hasAttempts = await questionRepo.hasAttemptsForExamTest(businessId, examTestId);
-    if (hasAttempts) throw new BadRequestError('Cannot modify questions after attempts have started');
+    const examTest = await this.getWithAccess(businessId, examTestId, user);
+    assertExamQuestionsMutableBeforeStart(examTest);
+    await assertCanModifyTestQuestions(businessId, examTestId, 'exam');
 
     const resolvedQuestionType = dto.type ?? existing.type;
-    const optionUpdates = dto.options !== undefined
-      ? dto.options.map((o) => ({
-          ...(o.id !== undefined ? { id: o.id } : {}),
-          text: o.text,
-          mediaUrl: o.mediaUrl ?? null,
-        }))
-      : undefined;
     const correctOptionIdsForValidation = dto.correctOptionIdsAnswers ?? existing.correctOptionIdsAnswers ?? [];
     const resolvedCorrectTextAnswer = dto.correctTextAnswer ?? existing.correctTextAnswer ?? null;
 
@@ -267,7 +285,7 @@ export class ExamTestService {
       correctTextAnswer: resolvedCorrectTextAnswer,
       correctOptionIdsAnswers: correctOptionIdsForValidation.map((v) => String(v)),
       options:
-        optionUpdates?.map((o) => ({ text: o.text, mediaUrl: o.mediaUrl ?? null })) ??
+        dto.options?.map((o) => ({ text: o.text, mediaUrl: o.mediaUrl ?? null })) ??
         existing.options?.map((o) => ({ text: o.text, mediaUrl: o.mediaUrl ?? null })) ??
         [],
     });
@@ -279,6 +297,30 @@ export class ExamTestService {
       userId: user.id,
     });
 
+    const sanitizedOptions =
+      dto.options !== undefined
+        ? sanitizeOptionsHtml(dto.options, { businessId, examTestId, questionId, userId: user.id })
+        : undefined;
+
+    // Clean up old question image if it is being replaced or removed
+    if (dto.mediaUrl !== undefined && dto.mediaUrl !== existing.mediaUrl) {
+      deleteQuestionImageFile(existing.mediaUrl);
+    }
+
+    // Clean up old option images if they are being replaced or removed
+    if (dto.options !== undefined && existing.options) {
+      for (const existingOpt of existing.options) {
+        const updatedOpt = dto.options.find((o) => o.id === existingOpt.id);
+        if (
+          updatedOpt &&
+          updatedOpt.mediaUrl !== undefined &&
+          updatedOpt.mediaUrl !== existingOpt.mediaUrl
+        ) {
+          deleteQuestionImageFile(existingOpt.mediaUrl);
+        }
+      }
+    }
+
     const updatedQuestion = await questionRepo.updateQuestionAndOptions(businessId, questionId, {
       ...(dto.type !== undefined ? { type: dto.type } : {}),
       ...(sanitizedQuestionText !== undefined ? { text: sanitizedQuestionText } : {}),
@@ -287,25 +329,26 @@ export class ExamTestService {
       ...(dto.correctOptionIdsAnswers !== undefined
         ? { correctOptionRefs: dto.correctOptionIdsAnswers }
         : {}),
-      ...(dto.options !== undefined ? { options: optionUpdates ?? [] } : {}),
+      ...(dto.options !== undefined ? { options: sanitizedOptions ?? [] } : {}),
     });
     if (!updatedQuestion) throw new NotFoundError('Question not found');
     return updatedQuestion;
   }
 
-  async deleteQuestion(businessId: number, questionId: string, user: { id: number; role: UserRole }) {
+  async deleteQuestion(
+    businessId: number,
+    questionId: string,
+    user: { id: number; role: UserRole },
+  ) {
     const existing = await questionRepo.findQuestionById(businessId, questionId);
     if (!existing) throw new NotFoundError('Question not found');
     const examTestId = existing.examTestId;
     if (!examTestId) throw new BadRequestError('Question does not belong to an exam test');
-    await this.getWithAccess(businessId, examTestId, user);
-
-    const hasAttempts = await questionRepo.hasAttemptsForExamTest(businessId, examTestId);
-    if (hasAttempts) throw new BadRequestError('Cannot modify questions after attempts have started');
-
+    const examTest = await this.getWithAccess(businessId, examTestId, user);
+    assertExamQuestionsMutableBeforeStart(examTest);
+    await assertCanModifyTestQuestions(businessId, examTestId, 'exam');
     await questionRepo.deleteQuestion(businessId, questionId);
   }
 }
-
 
 export const examTestService = new ExamTestService();

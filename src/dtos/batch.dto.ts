@@ -82,6 +82,13 @@ export class RemoveUserFromBatchDto {
     batchId!: number;
 }
 
+export class SelfEnrollBatchDto {
+    @IsNotEmpty()
+    @IsInt()
+    @Transform(({ value }) => parseInt(value, 10))
+    batchId!: number;
+}
+
 export class UpdateBatchUserDto {
     @IsNotEmpty()
     @IsBoolean()

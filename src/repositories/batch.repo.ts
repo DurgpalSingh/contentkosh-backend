@@ -1,5 +1,17 @@
 import { Prisma, UserRole } from '@prisma/client';
 import { prisma } from '../config/database';
+import {
+  queryTenantPublic,
+  userBasicFromRow,
+  openTenantTransaction,
+  commitAndClose,
+  rollbackAndClose,
+} from './crossSchema.repo';
+import {
+  ACTIVE_BATCH_WHERE,
+  activeBatchWhereForBusiness,
+  activeCourseWhereForBusiness,
+} from '../constants/hierarchyFilters';
 
 const batchSelect = {
   id: true,
@@ -19,11 +31,125 @@ const courseSelect = {
   examId: true,
 };
 
+const browsableCourseSelect = {
+  id: true,
+  name: true,
+  description: true,
+  price: true,
+  thumbnail: true,
+};
+
 const userSelect = {
   id: true,
   email: true,
   name: true,
+  profilePicture: true,
 };
+
+function mapBatchUserRow(row: any) {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    batchId: row.batch_id,
+    isActive: row.is_active,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    user: userBasicFromRow(row, 'user'),
+    ...(row.batch_code_name !== undefined
+      ? {
+          batch: {
+            id: row.batch_id,
+            codeName: row.batch_code_name,
+            displayName: row.batch_display_name,
+            startDate: row.batch_start_date,
+            endDate: row.batch_end_date,
+            isActive: row.batch_is_active,
+            courseId: row.batch_course_id,
+            createdAt: row.batch_created_at,
+            updatedAt: row.batch_updated_at,
+          },
+        }
+      : {}),
+  };
+}
+
+async function findBatchBusinessIdRequired(batchId: number): Promise<number> {
+  const businessId = await findBatchBusinessId(batchId);
+  if (!businessId) throw new Error(`Business not found for batch ${batchId}`);
+  return businessId;
+}
+
+async function findCourseBusinessId(courseId: number): Promise<number | null> {
+  const course = await prisma.course.findUnique({
+    where: { id: courseId },
+    select: { exam: { select: { businessId: true } } },
+  });
+  return course?.exam?.businessId ?? null;
+}
+
+async function findBatchUsersJoined(
+  businessId: number,
+  whereSql: string,
+  params: unknown[],
+  includeBatch = false,
+) {
+  const rows = await queryTenantPublic<any>(
+    businessId,
+    (schema) => `
+      SELECT
+        bu.*,
+        u.id AS user_id, u.name AS user_name, u.email AS user_email, u.mobile AS user_mobile,
+        u.role AS user_role, u.profile_picture AS user_profile_picture
+        ${includeBatch ? `,
+        b.code_name AS batch_code_name, b.display_name AS batch_display_name,
+        b.start_date AS batch_start_date, b.end_date AS batch_end_date,
+        b.is_active AS batch_is_active, b.course_id AS batch_course_id,
+        b.created_at AS batch_created_at, b.updated_at AS batch_updated_at` : ''}
+      FROM ${schema}.batch_users bu
+      JOIN public.users u ON u.id = bu.user_id
+      ${includeBatch ? `JOIN ${schema}.batches b ON b.id = bu.batch_id` : ''}
+      WHERE ${whereSql}
+      ORDER BY bu.created_at DESC
+    `,
+    ...params,
+  );
+  return rows.map(mapBatchUserRow);
+}
+
+async function attachStudentBatchUsers(batches: any[], businessId: number): Promise<any[]> {
+  const batchIds = batches.map((batch) => batch.id).filter((id) => Number.isInteger(id));
+  if (!batchIds.length) return batches;
+
+  const rows = await queryTenantPublic<any>(
+    businessId,
+    (schema) => `
+      SELECT
+        bu.*,
+        u.id AS user_id, u.name AS user_name, u.email AS user_email, u.mobile AS user_mobile,
+        u.role AS user_role, u.profile_picture AS user_profile_picture
+      FROM ${schema}.batch_users bu
+      JOIN public.users u ON u.id = bu.user_id
+      WHERE bu.batch_id = ANY($1::int[])
+        AND u.role = $2::"public"."UserRole"
+      ORDER BY bu.created_at DESC
+    `,
+    batchIds,
+    UserRole.STUDENT,
+  );
+
+  const byBatchId = new Map<number, any[]>();
+  for (const row of rows) {
+    const mapped = mapBatchUserRow(row);
+    const list = byBatchId.get(mapped.batchId) ?? [];
+    list.push(mapped);
+    byBatchId.set(mapped.batchId, list);
+  }
+
+  return batches.map((batch) => ({
+    ...batch,
+    batchUsers: byBatchId.get(batch.id) ?? [],
+  }));
+}
 
 export interface BatchFindOptions {
   where?: Prisma.BatchWhereInput;
@@ -33,6 +159,8 @@ export interface BatchFindOptions {
   select?: Prisma.BatchSelect;
   include?: Prisma.BatchInclude;
   includeStudents?: boolean;
+  /** When true, batch must have active course + exam (user-facing / validation paths). */
+  requireActiveHierarchy?: boolean;
 }
 
 export async function createBatch(data: Prisma.BatchCreateInput) {
@@ -50,7 +178,30 @@ export async function createBatch(data: Prisma.BatchCreateInput) {
 }
 
 export async function findBatchById(id: number, options: BatchFindOptions = {}) {
-  const query: any = { where: { id } };
+  if (options.requireActiveHierarchy) {
+    const query: Prisma.BatchFindFirstArgs = {
+      where: {
+        id,
+        ...ACTIVE_BATCH_WHERE,
+        ...(options.where ?? {}),
+      },
+    };
+
+    if (options.select) {
+      query.select = options.select;
+    } else if (options.include) {
+      query.include = options.include;
+    } else {
+      query.select = {
+        ...batchSelect,
+        course: { select: courseSelect },
+      };
+    }
+
+    return prisma.batch.findFirst(query);
+  }
+
+  const query: Prisma.BatchFindUniqueArgs = { where: { id } };
 
   if (options.select) {
     query.select = options.select;
@@ -59,7 +210,7 @@ export async function findBatchById(id: number, options: BatchFindOptions = {}) 
   } else {
     query.select = {
       ...batchSelect,
-      course: { select: courseSelect }
+      course: { select: courseSelect },
     };
   }
 
@@ -67,8 +218,11 @@ export async function findBatchById(id: number, options: BatchFindOptions = {}) 
 }
 
 export async function findBatchBusinessId(batchId: number): Promise<number | null> {
-  const batch = await prisma.batch.findUnique({
-    where: { id: batchId },
+  const batch = await prisma.batch.findFirst({
+    where: {
+      id: batchId,
+      ...ACTIVE_BATCH_WHERE,
+    },
     select: {
       course: {
         select: {
@@ -112,6 +266,7 @@ export async function findBatchesByCourseId(courseId: number, options: BatchFind
   const query: Prisma.BatchFindManyArgs = {
     where: {
       courseId,
+      ...ACTIVE_BATCH_WHERE,
       ...(options.where || {}),
     },
     orderBy: options.orderBy || { createdAt: 'desc' },
@@ -121,27 +276,10 @@ export async function findBatchesByCourseId(courseId: number, options: BatchFind
   if (options.take !== undefined) query.take = options.take;
 
   if (requestIncludeStudents) {
-    // Custom include logic for students - overrides standard select/include
-    query.include = {
-      ...(options.include || {}),
-      batchUsers: {
-        where: {
-          user: { role: UserRole.STUDENT }
-        },
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              mobile: true,
-              role: true
-            }
-          }
-        }
-      }
+    query.select = {
+      ...batchSelect,
+      course: { select: courseSelect }
     };
-    // Ensure we don't send includeStudents to prisma if we were spreading options elsewhere (though we aren't here)
   } else if (options.select) {
     query.select = options.select;
   } else if (options.include) {
@@ -153,7 +291,10 @@ export async function findBatchesByCourseId(courseId: number, options: BatchFind
     };
   }
 
-  return prisma.batch.findMany(query);
+  const batches = await prisma.batch.findMany(query);
+  if (!requestIncludeStudents) return batches;
+  const businessId = await findCourseBusinessId(courseId);
+  return businessId ? attachStudentBatchUsers(batches, businessId) : batches;
 }
 
 export async function findBatches(options: BatchFindOptions = {}) {
@@ -176,24 +317,9 @@ export async function findBatches(options: BatchFindOptions = {}) {
   };
 
   if (requestIncludeStudents) {
-    query.include = {
-      ...(options.include || {}),
-      batchUsers: {
-        where: {
-          user: { role: UserRole.STUDENT }
-        },
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              mobile: true,
-              role: true
-            }
-          }
-        }
-      }
+    query.select = {
+      ...batchSelect,
+      course: { select: courseSelect }
     };
   } else if (options.select) {
     query.select = options.select;
@@ -206,7 +332,10 @@ export async function findBatches(options: BatchFindOptions = {}) {
     };
   }
 
-  return prisma.batch.findMany(query);
+  const batches = await prisma.batch.findMany(query);
+  if (!requestIncludeStudents || batches.length === 0) return batches;
+  const businessId = await findBatchBusinessIdRequired((batches[0] as any).id);
+  return attachStudentBatchUsers(batches, businessId);
 }
 
 export async function findActiveBatchesByCourseId(courseId: number, options: BatchFindOptions = {}) {
@@ -244,10 +373,10 @@ export async function deleteBatch(id: number) {
 // Batch User operations
 export async function addUserToBatch(userId: number, batchId: number) {
   try {
-    return await prisma.batchUser.create({
+    const created = await prisma.batchUser.create({
       data: {
-        user: { connect: { id: userId } },
-        batch: { connect: { id: batchId } }
+        userId,
+        batchId
       },
       select: {
         id: true,
@@ -256,10 +385,10 @@ export async function addUserToBatch(userId: number, batchId: number) {
         isActive: true,
         createdAt: true,
         updatedAt: true,
-        user: { select: userSelect },
         batch: { select: batchSelect }
       },
     });
+    return (await findBatchUser(userId, batchId)) ?? created;
   } catch (error) {
     throw error;
   }
@@ -277,24 +406,14 @@ export async function removeUserFromBatch(userId: number, batchId: number) {
 }
 
 export async function findBatchUser(userId: number, batchId: number) {
-  return prisma.batchUser.findUnique({
-    where: {
-      userId_batchId: {
-        userId,
-        batchId
-      }
-    },
-    select: {
-      id: true,
-      userId: true,
-      batchId: true,
-      isActive: true,
-      createdAt: true,
-      updatedAt: true,
-      user: { select: userSelect },
-      batch: { select: batchSelect }
-    },
-  });
+  const businessId = await findBatchBusinessIdRequired(batchId);
+  const rows = await findBatchUsersJoined(
+    businessId,
+    'bu.user_id = $1 AND bu.batch_id = $2',
+    [userId, batchId],
+    true,
+  );
+  return rows[0] ?? null;
 }
 
 export async function findBatchesByUserId(userId: number) {
@@ -316,27 +435,18 @@ export async function findBatchesByUserId(userId: number) {
 }
 
 export async function findUsersByBatchId(batchId: number, role?: UserRole) {
-  const where: any = { batchId };
-
-  if (role) {
-    where.user = { role };
-  }
-
-  return prisma.batchUser.findMany({
-    where,
-    select: {
-      id: true,
-      isActive: true,
-      createdAt: true,
-      user: { select: userSelect }
-    },
-    orderBy: { createdAt: 'desc' },
-  });
+  const businessId = await findBatchBusinessIdRequired(batchId);
+  const rows = await findBatchUsersJoined(
+    businessId,
+    role ? 'bu.batch_id = $1 AND u.role = $2::"public"."UserRole"' : 'bu.batch_id = $1',
+    role ? [batchId, role] : [batchId],
+  );
+  return rows.map(({ batchId: _batchId, updatedAt: _updatedAt, ...row }) => row);
 }
 
 export async function updateBatchUser(userId: number, batchId: number, data: Prisma.BatchUserUpdateInput) {
   try {
-    return await prisma.batchUser.update({
+    const updated = await prisma.batchUser.update({
       where: {
         userId_batchId: {
           userId,
@@ -351,10 +461,10 @@ export async function updateBatchUser(userId: number, batchId: number, data: Pri
         isActive: true,
         createdAt: true,
         updatedAt: true,
-        user: { select: userSelect },
         batch: { select: batchSelect }
       },
     });
+    return (await findBatchUser(userId, batchId)) ?? updated;
   } catch (error) {
     throw error;
   }
@@ -373,9 +483,7 @@ export function applyBatchAccessFilters(
   if (access.role !== UserRole.SUPERADMIN && access.businessId) {
     next.where = {
       ...next.where,
-      course: {
-        exam: { businessId: access.businessId }
-      }
+      ...activeBatchWhereForBusiness(access.businessId),
     };
   }
 
@@ -400,4 +508,129 @@ export async function isActiveUserInBatch(userId: number, batchId: number): Prom
     select: { id: true },
   });
   return Boolean(membership);
+}
+
+export async function findBrowsableBatchesForBusiness(businessId: number) {
+  return prisma.batch.findMany({
+    where: activeBatchWhereForBusiness(businessId),
+    orderBy: { createdAt: 'desc' },
+    select: {
+      ...batchSelect,
+      course: { select: browsableCourseSelect },
+    },
+  });
+}
+
+export async function findBatchForSelfEnroll(batchId: number) {
+  return findBatchById(batchId, {
+    requireActiveHierarchy: true,
+    select: {
+      id: true,
+      course: { select: { price: true, exam: { select: { businessId: true } } } },
+    },
+  }) as Promise<{ id: number; course: { price: number; exam: { businessId: number } } } | null>;
+}
+
+export async function enrollUserAndMaybePromote(
+  businessId: number,
+  userId: number,
+  batchId: number,
+  promoteToStudent: boolean,
+): Promise<{ batchUserId: number; roleChanged: boolean }> {
+  const { client, schemaSql } = await openTenantTransaction(businessId);
+  let committed = false;
+  try {
+    const insertResult = await client.query<{ id: number }>(
+      `INSERT INTO ${schemaSql}.batch_users (user_id, batch_id) VALUES ($1, $2) RETURNING id`,
+      [userId, batchId],
+    );
+    const batchUserId = insertResult.rows[0]!.id;
+
+    let roleChanged = false;
+    if (promoteToStudent) {
+      const updateResult = await client.query(
+        `UPDATE public.users SET role = $1, updated_at = now() WHERE id = $2 AND role = $3`,
+        [UserRole.STUDENT, userId, UserRole.USER],
+      );
+      roleChanged = (updateResult.rowCount ?? 0) > 0;
+    }
+
+    await commitAndClose(client);
+    committed = true;
+    return { batchUserId, roleChanged };
+  } finally {
+    if (!committed) await rollbackAndClose(client);
+  }
+}
+
+export async function findActiveBatchIdsForUser(
+  businessId: number,
+  userId: number,
+): Promise<number[]> {
+  const rows = await prisma.batchUser.findMany({
+    where: {
+      userId,
+      isActive: true,
+      batch: activeBatchWhereForBusiness(businessId),
+    },
+    select: { batchId: true },
+  });
+  return [...new Set(rows.map((r) => r.batchId))];
+}
+
+export async function findUserBatchAndCourseMembership(
+  businessId: number,
+  userId: number,
+): Promise<{ batchIds: number[]; courseIds: number[] }> {
+  const rows = await prisma.batchUser.findMany({
+    where: {
+      userId,
+      isActive: true,
+      batch: activeBatchWhereForBusiness(businessId),
+    },
+    select: {
+      batchId: true,
+      batch: { select: { courseId: true } },
+    },
+  });
+  const batchIds = [...new Set(rows.map((r) => r.batchId))];
+  const courseIds = [...new Set(rows.map((r) => r.batch.courseId))];
+  return { batchIds, courseIds };
+}
+
+export async function findAllBatchIdsInBusiness(businessId: number): Promise<number[]> {
+  const rows = await prisma.batch.findMany({
+    where: activeBatchWhereForBusiness(businessId),
+    select: { id: true },
+  });
+  return rows.map((r) => r.id);
+}
+
+export async function findBatchIdsForCourseIds(
+  businessId: number,
+  courseIds: number[],
+): Promise<number[]> {
+  if (courseIds.length === 0) return [];
+  const rows = await prisma.batch.findMany({
+    where: {
+      courseId: { in: courseIds },
+      ...activeBatchWhereForBusiness(businessId),
+    },
+    select: { id: true },
+  });
+  return rows.map((r) => r.id);
+}
+
+export async function validateBatchIdsBelongToBusiness(
+  businessId: number,
+  batchIds: number[],
+): Promise<boolean> {
+  if (batchIds.length === 0) return true;
+  const count = await prisma.batch.count({
+    where: {
+      id: { in: batchIds },
+      ...activeBatchWhereForBusiness(businessId),
+    },
+  });
+  return count === batchIds.length;
 }

@@ -1,13 +1,12 @@
 import { Request, Response } from 'express';
 import { ApiResponseHandler } from '../utils/apiResponse';
-import logger from '../utils/logger';
-import { BadRequestError, NotFoundError } from '../errors/api.errors';
 import { ValidationUtils } from '../utils/validation';
 import { CreateCourseDto, UpdateCourseDto } from '../dtos/course.dto';
 import { plainToInstance } from 'class-transformer';
 import { QueryBuilder } from '../utils/queryBuilder';
 import { CourseService } from '../services/course.service';
 import { ExamService } from '../services/exam.service';
+import { handleControllerError } from '../utils/controllerErrorHandler';
 
 
 export const courseService = new CourseService();
@@ -28,15 +27,8 @@ export const createCourse = async (req: Request, res: Response) => {
         const course = await courseService.createCourse(courseDataInput);
 
         ApiResponseHandler.success(res, course, 'Course created successfully', 201);
-    } catch (error: any) {
-        if (error instanceof BadRequestError) {
-            return ApiResponseHandler.badRequest(res, error.message);
-        }
-        if (error instanceof NotFoundError || error.constructor.name === 'NotFoundError') {
-            return ApiResponseHandler.notFound(res, error.message);
-        }
-        logger.error(`Error creating course: ${error.message}`);
-        ApiResponseHandler.error(res, 'Failed to create course');
+    } catch (error) {
+        handleControllerError(res, error, 'Failed to create course', 'Error creating course');
     }
 };
 
@@ -58,15 +50,8 @@ export const getCourse = async (req: Request, res: Response) => {
         }
 
         ApiResponseHandler.success(res, course, 'Course fetched successfully');
-    } catch (error: any) {
-        if (error instanceof BadRequestError) {
-            return ApiResponseHandler.badRequest(res, error.message);
-        }
-        if (error instanceof NotFoundError || error.constructor.name === 'NotFoundError') {
-            return ApiResponseHandler.notFound(res, error.message);
-        }
-        logger.error(`Error fetching course: ${error.message}`);
-        ApiResponseHandler.error(res, 'Failed to fetch course');
+    } catch (error) {
+        handleControllerError(res, error, 'Failed to fetch course', 'Error fetching course');
     }
 };
 
@@ -93,15 +78,8 @@ export const getCoursesByExam = async (req: Request, res: Response) => {
         const courses = await courseService.getCoursesByExam(examId, user, options);
 
         ApiResponseHandler.success(res, courses, 'Courses fetched successfully');
-    } catch (error: any) {
-        if (error instanceof BadRequestError) {
-            return ApiResponseHandler.badRequest(res, error.message);
-        }
-        if (error instanceof NotFoundError || error.constructor.name === 'NotFoundError') {
-            return ApiResponseHandler.notFound(res, error.message);
-        }
-        logger.error(`Error fetching courses by exam: ${error.message}`);
-        ApiResponseHandler.error(res, 'Failed to fetch courses');
+    } catch (error) {
+        handleControllerError(res, error, 'Failed to fetch courses', 'Error fetching courses by exam');
     }
 };
 
@@ -120,15 +98,8 @@ export const updateCourse = async (req: Request, res: Response) => {
         const course = await courseService.updateCourse(id, courseDataInput);
 
         ApiResponseHandler.success(res, course, 'Course updated successfully');
-    } catch (error: any) {
-        if (error instanceof BadRequestError) {
-            return ApiResponseHandler.badRequest(res, error.message);
-        }
-        if (error instanceof NotFoundError || error.constructor.name === 'NotFoundError') {
-            return ApiResponseHandler.notFound(res, error.message);
-        }
-        logger.error(`Error updating course: ${error.message}`);
-        ApiResponseHandler.error(res, 'Failed to update course');
+    } catch (error) {
+        handleControllerError(res, error, 'Failed to update course', 'Error updating course');
     }
 };
 
@@ -146,14 +117,7 @@ export const deleteCourse = async (req: Request, res: Response) => {
         await courseService.deleteCourse(id);
 
         ApiResponseHandler.success(res, null, 'Course deleted successfully');
-    } catch (error: any) {
-        if (error instanceof BadRequestError) {
-            return ApiResponseHandler.badRequest(res, error.message);
-        }
-        if (error instanceof NotFoundError || error.constructor.name === 'NotFoundError') {
-            return ApiResponseHandler.notFound(res, error.message);
-        }
-        logger.error(`Error deleting course: ${error.message}`);
-        ApiResponseHandler.error(res, 'Failed to delete course');
+    } catch (error) {
+        handleControllerError(res, error, 'Failed to delete course', 'Error deleting course');
     }
 };

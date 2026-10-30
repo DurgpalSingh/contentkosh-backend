@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
+import { ACTIVE_COURSE_WHERE, activeCourseWhereForBusiness } from '../constants/hierarchyFilters';
 
 export interface CourseFindOptions {
   select?: Prisma.CourseSelect;
@@ -17,7 +18,7 @@ export async function createCourse(data: Prisma.CourseUncheckedCreateInput) {
 }
 
 export async function findCourseById(id: number, options: CourseFindOptions = {}) {
-  const { where, orderBy, skip, take, ...findOptions } = options;
+  const { where: _where, orderBy: _orderBy, skip: _skip, take: _take, ...findOptions } = options;
   return prisma.course.findUnique({
     where: { id },
     ...findOptions,
@@ -35,6 +36,7 @@ export async function findCoursesByExamId(examId: number, options: CourseFindOpt
   return prisma.course.findMany({
     where: {
       examId,
+      ...ACTIVE_COURSE_WHERE,
       ...where,
     },
     orderBy: options.orderBy || { name: 'asc' },
@@ -52,5 +54,27 @@ export async function updateCourse(id: number, data: Prisma.CourseUpdateInput) {
 export async function deleteCourse(id: number) {
   return prisma.course.delete({
     where: { id },
+  });
+}
+
+export async function validateCourseIdsBelongToBusiness(
+  businessId: number,
+  courseIds: number[],
+): Promise<boolean> {
+  if (courseIds.length === 0) return true;
+  const count = await prisma.course.count({
+    where: {
+      id: { in: courseIds },
+      ...activeCourseWhereForBusiness(businessId),
+    },
+  });
+  return count === courseIds.length;
+}
+
+/** A course in the current tenant schema that uses this thumbnail (`/uploads/courses/<file>`). */
+export function findCourseByThumbnailPath(thumbnailPath: string) {
+  return prisma.course.findFirst({
+    where: { thumbnail: thumbnailPath },
+    select: { id: true },
   });
 }

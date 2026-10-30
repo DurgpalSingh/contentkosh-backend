@@ -1,3 +1,5 @@
+import * as fs from 'fs';
+import * as path from 'path';
 /**
  * test.utils.ts
  * Combined utility module for the test/LMS module.
@@ -6,9 +8,10 @@
 
 import { TestOption, TestQuestion, TestAttemptAnswer, UserRole, SubjectStatus } from '@prisma/client';
 import { BadRequestError, ForbiddenError, NotFoundError } from '../errors/api.errors';
-import { QuestionType } from '../constants/test-enums';
+import { QuestionType, TestStatus } from '../constants/test-enums';
 import * as batchRepo from '../repositories/batch.repo';
 import * as subjectRepo from '../repositories/subject.repo';
+import * as questionRepo from '../repositories/testQuestion.repo';
 import logger from './logger';
 import { sanitizeOptionalQuillHtml, sanitizeRequiredQuillHtml } from './sanitizeHtml';
 
@@ -43,6 +46,49 @@ export function validateQuestionPayload(payload: {
   }
 }
 
+export type TestQuestionModifyKind = 'practice' | 'exam';
+
+export async function assertCanModifyTestQuestions(
+  businessId: number,
+  testId: string,
+  testType: TestQuestionModifyKind,
+): Promise<void> {
+  const hasAttempts =
+    testType === 'practice'
+      ? await questionRepo.hasAttemptsForPracticeTest(businessId, testId)
+      : await questionRepo.hasAttemptsForExamTest(businessId, testId);
+  if (hasAttempts) {
+    throw new BadRequestError('Cannot modify questions after attempts have started');
+  }
+}
+
+export function assertExamQuestionsMutableBeforeStart(
+  examTest: { status: number; startAt: Date | string },
+  now: Date = new Date(),
+): void {
+  if (examTest.status === TestStatus.PUBLISHED && now.getTime() >= new Date(examTest.startAt).getTime()) {
+    throw new BadRequestError('Cannot modify questions after exam start time');
+  }
+}
+
+
+/**
+ * Deletes a question/option image file from disk.
+ * mediaUrl is expected to be a public path like /uploads/questions/filename.jpg
+ */
+export function deleteQuestionImageFile(mediaUrl: string | null | undefined): void {
+  if (!mediaUrl) return;
+  try {
+    const relative = mediaUrl.replace(/^\//, '');
+    const absolute = path.resolve(process.cwd(), relative);
+    if (fs.existsSync(absolute)) {
+      fs.unlinkSync(absolute);
+      logger.info(`[exam-test] Deleted old question image: ${absolute}`);
+    }
+  } catch (err) {
+    logger.warn(`[exam-test] Could not delete question image ${mediaUrl}:`, err);
+  }
+}
 
 /**
  * Sanitizes Quill HTML for question text and explanation on create.
@@ -61,6 +107,26 @@ export function sanitizeQuestionFieldsForCreate(
     questionText: sanitizeRequiredQuillHtml(dto.questionText, 'questionText', context),
     explanation: sanitizeOptionalQuillHtml(dto.explanation ?? null, 'explanation', context),
   };
+}
+
+/**
+ * Sanitizes option HTML for create/update flows. Returns options with sanitized `text`.
+ */
+export function sanitizeOptionsHtml(
+  options: Array<{ id?: string; text: string; mediaUrl?: string | null }> | undefined | null,
+  context: Record<string, unknown>,
+): Array<{ id?: string; text: string; mediaUrl?: string | null }> | undefined {
+  if (!options || !options.length) return undefined;
+
+  return options.map((o, i) => ({
+    ...(o.id !== undefined ? { id: o.id } : {}),
+    text: sanitizeRequiredQuillHtml(
+      o.text ?? '',
+      `option[${i}].text` as any,
+      context,
+    ),
+    mediaUrl: o.mediaUrl ?? null,
+  }));
 }
 
 /**
@@ -143,7 +209,7 @@ type AssertSubjectForBatchParams = {
 export async function assertSubjectForBatch(params: AssertSubjectForBatchParams): Promise<void> {
   const { batchId, subjectId, businessId, userId } = params;
 
-  const batch = await batchRepo.findBatchById(batchId);
+  const batch = await batchRepo.findBatchById(batchId, { requireActiveHierarchy: true });
   if (!batch) {
     logger.warn('[test-module] Subject validation failed: batch not found', {
       businessId,

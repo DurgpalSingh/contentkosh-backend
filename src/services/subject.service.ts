@@ -5,6 +5,8 @@ import * as courseRepo from '../repositories/course.repo';
 import * as userRepo from '../repositories/user.repo';
 import { SubjectMapper } from '../mappers/subject.mapper';
 import { NotFoundError, BadRequestError, ForbiddenError } from '../errors/api.errors';
+import { translatePrismaError } from '../utils/prismaError';
+import { PRISMA_ERROR_CODES } from '../constants/prismaErrorCodes.constants';
 import logger from '../utils/logger';
 import { IUser } from '../dtos/auth.dto';
 
@@ -30,10 +32,9 @@ export class SubjectService {
             const subject = await subjectRepo.createSubject(createData);
             return SubjectMapper.toDomain(subject);
         } catch (error: any) {
-            if (error.code === 'P2002') {
-                throw new BadRequestError('Subject with this name already exists for this course');
-            }
-            throw error;
+            translatePrismaError(error, {
+                [PRISMA_ERROR_CODES.UNIQUE_CONSTRAINT_VIOLATION]: () => new BadRequestError('Subject with this name already exists for this course'),
+            });
         }
     }
 
@@ -95,10 +96,9 @@ export class SubjectService {
             const subject = await subjectRepo.updateSubject(id, updateData);
             return SubjectMapper.toDomain(subject);
         } catch (error: any) {
-            if (error.code === 'P2002') {
-                throw new BadRequestError('Subject with this name already exists for this course');
-            }
-            throw error;
+            translatePrismaError(error, {
+                [PRISMA_ERROR_CODES.UNIQUE_CONSTRAINT_VIOLATION]: () => new BadRequestError('Subject with this name already exists for this course'),
+            });
         }
     }
 

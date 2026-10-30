@@ -14,10 +14,11 @@ export class CreateContentDto {
   @IsNotEmpty()
   title!: string;
 
+  @IsOptional()
   @IsInt()
   @Min(1)
   @Transform(({ value }) => toOptionalNumber(value))
-  subjectId!: number;
+  subjectId?: number;
 
   @IsEnum(ContentType)
   type!: ContentType;
@@ -45,10 +46,11 @@ export class UpdateContentDto {
   @IsEnum(ContentStatus)
   status?: ContentStatus;
 
+  @IsOptional()
   @IsInt()
   @Min(1)
   @Transform(({ value }) => toOptionalNumber(value))
-  subjectId!: number;
+  subjectId?: number;
 }
 
 export class ContentQueryDto {

@@ -9,7 +9,12 @@ jest.mock('../../../src/services/auth.service', () => ({
         verifyAccessToken: jest.fn()
     }
 }));
+jest.mock('../../../src/repositories/business.repo', () => ({
+    findBusinessById: jest.fn()
+}));
 jest.mock('../../../src/utils/logger');
+
+import * as businessRepo from '../../../src/repositories/business.repo';
 
 describe('Auth Middleware', () => {
     let req: any;
@@ -61,11 +66,59 @@ describe('Auth Middleware', () => {
             req.cookies = { ck_access_token: 'validtoken' };
             const mockUser = { id: 1, email: 'test@test.com', role: 'USER', businessId: 1 };
             (AuthService.verifyAccessToken as jest.Mock).mockReturnValue(mockUser);
+            (businessRepo.findBusinessById as jest.Mock).mockResolvedValue(null);
 
             await authenticate(req, res, next);
 
             expect(req.user).toEqual(mockUser);
             expect(next).toHaveBeenCalled();
+        });
+
+        it('should call next and append business/tenant context if business is found', async () => {
+            req.cookies = { ck_access_token: 'validtoken' };
+            const mockUser = { id: 1, email: 'test@test.com', role: 'USER', businessId: 1 };
+            (AuthService.verifyAccessToken as jest.Mock).mockReturnValue(mockUser);
+            (businessRepo.findBusinessById as jest.Mock).mockResolvedValue({
+                id: 1,
+                slug: 'test-slug',
+                schemaName: 'tenant_test_slug',
+                status: 'ACTIVE',
+            });
+
+            await authenticate(req, res, next);
+
+            expect(req.user).toEqual({
+                ...mockUser,
+                businessSlug: 'test-slug',
+                tenantSchema: 'tenant_test_slug',
+            });
+            expect(next).toHaveBeenCalled();
+        });
+
+        it('should block with a suspended error and not call next if the business is paused', async () => {
+            req.cookies = { ck_access_token: 'validtoken' };
+            const mockUser = { id: 1, email: 'test@test.com', role: 'USER', businessId: 1 };
+            (AuthService.verifyAccessToken as jest.Mock).mockReturnValue(mockUser);
+            (businessRepo.findBusinessById as jest.Mock).mockResolvedValue({
+                id: 1,
+                slug: 'test-slug',
+                schemaName: 'tenant_test_slug',
+                status: 'PAUSED',
+                statusReason: 'Non-payment',
+            });
+
+            await authenticate(req, res, next);
+
+            expect(res.status).toHaveBeenCalledWith(403);
+            expect(res.json).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    success: false,
+                    apiCode: 'ERR_BUSINESS_SUSPENDED',
+                    action: 'paused',
+                    reason: 'Non-payment',
+                })
+            );
+            expect(next).not.toHaveBeenCalled();
         });
     });
 

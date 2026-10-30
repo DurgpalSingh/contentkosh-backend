@@ -41,7 +41,7 @@ describe('Course Routes', () => {
 
     describe('POST /api/exams/:examId/courses', () => {
         it('should create a course', async () => {
-            const courseData = { name: 'Test Course', description: 'Test description', examId: 1, status: CourseStatus.ACTIVE, startDate: '2024-01-01', endDate: '2024-12-31' };
+            const courseData = { name: 'Test Course', description: 'Test description', examId: 1, price: 499, status: CourseStatus.ACTIVE, startDate: '2024-01-01', endDate: '2024-12-31' };
             (ExamRepo.findExamById as jest.Mock).mockResolvedValue({ id: 1, name: 'Test Exam' });
             (CourseRepo.createCourse as jest.Mock).mockResolvedValue({ id: 1, ...courseData });
 
@@ -54,9 +54,28 @@ describe('Course Routes', () => {
             expect(res.body.data.name).toBe('Test Course');
             expect(CourseRepo.createCourse).toHaveBeenCalledWith(expect.objectContaining({
                 name: 'Test Course',
+                price: 499,
                 startDate: '2024-01-01',
                 endDate: '2024-12-31'
             }));
+        });
+
+        it('should reject a negative price', async () => {
+            const res = await request(app)
+                .post('/api/exams/1/courses')
+                .send({ name: 'Test Course', examId: 1, price: -1 });
+
+            expect(res.status).toBe(400);
+            expect(res.body.message).toContain('Price cannot be negative');
+        });
+
+        it('should reject a non-whole-number price', async () => {
+            const res = await request(app)
+                .post('/api/exams/1/courses')
+                .send({ name: 'Test Course', examId: 1, price: 10.5 });
+
+            expect(res.status).toBe(400);
+            expect(res.body.message).toContain('Price must be a whole number');
         });
 
         it('should return 400 if course name is missing', async () => {
@@ -77,6 +96,53 @@ describe('Course Routes', () => {
 
             expect(res.status).toBe(404);
             expect(res.body.message).toContain('Exam');
+        });
+
+        it('should create a course with a multipart thumbnail', async () => {
+            const courseData = { name: 'Test Course', description: 'Test description', examId: 1, status: CourseStatus.ACTIVE };
+            (ExamRepo.findExamById as jest.Mock).mockResolvedValue({ id: 1, name: 'Test Exam' });
+            (CourseRepo.createCourse as jest.Mock).mockImplementation(async (data) => ({ id: 1, ...data }));
+
+            const res = await request(app)
+                .post('/api/exams/1/courses')
+                .field('data', JSON.stringify(courseData))
+                .attach('thumbnail', Buffer.from('image'), {
+                    filename: 'thumbnail.png',
+                    contentType: 'image/png',
+                });
+
+            expect(res.status).toBe(201);
+            expect(res.body.data.thumbnail).toContain('/uploads/courses/thumbnail-');
+            expect(CourseRepo.createCourse).toHaveBeenCalledWith(expect.objectContaining({
+                name: 'Test Course',
+                thumbnail: expect.stringContaining('/uploads/courses/thumbnail-')
+            }));
+        });
+
+        it('should reject an invalid thumbnail type', async () => {
+            const res = await request(app)
+                .post('/api/exams/1/courses')
+                .field('data', JSON.stringify({ name: 'Test Course', examId: 1 }))
+                .attach('thumbnail', Buffer.from('text'), {
+                    filename: 'thumbnail.txt',
+                    contentType: 'text/plain',
+                });
+
+            expect(res.status).toBe(400);
+            expect(res.body.message).toContain('Invalid file type for course thumbnail');
+        });
+
+        it('should reject an oversized thumbnail', async () => {
+            const res = await request(app)
+                .post('/api/exams/1/courses')
+                .field('data', JSON.stringify({ name: 'Test Course', examId: 1 }))
+                .attach('thumbnail', Buffer.alloc(5 * 1024 * 1024 + 1), {
+                    filename: 'thumbnail.png',
+                    contentType: 'image/png',
+                });
+
+            expect(res.status).toBe(400);
+            expect(res.body.message).toContain('File is too large');
         });
     });
 
@@ -116,7 +182,7 @@ describe('Course Routes', () => {
 
     describe('GET /api/exams/:examId/courses/:courseId', () => {
         it('should return a course by ID', async () => {
-            const mockCourse = { id: 1, name: 'Test Course', examId: 1 };
+            const mockCourse = { id: 1, name: 'Test Course', examId: 1, price: 0 };
             (CourseRepo.findCourseById as jest.Mock).mockResolvedValue(mockCourse);
 
             const res = await request(app).get('/api/exams/1/courses/1');
@@ -148,12 +214,13 @@ describe('Course Routes', () => {
 
             const res = await request(app)
                 .put('/api/exams/1/courses/1')
-                .send({ name: 'Updated Course', description: 'Updated description', startDate: '2024-01-01' });
+                .send({ name: 'Updated Course', description: 'Updated description', price: 0, startDate: '2024-01-01' });
 
             expect(res.status).toBe(200);
             expect(res.body.data.name).toBe('Updated Course');
             expect(CourseRepo.updateCourse).toHaveBeenCalledWith(1, expect.objectContaining({
                 name: 'Updated Course',
+                price: 0,
                 startDate: '2024-01-01'
             }));
         });
@@ -166,6 +233,40 @@ describe('Course Routes', () => {
 
             expect(res.status).toBe(400);
             expect(res.body.message).toContain('Course name cannot be empty');
+        });
+
+        it('should update a course with a multipart thumbnail', async () => {
+            (CourseRepo.findCourseById as jest.Mock).mockResolvedValue({ id: 1, name: 'Updated Course', examId: 1 });
+            (CourseRepo.updateCourse as jest.Mock).mockImplementation(async (_id, data) => ({ id: 1, examId: 1, ...data }));
+
+            const res = await request(app)
+                .put('/api/exams/1/courses/1')
+                .field('data', JSON.stringify({ name: 'Updated Course' }))
+                .attach('thumbnail', Buffer.from('image'), {
+                    filename: 'thumbnail.webp',
+                    contentType: 'image/webp',
+                });
+
+            expect(res.status).toBe(200);
+            expect(res.body.data.thumbnail).toContain('/uploads/courses/thumbnail-');
+            expect(CourseRepo.updateCourse).toHaveBeenCalledWith(1, expect.objectContaining({
+                thumbnail: expect.stringContaining('/uploads/courses/thumbnail-')
+            }));
+        });
+
+        it('should clear a course thumbnail from multipart update', async () => {
+            (CourseRepo.findCourseById as jest.Mock).mockResolvedValue({ id: 1, name: 'Updated Course', examId: 1 });
+            (CourseRepo.updateCourse as jest.Mock).mockImplementation(async (_id, data) => ({ id: 1, examId: 1, ...data }));
+
+            const res = await request(app)
+                .put('/api/exams/1/courses/1')
+                .field('data', JSON.stringify({ name: 'Updated Course' }))
+                .field('removeThumbnail', 'true');
+
+            expect(res.status).toBe(200);
+            expect(CourseRepo.updateCourse).toHaveBeenCalledWith(1, expect.objectContaining({
+                thumbnail: null
+            }));
         });
     });
 

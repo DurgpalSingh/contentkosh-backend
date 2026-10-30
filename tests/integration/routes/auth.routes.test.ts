@@ -6,7 +6,7 @@ import authRoutes from '../../../src/routes/auth.routes';
 import { AuthService } from '../../../src/services/auth.service';
 import * as UserService from '../../../src/services/user.service';
 import { errorHandler } from '../../../src/middlewares/error.middleware';
-import { AuthError, ForbiddenError, AlreadyExistsError } from '../../../src/errors/api.errors';
+import { AuthError, ForbiddenError, AlreadyExistsError, NotFoundError, SessionAlreadyActiveError } from '../../../src/errors/api.errors';
 
 // Mock dependencies
 jest.mock('../../../src/services/auth.service');
@@ -128,6 +128,74 @@ describe('Auth Routes', () => {
         });
     });
 
+    // ==================== SIGNUP (guest join via slug) ====================
+    // Same /auth/signup endpoint as above — passing `slug` routes AuthService.register
+    // down the "join existing business as guest" branch instead of the institute-owner
+    // bootstrap branch. Both flows share one endpoint/DTO to avoid duplicating this logic.
+
+    describe('POST /auth/signup (with slug — guest join)', () => {
+        const validGuestSignupData = {
+            name: 'Guest User',
+            email: 'guest@test.com',
+            password: 'password123',
+            slug: 'vidit-publication'
+        };
+
+        it('should create a guest account successfully and set auth cookies', async () => {
+            (AuthService.register as jest.Mock).mockResolvedValue({
+                accessToken: 'jwt-access-token',
+                refreshToken: 'jwt-refresh-token',
+                user: {
+                    id: 2,
+                    email: 'guest@test.com',
+                    name: 'Guest User',
+                    role: 'USER',
+                    businessId: 1
+                }
+            });
+
+            const res = await request(app)
+                .post('/auth/signup')
+                .send(validGuestSignupData);
+
+            expect(res.status).toBe(201);
+            expect(res.body.data).toHaveProperty('email', 'guest@test.com');
+            expect(res.body.data).toHaveProperty('role', 'USER');
+            expect(res.body.data).not.toHaveProperty('accessToken');
+            expect(res.headers['set-cookie']).toBeDefined();
+            expect(AuthService.register).toHaveBeenCalledWith(expect.objectContaining({ slug: 'vidit-publication' }));
+        });
+
+        it('should return 400 if email is invalid', async () => {
+            const res = await request(app)
+                .post('/auth/signup')
+                .send({ ...validGuestSignupData, email: 'invalid-email' });
+
+            expect(res.status).toBe(400);
+        });
+
+        it('should return 404 if business slug does not exist', async () => {
+            (AuthService.register as jest.Mock).mockRejectedValue(new NotFoundError('Business'));
+
+            const res = await request(app)
+                .post('/auth/signup')
+                .send(validGuestSignupData);
+
+            expect(res.status).toBe(404);
+        });
+
+        it('should return 409 if email already exists in this business', async () => {
+            (AuthService.register as jest.Mock).mockRejectedValue(new AlreadyExistsError('User with this email already exists'));
+
+            const res = await request(app)
+                .post('/auth/signup')
+                .send(validGuestSignupData);
+
+            expect(res.status).toBe(409);
+            expect(res.body.message).toContain('User with this email already exists');
+        });
+    });
+
     // ==================== LOGIN ====================
 
     describe('POST /auth/login', () => {
@@ -198,6 +266,19 @@ describe('Auth Routes', () => {
 
             expect(res.status).toBe(403);
             expect(res.body.message).toContain('User account is inactive');
+        });
+
+        it('should return 409 with a distinct apiCode when the account already has an active session', async () => {
+            (AuthService.login as jest.Mock).mockRejectedValue(new SessionAlreadyActiveError());
+
+            const res = await request(app)
+                .post('/auth/login')
+                .send(validLoginData);
+
+            expect(res.status).toBe(409);
+            expect(res.body.apiCode).toBe('ERR_SESSION_ALREADY_ACTIVE');
+            expect(res.body.message).toMatch(/already logged in/i);
+            expect(res.headers['set-cookie']).toBeUndefined();
         });
     });
 
@@ -275,6 +356,28 @@ describe('Auth Routes', () => {
         it('should logout successfully and clear cookies', async () => {
             const res = await request(app)
                 .post('/auth/logout');
+
+            expect(res.status).toBe(200);
+            expect(res.body.message).toContain('Logout successful');
+        });
+
+        it('should call AuthService.logout with the refresh token itself, not req.user (unset on this route)', async () => {
+            (AuthService.logout as jest.Mock).mockResolvedValue(undefined);
+
+            const res = await request(app)
+                .post('/auth/logout')
+                .set('Cookie', ['ck_refresh_token=some-refresh-token-value']);
+
+            expect(res.status).toBe(200);
+            expect(AuthService.logout).toHaveBeenCalledWith('some-refresh-token-value');
+        });
+
+        it('should still return success even if AuthService.logout throws', async () => {
+            (AuthService.logout as jest.Mock).mockRejectedValue(new Error('db down'));
+
+            const res = await request(app)
+                .post('/auth/logout')
+                .set('Cookie', ['ck_refresh_token=some-refresh-token-value']);
 
             expect(res.status).toBe(200);
             expect(res.body.message).toContain('Logout successful');

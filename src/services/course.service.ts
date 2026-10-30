@@ -5,6 +5,8 @@ import { NotFoundError, BadRequestError, ForbiddenError } from '../errors/api.er
 import { IUser } from '../dtos/auth.dto';
 import logger from '../utils/logger';
 import { CourseMapper } from '../mappers/course.mapper';
+import { translatePrismaError } from '../utils/prismaError';
+import { PRISMA_ERROR_CODES } from '../constants/prismaErrorCodes.constants';
 
 export class CourseService {
 
@@ -15,6 +17,8 @@ export class CourseService {
         const createData: Prisma.CourseUncheckedCreateInput = {
             name: data.name,
             description: data.description ?? null,
+            thumbnail: data.thumbnail ?? null,
+            price: data.price ?? 0,
             examId: data.examId,
             startDate: data.startDate ?? null,
             endDate: data.endDate ?? null,
@@ -70,6 +74,9 @@ export class CourseService {
         const updateData: Prisma.CourseUncheckedUpdateInput = {
             ...(data.name && { name: data.name }),
             ...(data.description !== undefined && { description: data.description }),
+            ...(data.removeThumbnail ? { thumbnail: null } : {}),
+            ...(!data.removeThumbnail && data.thumbnail !== undefined ? { thumbnail: data.thumbnail } : {}),
+            ...(data.price !== undefined && { price: data.price }),
             ...(data.startDate !== undefined && { startDate: data.startDate }),
             ...(data.endDate !== undefined && { endDate: data.endDate }),
             ...(data.status && { status: data.status }),
@@ -93,10 +100,9 @@ export class CourseService {
             logger.info(`CourseService: Course updated successfully: ${course.name}`);
             return CourseMapper.toDomain(course);
         } catch (error: any) {
-            if (error.code === 'P2025') {
-                throw new NotFoundError('Course not found');
-            }
-            throw error;
+            translatePrismaError(error, {
+                [PRISMA_ERROR_CODES.RECORD_NOT_FOUND]: () => new NotFoundError('Course not found'),
+            });
         }
     }
 
@@ -106,10 +112,9 @@ export class CourseService {
             await courseRepo.deleteCourse(id);
             logger.info(`CourseService: Course deleted successfully: ID ${id}`);
         } catch (error: any) {
-            if (error.code === 'P2025') {
-                throw new NotFoundError('Course not found');
-            }
-            throw error;
+            translatePrismaError(error, {
+                [PRISMA_ERROR_CODES.RECORD_NOT_FOUND]: () => new NotFoundError('Course not found'),
+            });
         }
     }
 

@@ -1,13 +1,12 @@
 import { Response } from 'express';
 import { ApiResponseHandler } from '../utils/apiResponse';
-import logger from '../utils/logger';
-import { BadRequestError, NotFoundError, ForbiddenError } from '../errors/api.errors';
 import { ValidationUtils } from '../utils/validation';
 import { plainToInstance } from 'class-transformer';
 import { CreateStudentDto, UpdateStudentDto } from '../dtos/student.dto';
 import { StudentService } from '../services/student.service';
 import { StudentMapper } from '../mappers/student.mapper';
 import { AuthRequest } from '../dtos/auth.dto';
+import { handleControllerError } from '../utils/controllerErrorHandler';
 
 export class StudentController {
   private studentService: StudentService;
@@ -28,18 +27,8 @@ export class StudentController {
       const user = req.user!;
       const student = await this.studentService.createStudent(studentData, user);
       ApiResponseHandler.success(res, StudentMapper.toResponse(student), 'Student profile created successfully', 201);
-    } catch (error: any) {
-      if (error instanceof BadRequestError) {
-        return ApiResponseHandler.error(res, error.message, 400);
-      }
-      if (error instanceof NotFoundError) {
-        return ApiResponseHandler.error(res, error.message, 404);
-      }
-      if (error instanceof ForbiddenError) {
-        return ApiResponseHandler.error(res, error.message, 403);
-      }
-      logger.error(`Error creating student profile: ${error.message}`);
-      ApiResponseHandler.error(res, 'Failed to create student profile');
+    } catch (error) {
+      handleControllerError(res, error, 'Failed to create student profile', 'Error creating student profile');
     }
   };
 
@@ -55,15 +44,8 @@ export class StudentController {
 
       const student = await this.studentService.getStudentById(studentId, user);
       ApiResponseHandler.success(res, StudentMapper.toResponse(student), 'Student profile fetched successfully');
-    } catch (error: any) {
-      if (error instanceof NotFoundError) {
-        return ApiResponseHandler.notFound(res, error.message);
-      }
-      if (error instanceof ForbiddenError) {
-        return ApiResponseHandler.error(res, error.message, 403);
-      }
-      logger.error(`Error fetching student profile: ${error.message}`);
-      ApiResponseHandler.error(res, 'Failed to fetch student profile');
+    } catch (error) {
+      handleControllerError(res, error, 'Failed to fetch student profile', 'Error fetching student profile');
     }
   };
 
@@ -79,15 +61,8 @@ export class StudentController {
 
       const student = await this.studentService.getStudentByUserId(userId, user);
       ApiResponseHandler.success(res, StudentMapper.toResponse(student), 'Student profile fetched successfully');
-    } catch (error: any) {
-      if (error instanceof NotFoundError) {
-        return ApiResponseHandler.notFound(res, error.message);
-      }
-      if (error instanceof ForbiddenError) {
-        return ApiResponseHandler.error(res, error.message, 403);
-      }
-      logger.error(`Error fetching student profile by userId: ${error.message}`);
-      ApiResponseHandler.error(res, 'Failed to fetch student profile');
+    } catch (error) {
+      handleControllerError(res, error, 'Failed to fetch student profile', 'Error fetching student profile by userId');
     }
   };
 
@@ -103,18 +78,8 @@ export class StudentController {
       const user = req.user!;
       const student = await this.studentService.updateStudent(studentId, studentData, user);
       ApiResponseHandler.success(res, StudentMapper.toResponse(student), 'Student profile updated successfully');
-    } catch (error: any) {
-      if (error instanceof BadRequestError) {
-        return ApiResponseHandler.error(res, error.message, 400);
-      }
-      if (error instanceof NotFoundError) {
-        return ApiResponseHandler.notFound(res, error.message);
-      }
-      if (error instanceof ForbiddenError) {
-        return ApiResponseHandler.error(res, error.message, 403);
-      }
-      logger.error(`Error updating student profile: ${error.message}`);
-      ApiResponseHandler.error(res, 'Failed to update student profile');
+    } catch (error) {
+      handleControllerError(res, error, 'Failed to update student profile', 'Error updating student profile');
     }
   };
 }
