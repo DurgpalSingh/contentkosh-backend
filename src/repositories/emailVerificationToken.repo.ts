@@ -1,60 +1,38 @@
-// src/repositories/emailVerificationToken.repo.ts
-// Always use publicPrisma: email_verification_tokens live in the public schema and must never
-// be routed to a tenant schema regardless of the active request context.
-import { Prisma } from '@prisma/client';
+import { UserStatus } from '@prisma/client';
 import { publicPrisma as prisma } from '../config/database';
 
-export interface UpsertVerificationTokenData {
-  userId: number;
+export interface VerificationTokenData {
+  businessId: number;
   tokenHash: string;
   expiresAt: Date;
-  /** Business details held until the link is opened; `null` for guest signups. */
-  pendingBusiness?: Prisma.InputJsonValue | null;
 }
 
 /** One row per user: re-issuing overwrites the hash, which invalidates the previously emailed link. */
-export async function upsertForUser(data: UpsertVerificationTokenData) {
-  const now = new Date();
-  const pendingBusiness =
-    data.pendingBusiness === undefined ? undefined : data.pendingBusiness === null ? Prisma.DbNull : data.pendingBusiness;
-
+export function upsertForUser(userId: number, data: VerificationTokenData) {
   return prisma.emailVerificationToken.upsert({
-    where: { userId: data.userId },
-    create: {
-      userId: data.userId,
-      tokenHash: data.tokenHash,
-      expiresAt: data.expiresAt,
-      lastSentAt: now,
-      ...(pendingBusiness !== undefined && { pendingBusiness }),
-    },
-    update: {
-      tokenHash: data.tokenHash,
-      expiresAt: data.expiresAt,
-      lastSentAt: now,
-      verifiedAt: null,
-      ...(pendingBusiness !== undefined && { pendingBusiness }),
-    },
+    where: { userId },
+    create: { userId, ...data },
+    update: data,
   });
 }
 
-export async function findByTokenHash(tokenHash: string) {
+export function findByTokenHash(tokenHash: string) {
   return prisma.emailVerificationToken.findUnique({
     where: { tokenHash },
     include: {
-      user: {
-        select: { id: true, email: true, name: true, role: true, businessId: true, status: true, emailVerified: true },
-      },
+      business: true,
+      user: { select: { id: true, name: true, email: true, emailVerified: true } },
     },
   });
 }
 
-export async function findByUserId(userId: number) {
-  return prisma.emailVerificationToken.findUnique({ where: { userId } });
-}
-
-export async function markVerified(userId: number) {
-  return prisma.emailVerificationToken.update({
-    where: { userId },
-    data: { verifiedAt: new Date(), pendingBusiness: Prisma.DbNull },
+export function findUnverifiedByEmail(email: string) {
+  return prisma.emailVerificationToken.findMany({
+    where: { user: { email: email.toLowerCase().trim(), emailVerified: false, status: UserStatus.ACTIVE } },
+    select: {
+      expiresAt: true,
+      business: { select: { id: true, instituteName: true } },
+      user: { select: { id: true, name: true, email: true } },
+    },
   });
 }

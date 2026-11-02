@@ -14,8 +14,8 @@ import {
     NotFoundError,
     SessionAlreadyActiveError,
     EmailNotVerifiedError,
-    VerificationLinkInvalidError,
-    VerificationLinkExpiredError,
+    InvalidVerificationLinkError,
+    ExpiredVerificationLinkError,
 } from '../../../src/errors/api.errors';
 
 // Mock dependencies
@@ -224,9 +224,7 @@ describe('Auth Routes', () => {
     describe('POST /auth/verify-email', () => {
         it('should verify, set cookies and auto-login a new institute owner', async () => {
             (AuthService.verifyEmail as jest.Mock).mockResolvedValue({
-                verified: true,
                 alreadyVerified: false,
-                autoLogin: true,
                 slug: 'test-institute',
                 tokens: { accessToken: 'jwt-access-token', refreshToken: 'jwt-refresh-token' },
             });
@@ -234,7 +232,7 @@ describe('Auth Routes', () => {
             const res = await request(app).post('/auth/verify-email').send({ token: 'raw-token' });
 
             expect(res.status).toBe(200);
-            expect(res.body.data).toMatchObject({ verified: true, autoLogin: true, slug: 'test-institute' });
+            expect(res.body.data).toMatchObject({ autoLogin: true, slug: 'test-institute' });
             // Tokens only travel in httpOnly cookies
             expect(res.body.data).not.toHaveProperty('tokens');
             expect(res.headers['set-cookie']).toBeDefined();
@@ -243,24 +241,20 @@ describe('Auth Routes', () => {
 
         it('should only verify a guest, without cookies', async () => {
             (AuthService.verifyEmail as jest.Mock).mockResolvedValue({
-                verified: true,
                 alreadyVerified: false,
-                autoLogin: false,
                 slug: 'vidit-publication',
             });
 
             const res = await request(app).post('/auth/verify-email').send({ token: 'raw-token' });
 
             expect(res.status).toBe(200);
-            expect(res.body.data).toMatchObject({ verified: true, autoLogin: false });
+            expect(res.body.data).toMatchObject({ alreadyVerified: false, autoLogin: false });
             expect(res.headers['set-cookie']).toBeUndefined();
         });
 
         it('should not log in again when the link was already used', async () => {
             (AuthService.verifyEmail as jest.Mock).mockResolvedValue({
-                verified: true,
                 alreadyVerified: true,
-                autoLogin: false,
                 slug: 'test-institute',
             });
 
@@ -272,7 +266,7 @@ describe('Auth Routes', () => {
         });
 
         it('should return 400 with ERR_VERIFICATION_LINK_INVALID for an unknown token', async () => {
-            (AuthService.verifyEmail as jest.Mock).mockRejectedValue(new VerificationLinkInvalidError());
+            (AuthService.verifyEmail as jest.Mock).mockRejectedValue(new InvalidVerificationLinkError());
 
             const res = await request(app).post('/auth/verify-email').send({ token: 'nope' });
 
@@ -280,12 +274,12 @@ describe('Auth Routes', () => {
             expect(res.body.apiCode).toBe('ERR_VERIFICATION_LINK_INVALID');
         });
 
-        it('should return 410 with the email for an expired link', async () => {
-            (AuthService.verifyEmail as jest.Mock).mockRejectedValue(new VerificationLinkExpiredError('test@test.com'));
+        it('should return 400 with the email for an expired link', async () => {
+            (AuthService.verifyEmail as jest.Mock).mockRejectedValue(new ExpiredVerificationLinkError('test@test.com'));
 
             const res = await request(app).post('/auth/verify-email').send({ token: 'old' });
 
-            expect(res.status).toBe(410);
+            expect(res.status).toBe(400);
             expect(res.body.apiCode).toBe('ERR_VERIFICATION_LINK_EXPIRED');
             expect(res.body.email).toBe('test@test.com');
         });

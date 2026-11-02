@@ -27,7 +27,7 @@ export const verifyEmail = async (req: Request, res: Response) => {
         if (tokens) {
             setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
         }
-        ApiResponseHandler.success(res, result, EMAIL_VERIFICATION_MESSAGES.VERIFIED);
+        ApiResponseHandler.success(res, { ...result, autoLogin: Boolean(tokens) }, EMAIL_VERIFICATION_MESSAGES.VERIFIED);
     } catch (error) {
         handleControllerError(res, error, 'Error verifying email', 'Error verifying email');
     }

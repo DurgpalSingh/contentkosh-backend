@@ -174,20 +174,11 @@ export const swaggerSchemas = {
       },
       business: {
         type: 'object',
-        description: 'Institute details, required when `slug` is omitted. The business is only created once the emailed verification link is opened.',
+        description: 'Institute details, required when `slug` is omitted. The slug is reserved at signup and the institute is set up once the emailed verification link is opened.',
         required: ['instituteName', 'slug'],
         properties: {
           instituteName: { type: 'string', maxLength: 100 },
-          slug: { type: 'string', pattern: '^[a-z0-9-]+$' },
-          logo_url: { type: 'string', format: 'uri' },
-          phone: { type: 'string', description: 'E.164 phone number' },
-          email: { type: 'string', format: 'email' },
-          tagline: { type: 'string' },
-          address: { type: 'string' },
-          youtubeUrl: { type: 'string', format: 'uri' },
-          instagramUrl: { type: 'string', format: 'uri' },
-          linkedinUrl: { type: 'string', format: 'uri' },
-          facebookUrl: { type: 'string', format: 'uri' }
+          slug: { type: 'string', pattern: '^[a-z0-9-]+$' }
         }
       }
     }

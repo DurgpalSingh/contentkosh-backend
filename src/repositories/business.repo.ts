@@ -1,4 +1,4 @@
-import { Prisma, BusinessStatus } from '@prisma/client';
+import { Prisma, BusinessStatus, BusinessProvisioningStatus } from '@prisma/client';
 import { prisma } from '../config/database';
 
 export type BusinessCreateInput = Prisma.BusinessCreateInput;
@@ -40,6 +40,27 @@ export async function updateBusiness(id: number, data: Prisma.BusinessUpdateInpu
   return await prisma.business.update({
     where: { id },
     data,
+  });
+}
+
+/** Frees a slug held by a signup whose verification link is gone or expired. */
+export function deleteAbandonedPendingBusinessBySlug(slug: string) {
+  return prisma.business.deleteMany({
+    where: {
+      slug,
+      provisioningStatus: BusinessProvisioningStatus.PENDING,
+      emailVerificationTokens: { none: { expiresAt: { gt: new Date() } } },
+    },
+  });
+}
+
+/** Discards the not-yet-provisioned institute of an owner who signs up again. */
+export function deletePendingBusinessOfUser(userId: number) {
+  return prisma.business.deleteMany({
+    where: {
+      provisioningStatus: BusinessProvisioningStatus.PENDING,
+      emailVerificationTokens: { some: { userId } },
+    },
   });
 }
 
