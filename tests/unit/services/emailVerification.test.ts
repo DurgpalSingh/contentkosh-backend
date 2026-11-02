@@ -7,7 +7,6 @@ import * as refreshTokenRepo from '../../../src/repositories/refreshToken.repo';
 import * as tokenRepo from '../../../src/repositories/emailVerificationToken.repo';
 import { BusinessService } from '../../../src/services/business.service';
 import { sendMail } from '../../../src/services/mail.service';
-import { publicPrisma } from '../../../src/config/database';
 import {
   AlreadyExistsError,
   BadRequestError,
@@ -24,10 +23,6 @@ jest.mock('../../../src/repositories/refreshToken.repo');
 jest.mock('../../../src/repositories/emailVerificationToken.repo');
 jest.mock('../../../src/services/business.service');
 jest.mock('../../../src/services/mail.service');
-jest.mock('../../../src/config/database', () => ({
-  publicPrisma: { user: { findMany: jest.fn() } },
-  prisma: {},
-}));
 
 const institute = { instituteName: 'Test Institute', slug: 'test-institute' };
 const pendingBusiness = { id: 7, ...institute, schemaName: 'test_institute', provisioningStatus: 'PENDING' };
@@ -62,7 +57,7 @@ describe('Email verification', () => {
 
       expect(userRepo.createUser).toHaveBeenCalledWith(expect.objectContaining({ role: UserRole.ADMIN, emailVerified: false }));
       expect(BusinessService.createPendingBusiness).toHaveBeenCalledWith(institute);
-      expect(BusinessService.provisionBusiness).not.toHaveBeenCalled();
+      expect(BusinessService.provisionPendingBusiness).not.toHaveBeenCalled();
       expect(tokenRepo.upsertForUser).toHaveBeenCalledWith(1, expect.objectContaining({ businessId: 7 }));
       expect(sendMail).toHaveBeenCalledWith(expect.objectContaining({ to: 'owner@test.com' }));
       expect(refreshTokenRepo.createRefreshToken).not.toHaveBeenCalled();
@@ -117,24 +112,15 @@ describe('Email verification', () => {
       expect(userRepo.createUser).not.toHaveBeenCalled();
     });
 
-    it('rejects an email that already belongs to a verified account without touching any institute', async () => {
-      (userRepo.findByEmail as jest.Mock).mockResolvedValue({ ...ownerRow, emailVerified: true });
+    it.each([
+      ['a verified account', { ...ownerRow, emailVerified: true }],
+      ['an account that has not verified its email yet', { ...ownerRow, emailVerified: false }],
+    ])('rejects an email that already belongs to %s without touching any institute', async (_label, existingUser) => {
+      (userRepo.findByEmail as jest.Mock).mockResolvedValue(existingUser);
 
       await expect(AuthService.register(signupData)).rejects.toBeInstanceOf(AlreadyExistsError);
-      expect(businessRepo.deletePendingBusinessOfUser).not.toHaveBeenCalled();
       expect(BusinessService.createPendingBusiness).not.toHaveBeenCalled();
-    });
-
-    it('takes over an abandoned unverified signup and discards its earlier pending institute', async () => {
-      (userRepo.findByEmail as jest.Mock).mockResolvedValue({ ...ownerRow, emailVerified: false });
-      (userRepo.updateUser as jest.Mock).mockResolvedValue(ownerRow);
-
-      const result = await AuthService.register(signupData);
-
-      expect(businessRepo.deletePendingBusinessOfUser).toHaveBeenCalledWith(1);
       expect(userRepo.createUser).not.toHaveBeenCalled();
-      expect(userRepo.updateUser).toHaveBeenCalledWith(1, expect.objectContaining({ name: 'Owner' }));
-      expect(result.emailSent).toBe(true);
     });
   });
 
@@ -177,18 +163,18 @@ describe('Email verification', () => {
         constructor: ExpiredVerificationLinkError,
         email: 'owner@test.com',
       });
-      expect(BusinessService.provisionBusiness).not.toHaveBeenCalled();
+      expect(BusinessService.provisionPendingBusiness).not.toHaveBeenCalled();
       expect(userRepo.updateUser).not.toHaveBeenCalled();
     });
 
     it('provisions the pending institute, verifies the owner and logs them in on first use', async () => {
       (tokenRepo.findByTokenHash as jest.Mock).mockResolvedValue(verificationRecord());
-      (BusinessService.provisionBusiness as jest.Mock).mockResolvedValue(activeBusiness);
+      (BusinessService.provisionPendingBusiness as jest.Mock).mockResolvedValue(activeBusiness);
       (userRepo.updateUser as jest.Mock).mockResolvedValue({});
 
       const result = await AuthService.verifyEmail('good');
 
-      expect(BusinessService.provisionBusiness).toHaveBeenCalledWith(pendingBusiness, 1);
+      expect(BusinessService.provisionPendingBusiness).toHaveBeenCalledWith(pendingBusiness, 1);
       expect(userRepo.updateUser).toHaveBeenCalledWith(1, { emailVerified: true });
       expect(result).toMatchObject({ alreadyVerified: false, slug: 'test-institute' });
       expect(result.tokens).toEqual({ accessToken: expect.any(String), refreshToken: expect.any(String) });
@@ -196,7 +182,7 @@ describe('Email verification', () => {
 
     it('does not mark the owner verified when the institute cannot be provisioned', async () => {
       (tokenRepo.findByTokenHash as jest.Mock).mockResolvedValue(verificationRecord());
-      (BusinessService.provisionBusiness as jest.Mock).mockRejectedValue(new Error('schema failed'));
+      (BusinessService.provisionPendingBusiness as jest.Mock).mockRejectedValue(new Error('schema failed'));
 
       await expect(AuthService.verifyEmail('good')).rejects.toThrow('schema failed');
       expect(userRepo.updateUser).not.toHaveBeenCalled();
@@ -208,7 +194,7 @@ describe('Email verification', () => {
 
       const result = await AuthService.verifyEmail('good');
 
-      expect(BusinessService.provisionBusiness).not.toHaveBeenCalled();
+      expect(BusinessService.provisionPendingBusiness).not.toHaveBeenCalled();
       expect(userRepo.updateUser).toHaveBeenCalledWith(1, { emailVerified: true });
       expect(result.tokens).toBeUndefined();
     });
@@ -221,7 +207,7 @@ describe('Email verification', () => {
 
       expect(result).toEqual({ alreadyVerified: false, slug: 'vidit' });
       expect(userRepo.updateUser).toHaveBeenCalledWith(5, { emailVerified: true });
-      expect(BusinessService.provisionBusiness).not.toHaveBeenCalled();
+      expect(BusinessService.provisionPendingBusiness).not.toHaveBeenCalled();
       expect(refreshTokenRepo.createRefreshToken).not.toHaveBeenCalled();
     });
 
@@ -233,7 +219,7 @@ describe('Email verification', () => {
       const result = await AuthService.verifyEmail('used');
 
       expect(result).toEqual({ alreadyVerified: true, slug: 'test-institute' });
-      expect(BusinessService.provisionBusiness).not.toHaveBeenCalled();
+      expect(BusinessService.provisionPendingBusiness).not.toHaveBeenCalled();
       expect(refreshTokenRepo.createRefreshToken).not.toHaveBeenCalled();
     });
 
@@ -267,7 +253,7 @@ describe('Email verification', () => {
     });
 
     it('blocks an unverified account after the password matched, before any session is issued', async () => {
-      (publicPrisma.user.findMany as jest.Mock).mockResolvedValue([candidate(false)]);
+      (userRepo.findLoginCandidates as jest.Mock).mockResolvedValue([candidate(false)]);
 
       await expect(AuthService.login({ email: 'owner@test.com', password: 'password123' } as any)).rejects.toMatchObject({
         constructor: EmailNotVerifiedError,
@@ -278,7 +264,7 @@ describe('Email verification', () => {
 
     it('does not reveal verification state when the password is wrong', async () => {
       jest.spyOn(AuthService, 'verifyPassword').mockResolvedValue(false);
-      (publicPrisma.user.findMany as jest.Mock).mockResolvedValue([candidate(false)]);
+      (userRepo.findLoginCandidates as jest.Mock).mockResolvedValue([candidate(false)]);
 
       const error = await AuthService.login({ email: 'owner@test.com', password: 'wrong' } as any).catch((e) => e);
 
@@ -287,7 +273,7 @@ describe('Email verification', () => {
     });
 
     it('lets a verified account log in', async () => {
-      (publicPrisma.user.findMany as jest.Mock).mockResolvedValue([candidate(true)]);
+      (userRepo.findLoginCandidates as jest.Mock).mockResolvedValue([candidate(true)]);
 
       const result = await AuthService.login({ email: 'owner@test.com', password: 'password123' } as any);
 
