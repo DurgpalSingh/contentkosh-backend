@@ -25,7 +25,7 @@ export function hashToken(rawToken: string): string {
   return crypto.createHash('sha256').update(rawToken).digest('hex');
 }
 
-export function findByRawToken(rawToken: string) {
+export function findVerificationByRawToken(rawToken: string) {
   return emailVerificationTokenRepo.findByTokenHash(hashToken(rawToken));
 }
 

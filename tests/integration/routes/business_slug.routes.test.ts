@@ -16,7 +16,6 @@ jest.mock('../../../src/middlewares/auth.middleware', () => ({
 jest.mock('../../../src/services/business.service', () => ({
     BusinessService: {
         createBusiness: jest.fn(),
-        toCreateInput: jest.fn((dto: unknown) => dto),
         getBusinessBySlug: jest.fn(),
         getBusinessById: jest.fn()
     }

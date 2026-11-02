@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { ApiResponseHandler } from '../utils/apiResponse';
 import logger from '../utils/logger';
 import { BadRequestError } from '../errors/api.errors';
+import { toBusinessCreateInput } from '../utils/business.utils';
 import { BusinessService } from '../services/business.service';
 import { AuthRequest } from '../dtos/auth.dto';
 import { CreateBusinessDto, UpdateBusinessDto } from '../dtos/business.dto';
@@ -16,7 +17,7 @@ export const createBusiness = async (req: AuthRequest, res: Response, next: Next
       throw new BadRequestError('User context required');
     }
 
-    const businessData = BusinessService.toCreateInput(dto);
+    const businessData = toBusinessCreateInput(dto);
 
     const business = await BusinessService.createBusiness(businessData, user.id);
 

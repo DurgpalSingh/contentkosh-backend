@@ -1,5 +1,5 @@
-import { Prisma, BusinessStatus, BusinessProvisioningStatus } from '@prisma/client';
-import { prisma } from '../config/database';
+import { Prisma, BusinessStatus } from '@prisma/client';
+import { prisma, publicPrisma } from '../config/database';
 
 export type BusinessCreateInput = Prisma.BusinessCreateInput;
 export type BusinessUpdateInput = Prisma.BusinessUpdateInput;
@@ -43,25 +43,20 @@ export async function updateBusiness(id: number, data: Prisma.BusinessUpdateInpu
   });
 }
 
-/** Frees a slug held by a signup whose verification link is gone or expired. */
-export function deleteAbandonedPendingBusinessBySlug(slug: string) {
-  return prisma.business.deleteMany({
-    where: {
-      slug,
-      provisioningStatus: BusinessProvisioningStatus.PENDING,
-      emailVerificationTokens: { none: { expiresAt: { gt: new Date() } } },
-    },
-  });
+export async function tenantSchemaExists(schemaName: string): Promise<boolean> {
+  const rows = await publicPrisma.$queryRaw<Array<{ schema_name: string }>>`
+    SELECT schema_name FROM information_schema.schemata WHERE schema_name = ${schemaName}
+  `;
+  return rows.length > 0;
 }
 
-/** Discards the not-yet-provisioned institute of an owner who signs up again. */
-export function deletePendingBusinessOfUser(userId: number) {
-  return prisma.business.deleteMany({
-    where: {
-      provisioningStatus: BusinessProvisioningStatus.PENDING,
-      emailVerificationTokens: { some: { userId } },
-    },
-  });
+/** Permanently removes the row (its verification tokens go with it); `deleteBusiness` is the soft delete. */
+export function hardDeleteBusiness(id: number) {
+  return publicPrisma.business.delete({ where: { id } });
+}
+
+export function createSlugHistory(businessId: number, slug: string) {
+  return prisma.businessSlugHistory.create({ data: { businessId, slug } });
 }
 
 export async function deleteBusiness(id: number) {
