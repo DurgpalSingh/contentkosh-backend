@@ -131,14 +131,6 @@ export function updateUser(id: number, data: { name?: string; mobile?: string; r
   });
 }
 
-/** Unverified accounts that registered with this email (a guest can exist once per business). */
-export function findUnverifiedByEmail(email: string) {
-  return publicPrisma.user.findMany({
-    where: { email: email.toLowerCase().trim(), emailVerified: false, status: UserStatus.ACTIVE },
-    select: { id: true, email: true, name: true, role: true, businessId: true },
-  });
-}
-
 export function softDeleteUser(id: number) {
   return publicPrisma.user.update({
     where: { id },

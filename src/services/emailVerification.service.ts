@@ -1,10 +1,7 @@
 import crypto from 'crypto';
-import { Prisma } from '@prisma/client';
 import { config } from '../config/config';
 import { EMAIL_VERIFICATION } from '../constants/emailVerification.constants';
 import * as emailVerificationTokenRepo from '../repositories/emailVerificationToken.repo';
-import * as userRepo from '../repositories/user.repo';
-import * as businessRepo from '../repositories/business.repo';
 import {
   buildEmailVerificationEmailHtml,
   buildEmailVerificationEmailSubject,
@@ -13,63 +10,58 @@ import {
 import logger from '../utils/logger';
 import { sendMail } from './mail.service';
 
-export interface VerificationRecipient {
+export interface VerificationUser {
   id: number;
   name: string;
   email: string;
-  businessId: number | null;
+}
+
+export interface VerificationBusiness {
+  id: number;
+  instituteName: string;
 }
 
 export function hashToken(rawToken: string): string {
   return crypto.createHash('sha256').update(rawToken).digest('hex');
 }
 
-function generateRawToken(): string {
-  return crypto.randomBytes(EMAIL_VERIFICATION.TOKEN_BYTES).toString('hex');
-}
-
-export function findRecordByRawToken(rawToken: string) {
+export function findByRawToken(rawToken: string) {
   return emailVerificationTokenRepo.findByTokenHash(hashToken(rawToken));
 }
 
+function isResendCoolingDown(expiresAt: Date): boolean {
+  const sentAt = expiresAt.getTime() - EMAIL_VERIFICATION.TOKEN_TTL_MS;
+  return Date.now() - sentAt < EMAIL_VERIFICATION.RESEND_COOLDOWN_MS;
+}
+
 /**
- * Issues a fresh magic link for the user (overwriting any previous one, so older links stop
- * working) and emails it. The token row is written first and its failure propagates; only the
- * mail send is best-effort, so a Gmail outage never fails signup - the caller gets `false`
- * and the user can request a resend.
+ * Issues a fresh verification link (replacing any previous one) and emails it. Saving the token
+ * is required and its failure propagates; only the mail send is best-effort, so a mail outage
+ * never fails signup - the caller gets `false` and the user can request a resend.
  */
-export async function sendVerificationEmail(
-  recipient: VerificationRecipient,
-  pendingBusiness?: Prisma.InputJsonValue | null,
-): Promise<boolean> {
-  const rawToken = generateRawToken();
-  await emailVerificationTokenRepo.upsertForUser({
-    userId: recipient.id,
+export async function sendVerificationEmail(user: VerificationUser, business: VerificationBusiness): Promise<boolean> {
+  const rawToken = crypto.randomBytes(EMAIL_VERIFICATION.TOKEN_BYTES).toString('hex');
+  await emailVerificationTokenRepo.upsertForUser(user.id, {
+    businessId: business.id,
     tokenHash: hashToken(rawToken),
-    expiresAt: new Date(Date.now() + EMAIL_VERIFICATION.LINK_EXPIRY_MS),
-    ...(pendingBusiness !== undefined && { pendingBusiness }),
+    expiresAt: new Date(Date.now() + EMAIL_VERIFICATION.TOKEN_TTL_MS),
   });
 
   try {
-    // A user without a business is a new institute owner; otherwise a guest joining one.
-    const business = recipient.businessId ? await businessRepo.findBusinessById(recipient.businessId) : null;
-    const audience = business ? 'guest' : 'admin';
-
     await sendMail({
-      to: recipient.email,
-      subject: buildEmailVerificationEmailSubject(audience, business?.instituteName),
+      to: user.email,
+      subject: buildEmailVerificationEmailSubject(business.instituteName),
       html: buildEmailVerificationEmailHtml({
-        name: recipient.name,
-        audience,
-        instituteName: business?.instituteName ?? null,
+        name: user.name,
+        instituteName: business.instituteName,
         verifyUrl: buildVerifyUrl(config.server.frontendUrl, rawToken),
         privacyUrl: `${config.server.frontendUrl}/privacy-policy`,
       }),
     });
-    logger.info('Verification email sent', { userId: recipient.id, audience });
+    logger.info('Verification email sent', { userId: user.id });
     return true;
   } catch (error) {
-    logger.error('Failed to send verification email', { userId: recipient.id, error });
+    logger.error('Failed to send verification email', { userId: user.id, error });
     return false;
   }
 }
@@ -79,25 +71,13 @@ export async function sendVerificationEmail(
  * whether the email exists: unknown, already-verified and cooling-down accounts are skipped silently.
  */
 export async function resendVerificationEmail(email: string): Promise<void> {
-  const unverifiedUsers = await userRepo.findUnverifiedByEmail(email);
-  if (unverifiedUsers.length === 0) {
-    logger.info('Resend verification skipped: no unverified account', { email });
-    return;
-  }
+  const pendingVerifications = await emailVerificationTokenRepo.findUnverifiedByEmail(email);
 
-  for (const user of unverifiedUsers) {
-    const existing = await emailVerificationTokenRepo.findByUserId(user.id);
-
-    if (existing && Date.now() - existing.lastSentAt.getTime() < EMAIL_VERIFICATION.RESEND_COOLDOWN_MS) {
+  for (const { expiresAt, business, user } of pendingVerifications) {
+    if (isResendCoolingDown(expiresAt)) {
       logger.info('Resend verification skipped: cooldown active', { userId: user.id });
       continue;
     }
-    // A new institute owner without a stored signup cannot be verified (nothing to create).
-    if (!existing && !user.businessId) {
-      logger.warn('Resend verification skipped: owner has no pending signup', { userId: user.id });
-      continue;
-    }
-
-    await sendVerificationEmail(user);
+    await sendVerificationEmail(user, business);
   }
 }
