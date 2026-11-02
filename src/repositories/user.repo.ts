@@ -60,6 +60,19 @@ export function findByMobile(mobile: string) {
   return publicPrisma.user.findFirst({ where: { mobile } });
 }
 
+/** Accounts with this email (one per business) together with the business data login needs. */
+export function findLoginCandidates(email: string, businessId?: number) {
+  return publicPrisma.user.findMany({
+    where: {
+      email: email.toLowerCase().trim(),
+      ...(businessId !== undefined ? { businessId } : {}),
+    },
+    include: {
+      business: { select: { id: true, slug: true, schemaName: true, status: true, statusReason: true } },
+    },
+  });
+}
+
 export async function exists(id: number): Promise<boolean> {
   if (!id) return false;
   const user = await publicPrisma.user.findUnique({ where: { id }, select: { id: true } });
