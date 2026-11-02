@@ -15,8 +15,8 @@ const router = Router();
  *     description: >
  *       Two flows behind one endpoint, selected by whether `slug` is provided:
  *       omit `slug` to register a new institute owner (role ADMIN) and send the institute
- *       details in `business` - the business is only created once the emailed link is
- *       opened; pass `slug` to self-signup as a guest (role USER) joining that existing
+ *       details in `business` - the institute is reserved now and set up once the emailed
+ *       link is opened; pass `slug` to self-signup as a guest (role USER) joining that existing
  *       business. Neither flow logs the user in: a verification link is emailed and login
  *       is blocked until it is opened. The response carries `emailSent: false` when the
  *       mail could not be sent, so the client can offer a resend.
@@ -57,7 +57,7 @@ router.post('/signup', validateDto(RegisterRequest), register);
  *   post:
  *     summary: Verify an email address using the emailed magic link token
  *     description: >
- *       For a new institute owner the first use creates the business and logs the user in
+ *       For a new institute owner the first use sets up the institute and logs the user in
  *       (auth cookies are set, `autoLogin: true`). For guests it only verifies. A link that
  *       was already used returns `alreadyVerified: true` without logging in. Links expire
  *       after 2 minutes.
@@ -76,11 +76,7 @@ router.post('/signup', validateDto(RegisterRequest), register);
  *       200:
  *         description: Email verified (or already verified)
  *       400:
- *         description: Invalid link (apiCode ERR_VERIFICATION_LINK_INVALID)
- *       409:
- *         description: The institute slug was taken before the link was opened
- *       410:
- *         description: Link expired (apiCode ERR_VERIFICATION_LINK_EXPIRED, body includes email)
+ *         description: Invalid link (apiCode ERR_VERIFICATION_LINK_INVALID) or expired link (apiCode ERR_VERIFICATION_LINK_EXPIRED, body includes email)
  */
 router.post('/verify-email', validateDto(VerifyEmailRequest), verifyEmail);
 

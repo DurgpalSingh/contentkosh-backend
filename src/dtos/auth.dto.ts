@@ -3,7 +3,7 @@ import { IsEmail, IsNotEmpty, IsString, MinLength, IsOptional, IsEnum, ValidateN
 import { Type } from 'class-transformer';
 import { UserRole } from '@prisma/client';
 import { Request } from 'express';
-import { CreateBusinessDto } from './business.dto';
+import { BusinessIdentityDto } from './business.dto';
 
 export class RegisterRequest {
     @IsNotEmpty()
@@ -35,14 +35,11 @@ export class RegisterRequest {
     @IsOptional()
     slug?: string;
 
-    /**
-     * Details of the institute to create. Required when `slug` is omitted (new institute owner).
-     * The business is not created at signup: it is held until the emailed link is opened.
-     */
+    /** Required when `slug` is omitted (new institute owner). The business is created once the emailed link is opened. */
     @IsOptional()
     @ValidateNested()
-    @Type(() => CreateBusinessDto)
-    business?: CreateBusinessDto;
+    @Type(() => BusinessIdentityDto)
+    business?: BusinessIdentityDto;
 }
 
 export class VerifyEmailRequest {
@@ -99,18 +96,16 @@ export interface RegisterResponse {
         email: string;
         name: string;
         role: string;
-        businessId?: number | null;
+        businessId: number | null;
     };
     /** False when the verification mail could not be sent - the client should offer a resend. */
     emailSent: boolean;
 }
 
 export interface VerifyEmailResponse {
-    verified: true;
     alreadyVerified: boolean;
-    /** True only when this call issued a session (new institute owner, first use of the link). */
-    autoLogin: boolean;
     slug: string | null;
+    /** Present only when this call logged in a new institute owner. */
     tokens?: { accessToken: string; refreshToken: string };
 }
 

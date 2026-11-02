@@ -73,20 +73,18 @@ model RefreshToken {
   @@map("refresh_tokens")
 }
 
-// One magic-link row per self-registered user. Only the sha256 hash of the emailed token is stored.
-// `pendingBusiness` holds the business details for an admin signup: the business is only
-// created once the link is opened (null for guest signups, which join an existing business).
+// Pending email verification, one row per self-registered user (re-sending overwrites it).
+// Only the sha256 hash of the emailed token is stored; `expiresAt` also tells when it was sent.
+// `business` is the institute the user is joining (guest) or the one waiting to be provisioned
+// (owner, status PENDING until the link is opened).
 model EmailVerificationToken {
-  id              Int       @id @default(autoincrement())
-  userId          Int       @unique @map("user_id")
-  tokenHash       String    @unique @map("token_hash")
-  expiresAt       DateTime  @map("expires_at")
-  lastSentAt      DateTime  @map("last_sent_at")
-  verifiedAt      DateTime? @map("verified_at")
-  pendingBusiness Json?     @map("pending_business")
-  createdAt       DateTime  @default(now()) @map("created_at")
+  userId     Int      @id @map("user_id")
+  businessId Int      @map("business_id")
+  tokenHash  String   @unique @map("token_hash")
+  expiresAt  DateTime @map("expires_at")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@map("email_verification_tokens")
 }
@@ -128,6 +126,7 @@ model Business {
   examTests     ExamTest[]
   subjectiveTests SubjectiveTest[]
   slugHistory   BusinessSlugHistory[]
+  emailVerificationTokens EmailVerificationToken[]
 
   @@map("business")
 }

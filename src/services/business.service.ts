@@ -55,33 +55,64 @@ export class BusinessService {
     };
   }
 
-  static async createBusiness(data: businessRepo.BusinessCreateInput, userId: number) {
+  /** Registers the business row only; the tenant schema is built later by provisionBusiness. */
+  static async createPendingBusiness(data: businessRepo.BusinessCreateInput) {
     if (!data.slug) {
       throw new BadRequestError('Slug is required');
     }
 
-    const normalizedSlug = data.slug.trim();
-    const schemaName = normalizeTenantSchemaName(normalizedSlug);
-
-    // Check for an existing active business with this slug
-    const existingSlug = await businessRepo.findBusinessBySlug(normalizedSlug);
-    if (existingSlug) {
-      throw new AlreadyExistsError(`Business with slug '${normalizedSlug}' already exists`);
+    const slug = data.slug.trim();
+    await businessRepo.deleteAbandonedPendingBusinessBySlug(slug);
+    if (await businessRepo.findBusinessBySlug(slug)) {
+      throw new AlreadyExistsError(`Business with slug '${slug}' already exists`);
     }
 
-    const business = await businessRepo.createBusiness({
+    return businessRepo.createBusiness({
       ...data,
-      slug: normalizedSlug,
-      schemaName,
+      slug,
+      schemaName: normalizeTenantSchemaName(slug),
       provisioningStatus: BusinessProvisioningStatus.PENDING,
       isDeleted: false,
     });
+  }
+
+  static async createBusiness(data: businessRepo.BusinessCreateInput, userId: number) {
+    const business = await this.createPendingBusiness(data);
 
     try {
-      // 1) Create the schema
+      return await this.provisionBusiness(business, userId);
+    } catch (error) {
+      // Hard-delete the failed business so the slug is immediately available for retry. A
+      // soft-delete would still block it, since findBusinessBySlug only skips isDeleted rows.
+      try {
+        await publicPrisma.business.delete({ where: { id: business.id } });
+      } catch (deleteErr) {
+        logger.warn('Could not hard-delete FAILED business record, falling back to soft-delete', {
+          businessId: business.id,
+          deleteErr,
+        });
+        await businessRepo.updateBusiness(business.id, {
+          provisioningStatus: BusinessProvisioningStatus.FAILED,
+          isDeleted: true,
+        });
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Builds the tenant schema for a pending business and makes `userId` its admin. On failure the
+   * partial schema is dropped and the business stays pending, so the caller decides whether to retry.
+   */
+  static async provisionBusiness(business: Business, userId: number) {
+    const { schemaName } = business;
+    if (!schemaName) {
+      throw new BadRequestError('Business has no tenant schema name');
+    }
+
+    try {
       await ensureTenantSchema(schemaName);
 
-      // 1.a) Verify schema creation at DB level
       const schemaRows: Array<{ schema_name: string }> = (await publicPrisma.$queryRaw`
         SELECT schema_name FROM information_schema.schemata WHERE schema_name = ${schemaName}
       `) as any;
@@ -89,29 +120,14 @@ export class BusinessService {
         throw new Error(`Tenant schema '${schemaName}' was not created`);
       }
 
-      // 2) Apply migrations (if present)
-      try {
-        await migrateTenantSchema(schemaName);
-      } catch (migErr) {
-        logger.error('Tenant migration failed', { schemaName, error: migErr });
-        throw migErr;
-      }
+      await migrateTenantSchema(schemaName);
+      await seedTenantDefaults(schemaName);
 
-      // 3) Seed tenant defaults (permissions, roles, etc.)
-      try {
-        await seedTenantDefaults(schemaName);
-      } catch (seedErr) {
-        logger.error('Tenant seeding failed', { schemaName, error: seedErr });
-        throw seedErr;
-      }
-
-      // 4) Link the creating user's public-schema row to this business
       const adminUser = await userRepo.updateUser(userId, {
         businessId: business.id,
         role: UserRole.ADMIN,
         status: UserStatus.ACTIVE,
       });
-      
       await refreshTokenRepo.revokeAllUserTokens(userId);
 
       const activeBusiness = await businessRepo.updateBusiness(business.id, {
@@ -126,24 +142,6 @@ export class BusinessService {
     } catch (error) {
       logger.error('Business provisioning failed', { businessId: business.id, schemaName, error });
 
-      // Hard-delete the FAILED business record so the slug is immediately available for retry.
-      // A soft-delete (isDeleted: true) would still block re-registration since findBusinessBySlug
-      // only filters isDeleted=false — but the user would see the same slug rejected on retry.
-      try {
-        await publicPrisma.business.delete({ where: { id: business.id } });
-      } catch (deleteErr) {
-        // Fall back to soft-delete if hard-delete fails (e.g. FK constraints from partial data)
-        logger.warn('Could not hard-delete FAILED business record, falling back to soft-delete', {
-          businessId: business.id,
-          deleteErr,
-        });
-        await businessRepo.updateBusiness(business.id, {
-          provisioningStatus: BusinessProvisioningStatus.FAILED,
-          isDeleted: true,
-        });
-      }
-
-      // Drop the partially-created tenant schema to allow clean re-provisioning.
       try {
         await dropTenantSchema(schemaName);
       } catch (dropErr) {
