@@ -1,5 +1,11 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.50] - verify email on signup
+**P.R Raised by** : shubh404-SE on **Date** : 2026-11-03
+
+### Added
+  - added a new feature to verify email on signup, now user will get a verification email on signup and he need to verify his email before login. also added resend api for expired links.
+---
 ## Version [1.2.49] - Multiple upload content
 **P.R Raised by** : shubh404-SE on **Date** : 2026-11-13
 
@@ -19,13 +25,6 @@ All notable changes to this project will be documented in this file.
 ### Changed
   - fixed email template icon issue, now email template will show proper icon in email.
 ---
-## Version [1.2.46] - mail cc and bcc added
-**P.R Raised by** : shubh404-SE on **Date** : 2026-11-04
-
-### added
-  - added cc and bcc in mail sending for bussiness signup notification, configure `BUSINESS_SIGNUP_NOTIFICATION_CC` and `BUSINESS_SIGNUP_NOTIFICATION_BCC` in env file.
----
-
 ## Version [1.2.46] - mail cc and bcc added
 **P.R Raised by** : shubh404-SE on **Date** : 2026-11-04
 
