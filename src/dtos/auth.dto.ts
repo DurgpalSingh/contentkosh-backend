@@ -1,7 +1,9 @@
 // src/dtos/auth.dto.ts
-import { IsEmail, IsNotEmpty, IsString, MinLength, IsOptional, IsEnum } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsString, MinLength, IsOptional, IsEnum, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 import { UserRole } from '@prisma/client';
 import { Request } from 'express';
+import { BusinessIdentityDto } from './business.dto';
 
 export class RegisterRequest {
     @IsNotEmpty()
@@ -32,6 +34,23 @@ export class RegisterRequest {
     @IsString()
     @IsOptional()
     slug?: string;
+
+    /** Required when `slug` is omitted (new institute owner). The business is created once the emailed link is opened. */
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => BusinessIdentityDto)
+    business?: BusinessIdentityDto;
+}
+
+export class VerifyEmailRequest {
+    @IsString()
+    @IsNotEmpty({ message: 'Verification token is required' })
+    token!: string;
+}
+
+export class ResendVerificationRequest {
+    @IsEmail()
+    email!: string;
 }
 
 export class LoginRequest {
@@ -68,6 +87,26 @@ export interface IUser {
 
 export interface AuthRequest extends Request {
     user?: IUser;
+}
+
+/** Signup issues no session: the account only becomes usable once the emailed link is opened. */
+export interface RegisterResponse {
+    user: {
+        id: number;
+        email: string;
+        name: string;
+        role: string;
+        businessId: number | null;
+    };
+    /** False when the verification mail could not be sent - the client should offer a resend. */
+    emailSent: boolean;
+}
+
+export interface VerifyEmailResponse {
+    alreadyVerified: boolean;
+    slug: string | null;
+    /** Present only when this call logged in a new institute owner. */
+    tokens?: { accessToken: string; refreshToken: string };
 }
 
 export interface AuthResponse {

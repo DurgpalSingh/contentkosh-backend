@@ -2,6 +2,7 @@
 import { Response } from 'express';
 import { ApiResponseHandler, ApiCode } from '../utils/apiResponse';
 import { HTTP_STATUS } from '../constants/httpStatus.constants';
+import { EMAIL_VERIFICATION_MESSAGES } from '../constants/emailVerification.constants';
 
 export class ApiError extends Error {
   statusCode: number;
@@ -97,6 +98,45 @@ export class SessionAlreadyActiveError extends ApiError {
     });
   }
 }
+
+/** Error carrying the email it refers to, so the client can offer to resend a verification link. */
+class EmailBoundApiError extends ApiError {
+  constructor(
+    message: string,
+    statusCode: number,
+    private readonly apiCode: ApiCode,
+    readonly email: string,
+  ) {
+    super(message, statusCode);
+  }
+
+  override respond(res: Response): void {
+    res.status(this.statusCode).json({ success: false, apiCode: this.apiCode, message: this.message, email: this.email });
+  }
+}
+
+export class EmailNotVerifiedError extends EmailBoundApiError {
+  constructor(email: string) {
+    super(EMAIL_VERIFICATION_MESSAGES.EMAIL_NOT_VERIFIED, HTTP_STATUS.FORBIDDEN, ApiCode.ERR_EMAIL_NOT_VERIFIED, email);
+  }
+}
+
+export class ExpiredVerificationLinkError extends EmailBoundApiError {
+  constructor(email: string) {
+    super(EMAIL_VERIFICATION_MESSAGES.LINK_EXPIRED, HTTP_STATUS.BAD_REQUEST, ApiCode.ERR_VERIFICATION_LINK_EXPIRED, email);
+  }
+}
+
+export class InvalidVerificationLinkError extends ApiError {
+  constructor() {
+    super(EMAIL_VERIFICATION_MESSAGES.LINK_INVALID, HTTP_STATUS.BAD_REQUEST);
+  }
+
+  override respond(res: Response): void {
+    ApiResponseHandler.error(res, this.message, this.statusCode, ApiCode.ERR_VERIFICATION_LINK_INVALID);
+  }
+}
+
 
 export class BusinessSuspendedError extends ApiError {
   action: string;
