@@ -13,6 +13,12 @@ All notable changes to this project will be documented in this file.
   - added cc and bcc in mail sending for bussiness signup notification, configure `BUSINESS_SIGNUP_NOTIFICATION_CC` and `BUSINESS_SIGNUP_NOTIFICATION_BCC` in env file.
 ---
 
+## Version [1.2.46] - mail cc and bcc added
+**P.R Raised by** : shubh404-SE on **Date** : 2026-11-04
+
+### added
+  - added cc and bcc in mail sending for bussiness signup notification, configure `BUSINESS_SIGNUP_NOTIFICATION_CC` and `BUSINESS_SIGNUP_NOTIFICATION_BCC` in env file.
+---
 ## Version [1.2.45] - SMTP mail via nodemailer
 **P.R Raised by** : shubh404-SE on **Date** : 2026-10-30
 
