@@ -102,6 +102,8 @@ Needed for sending emails (e.g. the new-business-signup notification and busines
 | `MAIL_FROM_NAME` | Display name on outgoing mail. Defaults to `ContentKosh` |
 | `MAIL_FROM_EMAIL` | Address emails are sent **from**. Defaults to `SMTP_USER`. Most providers require it to match the mailbox in `SMTP_USER` |
 | `BUSINESS_SIGNUP_NOTIFICATION_EMAIL` | Inbox that receives a notification when a new business signs up. Optional — defaults to `info@contentkosh.in` |
+| `BUSINESS_SIGNUP_NOTIFICATION_CC` | Comma separated emails copied (CC) on the signup notification. Optional |
+| `BUSINESS_SIGNUP_NOTIFICATION_BCC` | Comma separated emails blind-copied (BCC) on the signup notification. Optional |
 
 Final result in `.env`:
 
@@ -114,6 +116,8 @@ SMTP_PASSWORD=/etc/contentkosh/secrets.json
 MAIL_FROM_NAME=ContentKosh
 MAIL_FROM_EMAIL=noreply@yourdomain.com
 BUSINESS_SIGNUP_NOTIFICATION_EMAIL=admin@yourdomain.com
+BUSINESS_SIGNUP_NOTIFICATION_CC=ops@yourdomain.com,founder@yourdomain.com
+BUSINESS_SIGNUP_NOTIFICATION_BCC=audit@yourdomain.com
 ```
 
 ## SMTP setup (email sending)

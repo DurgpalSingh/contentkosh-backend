@@ -1,3 +1,4 @@
+import { parseEmailList } from '../utils/email.utils';
 import { readSecretFromFile } from '../utils/secretFile';
 
 const SMTP_PASSWORD_KEY = 'SMTP_PASSWORD';
@@ -21,6 +22,8 @@ export const mailConfig = {
     email: process.env.MAIL_FROM_EMAIL || process.env.SMTP_USER,
   },
   businessSignupNotificationEmail: process.env.BUSINESS_SIGNUP_NOTIFICATION_EMAIL || 'info@contentkosh.in',
+  businessSignupNotificationCc: parseEmailList(process.env.BUSINESS_SIGNUP_NOTIFICATION_CC),
+  businessSignupNotificationBcc: parseEmailList(process.env.BUSINESS_SIGNUP_NOTIFICATION_BCC),
 
   contact: {
     supportEmail: 'info@contentkosh.in' as string,
