@@ -63,6 +63,7 @@ Create a `.env` file in `contentkosh-backend/`. Use `.env.local` (local dev) or 
 | `DATABASE_URL` | PostgreSQL connection string used by Prisma, e.g. `postgresql://postgres:postgres@localhost:5432/contentkosh?schema=public` |
 | `JWT_SECRET` | Long random secret used to sign JWTs. Generate one with `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"` |
 | `FRONTEND_URL` | Frontend base URL, used for CORS and callbacks (e.g. `http://localhost:3000`) |
+| `BACKEND_URL` | Public base URL of this API (e.g. `https://api.yourdomain.com`). Emails load their logo and icons from `<BACKEND_URL>/uploads/assets/...`, so it must be reachable from the internet. Defaults to `http://localhost:<PORT>`, which only works on your own machine |
 
 ### Server, auth and cookies (optional)
 
