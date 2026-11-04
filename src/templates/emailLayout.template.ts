@@ -1,26 +1,20 @@
-import fs from 'fs';
-import path from 'path';
+import { config } from '../config/config';
+import { FILE_STORAGE_CONFIG } from '../config/fileStorage.config';
 import { escapeHtml } from '../utils/parserHtml.utils';
 
 const EMAIL_BRAND = {
   NAME: 'ContentKosh',
 } as const;
 
-// Embedded as data URIs (not linked to hosted URLs) so the logo and icons always
-// render, even if the frontend/backend that sent the email is later redeployed or
-// offline. uploads/assets/logo.png already combines the mark and the wordmark, so
-// the header just renders this one image — no separate icon/text pieces.
-const LOGO_FILE_PATH = path.resolve(process.cwd(), 'uploads', 'assets', 'logo.png');
-const ICONS_DIR = path.resolve(process.cwd(), 'uploads', 'assets', 'icons');
+const LOGO_FILE_NAME = 'logo.png';
+const ICONS_FOLDER_NAME = 'icons';
 
-let cachedLogoDataUri: string | null = null;
+function getAssetUrl(relativePath: string): string {
+  return `${config.server.backendUrl}${FILE_STORAGE_CONFIG.publicAssetsUrlPrefix}/${relativePath}`;
+}
 
-function getLogoDataUri(): string {
-  if (!cachedLogoDataUri) {
-    const buffer = fs.readFileSync(LOGO_FILE_PATH);
-    cachedLogoDataUri = `data:image/png;base64,${buffer.toString('base64')}`;
-  }
-  return cachedLogoDataUri;
+function getLogoUrl(): string {
+  return getAssetUrl(LOGO_FILE_NAME);
 }
 
 // Small line-icon graphics used in place of emoji (emoji render inconsistently
@@ -37,16 +31,8 @@ export type EmailIconName =
   | 'pause'
   | 'cross';
 
-const cachedIconDataUris = new Map<EmailIconName, string>();
-
-function getIconDataUri(name: EmailIconName): string {
-  let dataUri = cachedIconDataUris.get(name);
-  if (!dataUri) {
-    const buffer = fs.readFileSync(path.join(ICONS_DIR, `${name}.png`));
-    dataUri = `data:image/png;base64,${buffer.toString('base64')}`;
-    cachedIconDataUris.set(name, dataUri);
-  }
-  return dataUri;
+function getIconUrl(name: EmailIconName): string {
+  return getAssetUrl(`${ICONS_FOLDER_NAME}/${name}.png`);
 }
 
 const EMAIL_LAYOUT_TEXT = {
@@ -87,7 +73,7 @@ export interface EmailLayoutOptions {
 function buildInfoRow(row: EmailInfoRow): string {
   return [
     '<div class="info-row">',
-    `<div class="info-icon"><img src="${getIconDataUri(row.icon)}" alt="" width="22" height="22"></div>`,
+    `<div class="info-icon"><img src="${getIconUrl(row.icon)}" alt="" width="22" height="22"></div>`,
     `<div class="info-label">${escapeHtml(row.label)}</div>`,
     `<div class="info-value">${escapeHtml(row.value ?? EMAIL_LAYOUT_TEXT.FALLBACK_VALUE)}</div>`,
     '</div>',
@@ -118,9 +104,9 @@ function buildSection(section: EmailBodySection): string {
 export function buildEmailLayout(options: EmailLayoutOptions): string {
   const heading = options.headingLines.map(escapeHtml).join('<br>');
   const body = options.sections.map(buildSection).join('');
-  const logoUrl = getLogoDataUri();
-  const heroIconUrl = getIconDataUri(options.heroIcon);
-  const heroBadgeUrl = getIconDataUri(options.heroBadgeIcon);
+  const logoUrl = getLogoUrl();
+  const heroIconUrl = getIconUrl(options.heroIcon);
+  const heroBadgeUrl = getIconUrl(options.heroBadgeIcon);
 
   return `<!DOCTYPE html>
 <html lang="en">
