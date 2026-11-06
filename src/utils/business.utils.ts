@@ -25,6 +25,8 @@ export async function sendBusinessSignupNotification(business: Business, admin: 
   try {
     await sendMail({
       to: mailConfig.businessSignupNotificationEmail,
+      cc: mailConfig.businessSignupNotificationCc,
+      bcc: mailConfig.businessSignupNotificationBcc,
       subject: buildBusinessSignupEmailSubject(business.instituteName),
       html: buildBusinessSignupEmailHtml({
         instituteName: business.instituteName,
