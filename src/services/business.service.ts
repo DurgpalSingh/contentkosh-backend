@@ -14,28 +14,6 @@ import {
   seedTenantDefaults,
 } from './tenantProvisioning.service';
 
-async function notifyBusinessSignup(business: Business, admin: { name: string; email: string }): Promise<void> {
-  try {
-    await sendMail({
-      to: mailConfig.businessSignupNotificationEmail,
-      cc: mailConfig.businessSignupNotificationCc,
-      bcc: mailConfig.businessSignupNotificationBcc,
-      subject: buildBusinessSignupEmailSubject(business.instituteName),
-      html: buildBusinessSignupEmailHtml({
-        instituteName: business.instituteName,
-        slug: business.slug,
-        adminName: admin.name,
-        adminEmail: admin.email,
-        registeredOn: business.provisionedAt ?? new Date(),
-        dashboardUrl: `${config.server.frontendUrl}/superadmin/businesses`,
-        privacyUrl: `${config.server.frontendUrl}/privacy-policy`,
-      }),
-    });
-  } catch (error) {
-    logger.error('Failed to send business signup notification email', { businessId: business.id, error });
-  }
-}
-
 export class BusinessService {
   /**
    * Reserves the slug by saving the business as PENDING. The tenant schema is built later by
