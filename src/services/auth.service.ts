@@ -2,23 +2,32 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { config } from '../config/config';
-import { IUser, RegisterRequest, LoginRequest, AuthResponse } from '../dtos/auth.dto';
+import { IUser, RegisterRequest, RegisterResponse, VerifyEmailResponse, LoginRequest, AuthResponse } from '../dtos/auth.dto';
 import logger from '../utils/logger';
 import * as userRepo from '../repositories/user.repo';
 import * as refreshTokenRepo from '../repositories/refreshToken.repo';
 import * as businessRepo from '../repositories/business.repo';
-import { UserStatus, UserRole, BusinessStatus } from '@prisma/client';
-import { AlreadyExistsError, AuthError, BusinessSuspendedError, ForbiddenError, NotFoundError, SessionAlreadyActiveError } from '../errors/api.errors';
-import { BUSINESS_STATUS_ACTION } from '../constants/business.constants';
+import { UserStatus, UserRole, BusinessStatus, BusinessProvisioningStatus, Business } from '@prisma/client';
+import {
+  AlreadyExistsError,
+  AuthError,
+  BadRequestError,
+  EmailNotVerifiedError,
+  ExpiredVerificationLinkError,
+  ForbiddenError,
+  InvalidVerificationLinkError,
+  NotFoundError,
+  SessionAlreadyActiveError,
+} from '../errors/api.errors';
+import { EMAIL_VERIFICATION_MESSAGES } from '../constants/emailVerification.constants';
+import { BusinessService } from './business.service';
+import { findVerificationByRawToken, sendVerificationEmail } from './emailVerification.service';
+import { buildBusinessSuspendedError, resolveLoginSlug, toRegisteredUser } from '../utils/auth.utils';
 
-function buildBusinessSuspendedError(business: { status: BusinessStatus; statusReason: string | null }): BusinessSuspendedError {
-  const action = business.status === BusinessStatus.PAUSED ? BUSINESS_STATUS_ACTION.PAUSED : BUSINESS_STATUS_ACTION.REMOVED;
-  return new BusinessSuspendedError(action, business.statusReason);
-}
-import { publicPrisma } from '../config/database';
-
-function resolveLoginSlug(data: LoginRequest): string | undefined {
-  return data.slug?.trim() || data.businessSlug?.trim() || undefined;
+/** The user fields verification needs from the stored token. */
+interface VerifiedUser {
+  id: number;
+  email: string;
 }
 
 export class AuthService {
@@ -90,94 +99,151 @@ export class AuthService {
   }
 
   /**
-   * Handles both public signup flows behind one endpoint:
-   * - `slug` provided: join an existing business as a guest (role USER) — used by the
+   * Handles both public signup flows behind one endpoint. Neither issues a session: the
+   * account is unusable until the emailed link is opened (see verifyEmail).
+   * - `slug` provided: join an existing business as a guest (role USER) - used by the
    *   business-locked mobile app's "Create account" flow.
-   * - `slug` omitted: bootstrap a new institute owner (role ADMIN, no business yet) — the
-   *   caller creates the Business separately via POST /api/business.
+   * - `slug` omitted: new institute owner (role ADMIN). The institute is only set up on verify.
    */
-  static async register(data: RegisterRequest): Promise<AuthResponse> {
-    const slug = data.slug?.trim();
-    if (slug) {
-      return this.registerGuestForBusiness(data, slug);
-    }
-
-    logger.info(`Registering new public user: ${data.email}`);
-    const existingUser = await userRepo.findByEmail(data.email);
-    if (existingUser) {
-      logger.warn(`Signup rejected: email already exists`, { email: data.email });
-      throw new AlreadyExistsError('User with this email already exists');
-    }
-
-    const hashedPassword = await this.hashPassword(data.password);
-    const newUser = await userRepo.createUser({
-      name: data.name,
-      email: data.email,
-      password: hashedPassword,
-      mobile: data.mobile,
-      role: data.role || UserRole.ADMIN,
-      status: UserStatus.ACTIVE,
-    });
-
-    return this.issueAuthResponse({ ...newUser, businessId: newUser.businessId ?? null });
+  static async register(data: RegisterRequest): Promise<RegisterResponse> {
+    const businessSlug = data.slug?.trim();
+    return businessSlug ? this.registerGuest(data, businessSlug) : this.registerInstituteOwner(data);
   }
 
-  private static async registerGuestForBusiness(data: RegisterRequest, slug: string): Promise<AuthResponse> {
-    logger.info(`Guest signup attempt for email: ${data.email}`, { slug });
-
-    const business = await businessRepo.findBusinessBySlug(slug);
-    if (!business) {
-      logger.warn(`Guest signup rejected: business not found`, { slug });
-      throw new NotFoundError('Business');
+  private static async registerInstituteOwner(data: RegisterRequest): Promise<RegisterResponse> {
+    logger.info(`Institute owner signup attempt for email: ${data.email}`);
+    const { business: instituteDetails } = data;
+    if (!instituteDetails) {
+      logger.warn(`Institute owner signup rejected: institute details missing`, { email: data.email });
+      throw new BadRequestError(EMAIL_VERIFICATION_MESSAGES.INSTITUTE_DETAILS_REQUIRED);
     }
+    await this.assertEmailNotRegistered(data.email);
 
-    const existingUser = await userRepo.findByBusinessAndEmail(business.id, data.email);
-    if (existingUser) {
-      logger.warn(`Guest signup rejected: email already exists`, { email: data.email, businessId: business.id });
-      throw new AlreadyExistsError('User with this email already exists');
-    }
-
-    const hashedPassword = await this.hashPassword(data.password);
-    const newUser = await userRepo.createUser({
+    const pendingBusiness = await BusinessService.createPendingBusiness(instituteDetails);
+    const owner = await userRepo.createUser({
       name: data.name,
       email: data.email,
-      password: hashedPassword,
+      password: await this.hashPassword(data.password),
+      mobile: data.mobile,
+      role: UserRole.ADMIN,
+      status: UserStatus.ACTIVE,
+      emailVerified: false,
+    });
+    const emailSent = await sendVerificationEmail(owner, pendingBusiness);
+
+    logger.info(`Institute owner signed up, awaiting email verification`, {
+      userId: owner.id,
+      businessId: pendingBusiness.id,
+      emailSent,
+    });
+    return { user: toRegisteredUser(owner), emailSent };
+  }
+
+  private static async assertEmailNotRegistered(email: string) {
+    if (await userRepo.findByEmail(email)) {
+      logger.warn(`Signup rejected: email already exists`, { email });
+      throw new AlreadyExistsError('User with this email already exists');
+    }
+  }
+
+  private static async registerGuest(data: RegisterRequest, businessSlug: string): Promise<RegisterResponse> {
+    logger.info(`Guest signup attempt for email: ${data.email}`, { slug: businessSlug });
+
+    const business = await this.findJoinableBusiness(businessSlug);
+    await this.assertGuestEmailAvailable(business.id, data.email);
+
+    const guest = await userRepo.createUser({
+      name: data.name,
+      email: data.email,
+      password: await this.hashPassword(data.password),
       mobile: data.mobile,
       role: UserRole.USER,
       businessId: business.id,
       status: UserStatus.ACTIVE,
+      emailVerified: false,
     });
+    const emailSent = await sendVerificationEmail(guest, business);
 
-    return this.issueAuthResponse({ ...newUser, businessId: newUser.businessId ?? null }, business);
+    logger.info(`Guest signed up, awaiting email verification`, { userId: guest.id, businessId: business.id, emailSent });
+    return { user: toRegisteredUser(guest), emailSent };
   }
 
-  private static async issueAuthResponse(
-    user: { id: number; email: string; name: string; role: UserRole; businessId: number | null },
-    business?: { slug: string | null; schemaName: string | null },
-  ): Promise<AuthResponse> {
+  /** A guest can only join a business that is fully provisioned, never one still waiting for its owner. */
+  private static async findJoinableBusiness(businessSlug: string) {
+    const business = await businessRepo.findBusinessBySlug(businessSlug);
+    if (business?.provisioningStatus !== BusinessProvisioningStatus.ACTIVE) {
+      logger.warn(`Guest signup rejected: business not found`, { slug: businessSlug });
+      throw new NotFoundError('Business');
+    }
+    return business;
+  }
+
+  private static async assertGuestEmailAvailable(businessId: number, email: string) {
+    if (await userRepo.findByBusinessAndEmail(businessId, email)) {
+      logger.warn(`Guest signup rejected: email already exists`, { email, businessId });
+      throw new AlreadyExistsError('User with this email already exists');
+    }
+  }
+
+  /**
+   * Opens a verification link. A new institute owner gets the institute provisioned now and is
+   * logged in; a guest is only marked verified. A link that was already used never logs anyone in,
+   * since links are otherwise valid credentials until they expire.
+   */
+  static async verifyEmail(rawToken: string): Promise<VerifyEmailResponse> {
+    const verification = await findVerificationByRawToken(rawToken);
+    if (!verification) {
+      logger.warn(`Verify rejected: unknown token`);
+      throw new InvalidVerificationLinkError();
+    }
+
+    const { user, business } = verification;
+    if (user.emailVerified) {
+      logger.info(`Verify skipped: already verified`, { userId: user.id });
+      return { alreadyVerified: true, slug: business.slug };
+    }
+    if (new Date() > verification.expiresAt) {
+      logger.warn(`Verify rejected: link expired`, { userId: user.id });
+      throw new ExpiredVerificationLinkError(user.email);
+    }
+
+    // A pending business means a new institute owner. If an earlier attempt already provisioned it
+    // but failed afterwards, the business is active and the owner is simply verified, not logged in.
+    const isNewInstituteOwner = business.provisioningStatus === BusinessProvisioningStatus.PENDING;
+    return isNewInstituteOwner ? this.verifyNewInstituteOwner(user, business) : this.verifyGuest(user, business);
+  }
+
+  private static async verifyNewInstituteOwner(user: VerifiedUser, pendingBusiness: Business): Promise<VerifyEmailResponse> {
+    const activeBusiness = await BusinessService.provisionPendingBusiness(pendingBusiness, user.id);
+    await this.markEmailVerified(user.id);
+
+    const tokens = await this.issueInstituteOwnerSession(user, activeBusiness);
+    logger.info(`Institute owner verified and logged in`, { userId: user.id, businessId: activeBusiness.id });
+    return { alreadyVerified: false, slug: activeBusiness.slug, tokens };
+  }
+
+  private static async verifyGuest(user: VerifiedUser, business: Business): Promise<VerifyEmailResponse> {
+    await this.markEmailVerified(user.id);
+
+    logger.info(`Guest email verified`, { userId: user.id, businessId: business.id });
+    return { alreadyVerified: false, slug: business.slug };
+  }
+
+  private static async markEmailVerified(userId: number) {
+    await userRepo.updateUser(userId, { emailVerified: true });
+  }
+
+  private static async issueInstituteOwnerSession(user: VerifiedUser, business: Business) {
     const accessToken = this.generateAccessToken({
       id: user.id,
       email: user.email,
-      role: user.role,
-      businessId: user.businessId,
-      businessSlug: business?.slug ?? null,
-      tenantSchema: business?.schemaName ?? null,
+      role: UserRole.ADMIN,
+      businessId: business.id,
+      businessSlug: business.slug,
+      tenantSchema: business.schemaName,
     });
     const refreshToken = await this.generateRefreshToken(user.id);
-
-    logger.info(`Signup successful`, { userId: user.id, email: user.email, businessId: user.businessId });
-
-    return {
-      accessToken,
-      refreshToken,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        businessId: user.businessId,
-      },
-    };
+    return { accessToken, refreshToken };
   }
 
   static async login(data: LoginRequest): Promise<AuthResponse> {
@@ -191,15 +257,7 @@ export class AuthService {
       businessId = business.id;
     }
 
-    const candidates = await publicPrisma.user.findMany({
-      where: {
-        email: data.email.toLowerCase().trim(),
-        ...(businessId !== undefined ? { businessId } : {}),
-      },
-      include: {
-        business: { select: { id: true, slug: true, schemaName: true, status: true, statusReason: true } },
-      },
-    });
+    const candidates = await userRepo.findLoginCandidates(data.email, businessId);
 
     for (const candidate of candidates) {
       const isMatch = await this.verifyPassword(data.password, candidate.password);
@@ -216,6 +274,11 @@ export class AuthService {
           businessStatus: candidate.business.status,
         });
         throw buildBusinessSuspendedError(candidate.business);
+      }
+
+      if (!candidate.emailVerified) {
+        logger.warn(`Login rejected: email not verified`, { userId: candidate.id, email: candidate.email });
+        throw new EmailNotVerifiedError(candidate.email);
       }
 
       // Enforce one active session per account: reject the login outright rather than

@@ -1,5 +1,11 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.48] - verify email on signup
+**P.R Raised by** : shubh404-SE on **Date** : 2026-11-03
+
+### Added
+  - added a new feature to verify email on signup, now user will get a verification email on signup and he need to verify his email before login. also added resend api for expired links.
+---
 ## Version [1.2.47] - email template icon fixed
 **P.R Raised by** : shubh404-SE on **Date** : 2026-11-04
 
