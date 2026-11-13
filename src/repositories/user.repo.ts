@@ -182,6 +182,7 @@ export function findSettingsProfileByUserId(userId: number) {
           contactNumber: true,
           email: true,
           address: true,
+          allowContentDownloads: true,
           youtubeUrl: true,
           instagramUrl: true,
           linkedinUrl: true,
