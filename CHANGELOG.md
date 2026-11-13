@@ -1,5 +1,11 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.49] - Multiple upload content
+**P.R Raised by** : shubh404-SE on **Date** : 2026-11-13
+
+### Changed
+  - added a new feature in upload content to upload multiple files at once.
+---
 ## Version [1.2.48] - content download button setting ad force logout on multiple session
 **P.R Raised by** : shubh404-SE on **Date** : 2026-11-14
 
