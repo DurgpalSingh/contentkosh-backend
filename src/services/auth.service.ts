@@ -10,7 +10,7 @@ import * as businessRepo from '../repositories/business.repo';
 import { UserStatus, UserRole, BusinessStatus } from '@prisma/client';
 import { AlreadyExistsError, AuthError, BusinessSuspendedError, ForbiddenError, NotFoundError } from '../errors/api.errors';
 import { BUSINESS_STATUS_ACTION } from '../constants/business.constants';
-import { AUTH_ERROR_MESSAGES, AUTH_LOG_MESSAGES, AUTH_TOKEN_CONFIG } from '../constants/auth.constants';
+import { AUTH_TOKEN_CONFIG } from '../constants/auth.constants';
 
 function buildBusinessSuspendedError(business: { status: BusinessStatus; statusReason: string | null }): BusinessSuspendedError {
   const action = business.status === BusinessStatus.PAUSED ? BUSINESS_STATUS_ACTION.PAUSED : BUSINESS_STATUS_ACTION.REMOVED;
@@ -244,7 +244,7 @@ export class AuthService {
       .toString(AUTH_TOKEN_CONFIG.REFRESH_TOKEN_ENCODING);
     const expiresAt = new Date(Date.now() + config.jwt.refreshTokenExpiresIn);
     await refreshTokenRepo.replaceUserRefreshToken(userId, token, expiresAt);
-    logger.info(AUTH_LOG_MESSAGES.REFRESH_TOKEN_CREATED, { userId });
+    logger.info("Refresh token generated for new login session", { userId });
     return token;
   }
 
