@@ -1,5 +1,12 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.48] - content download button setting ad force logout on multiple session
+**P.R Raised by** : shubh404-SE on **Date** : 2026-11-14
+
+### changed
+  - added a new setting in business setting to show/hide content download button, configure `SHOW_CONTENT_DOWNLOAD_BUTTON` in env file.
+  - added a new feature to force logout user on multiple session login.
+
 ## Version [1.2.47] - email template icon fixed
 **P.R Raised by** : shubh404-SE on **Date** : 2026-11-04
 

@@ -8,15 +8,14 @@ import * as userRepo from '../repositories/user.repo';
 import * as refreshTokenRepo from '../repositories/refreshToken.repo';
 import * as businessRepo from '../repositories/business.repo';
 import { UserStatus, UserRole, BusinessStatus } from '@prisma/client';
-import { AlreadyExistsError, AuthError, BusinessSuspendedError, ForbiddenError, NotFoundError, SessionAlreadyActiveError } from '../errors/api.errors';
+import { AlreadyExistsError, AuthError, BusinessSuspendedError, ForbiddenError, NotFoundError } from '../errors/api.errors';
 import { BUSINESS_STATUS_ACTION } from '../constants/business.constants';
+import { AUTH_ERROR_MESSAGES, AUTH_LOG_MESSAGES, AUTH_TOKEN_CONFIG } from '../constants/auth.constants';
 
 function buildBusinessSuspendedError(business: { status: BusinessStatus; statusReason: string | null }): BusinessSuspendedError {
   const action = business.status === BusinessStatus.PAUSED ? BUSINESS_STATUS_ACTION.PAUSED : BUSINESS_STATUS_ACTION.REMOVED;
   return new BusinessSuspendedError(action, business.statusReason);
 }
-import { publicPrisma } from '../config/database';
-
 function resolveLoginSlug(data: LoginRequest): string | undefined {
   return data.slug?.trim() || data.businessSlug?.trim() || undefined;
 }
@@ -56,7 +55,8 @@ export class AuthService {
   static async generateRefreshToken(userId: number): Promise<string> {
     try {
       // Generate a random token
-      const token = crypto.randomBytes(64).toString('hex');
+      const token = crypto.randomBytes(AUTH_TOKEN_CONFIG.REFRESH_TOKEN_RANDOM_BYTES)
+        .toString(AUTH_TOKEN_CONFIG.REFRESH_TOKEN_ENCODING);
 
       const expiresIn = config.jwt.refreshTokenExpiresIn;
       const expiresAt = new Date(Date.now() + expiresIn);
@@ -191,15 +191,7 @@ export class AuthService {
       businessId = business.id;
     }
 
-    const candidates = await publicPrisma.user.findMany({
-      where: {
-        email: data.email.toLowerCase().trim(),
-        ...(businessId !== undefined ? { businessId } : {}),
-      },
-      include: {
-        business: { select: { id: true, slug: true, schemaName: true, status: true, statusReason: true } },
-      },
-    });
+    const candidates = await userRepo.findLoginCandidates(data.email, businessId);
 
     for (const candidate of candidates) {
       const isMatch = await this.verifyPassword(data.password, candidate.password);
@@ -218,15 +210,6 @@ export class AuthService {
         throw buildBusinessSuspendedError(candidate.business);
       }
 
-      // Enforce one active session per account: reject the login outright rather than
-      // silently kicking the other session out. The user must log out there first, or
-      // wait for that session's refresh token to go idle and expire.
-      const activeSession = await refreshTokenRepo.findActiveTokenByUserId(candidate.id);
-      if (activeSession) {
-        logger.warn(`Login rejected: session already active`, { userId: candidate.id, email: candidate.email });
-        throw new SessionAlreadyActiveError();
-      }
-
       const accessToken = this.generateAccessToken({
         id: candidate.id,
         email: candidate.email,
@@ -235,7 +218,7 @@ export class AuthService {
         businessSlug: candidate.business?.slug ?? null,
         tenantSchema: candidate.business?.schemaName ?? null,
       });
-      const refreshToken = await this.generateRefreshToken(candidate.id);
+      const refreshToken = await this.replaceRefreshToken(candidate.id);
 
       logger.info(`Login successful`, { userId: candidate.id, email: candidate.email, businessId: candidate.businessId });
 
@@ -254,6 +237,15 @@ export class AuthService {
 
     logger.warn(`Login rejected: invalid credentials`, { email: data.email });
     throw new AuthError('Invalid email or password');
+  }
+  
+  private static async replaceRefreshToken(userId: number): Promise<string> {
+    const token = crypto.randomBytes(AUTH_TOKEN_CONFIG.REFRESH_TOKEN_RANDOM_BYTES)
+      .toString(AUTH_TOKEN_CONFIG.REFRESH_TOKEN_ENCODING);
+    const expiresAt = new Date(Date.now() + config.jwt.refreshTokenExpiresIn);
+    await refreshTokenRepo.replaceUserRefreshToken(userId, token, expiresAt);
+    logger.info(AUTH_LOG_MESSAGES.REFRESH_TOKEN_CREATED, { userId });
+    return token;
   }
 
   static async refreshTokens(refreshToken: string): Promise<AuthResponse> {
