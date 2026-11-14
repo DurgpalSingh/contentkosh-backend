@@ -54,6 +54,20 @@ export function findByBusinessAndEmail(businessId: number, email: string) {
   });
 }
 
+export function findLoginCandidates(email: string, businessId?: number) {
+  return publicPrisma.user.findMany({
+    where: {
+      email: email.toLowerCase().trim(),
+      ...(businessId !== undefined ? { businessId } : {}),
+    },
+    include: {
+      business: {
+        select: { id: true, slug: true, schemaName: true, status: true, statusReason: true },
+      },
+    },
+  });
+}
+
 export function findByMobile(mobile: string) {
   return publicPrisma.user.findFirst({ where: { mobile } });
 }
@@ -182,6 +196,7 @@ export function findSettingsProfileByUserId(userId: number) {
           contactNumber: true,
           email: true,
           address: true,
+          allowContentDownloads: true,
           youtubeUrl: true,
           instagramUrl: true,
           linkedinUrl: true,

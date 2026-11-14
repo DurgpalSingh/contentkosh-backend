@@ -13,6 +13,19 @@ export async function createRefreshToken(userId: number, token: string, expiresA
     });
 }
 
+export async function replaceUserRefreshToken(userId: number, token: string, expiresAt: Date) {
+    return prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT "id" FROM "public"."users" WHERE "id" = ${userId} FOR UPDATE`;
+        await tx.refreshToken.updateMany({
+            where: { userId, isRevoked: false },
+            data: { isRevoked: true },
+        });
+        return tx.refreshToken.create({
+            data: { userId, token, expiresAt },
+        });
+    });
+}
+
 export async function findByToken(token: string) {
     return prisma.refreshToken.findUnique({
         where: { token },
@@ -43,16 +56,6 @@ export async function revokeToken(token: string) {
     return prisma.refreshToken.update({
         where: { token },
         data: { isRevoked: true },
-    });
-}
-
-export async function findActiveTokenByUserId(userId: number) {
-    return prisma.refreshToken.findFirst({
-        where: {
-            userId,
-            isRevoked: false,
-            expiresAt: { gt: new Date() },
-        },
     });
 }
 

@@ -83,6 +83,7 @@ model Business {
   contactNumber String?        @map("contact_number")
   email         String?
   address       String?
+  allowContentDownloads Boolean  @default(true) @map("allow_content_downloads")
   youtubeUrl    String?        @map("youtube_url")
   instagramUrl  String?        @map("instagram_url")
   linkedinUrl   String?        @map("linkedin_url")
