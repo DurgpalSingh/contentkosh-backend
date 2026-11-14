@@ -21,6 +21,7 @@ jest.mock('../../../src/services/content.service', () => {
     return {
         ContentService: jest.fn().mockImplementation(() => ({
             createContent: jest.fn().mockResolvedValue(mockContent),
+            createContentsBulk: jest.fn(),
             getContent: jest.fn().mockResolvedValue(mockContent),
             getContentsByBatch: jest.fn().mockResolvedValue([mockContent]),
             updateContent: jest.fn().mockResolvedValue({ ...mockContent, title: 'Updated Title' }),
@@ -71,6 +72,14 @@ jest.mock('../../../src/middlewares/upload.middleware', () => ({
         req.body.type = requestedType;
         next();
     },
+    uploadMultipleFiles: (req: any, res: any, next: any) => next(),
+    validateMultipleFileSizes: (req: any, res: any, next: any) => {
+        req.body.items = [
+            { title: 'File 1', type: 'PDF', filePath: 'uploads/a.pdf', fileSize: 1024 },
+            { title: 'File 2', type: 'PDF', filePath: 'uploads/b.pdf', fileSize: 2048 }
+        ];
+        next();
+    },
     handleUploadError: (err: any, req: any, res: any, next: any) => next(err),
 }));
 
@@ -115,6 +124,28 @@ describe('Content Routes Integration', () => {
             // Since we're using a new mock for this test, we need to re-import the route
             // This is complex, so we'll just verify that the happy path works
             expect(true).toBe(true);
+        });
+    });
+
+    describe('POST /api/batches/:batchId/contents/bulk', () => {
+        it('should create multiple contents successfully', async () => {
+            // resetMocks wipes factory return values, so stub on the live controller instance
+            const { contentController } = require('../../../src/controllers/content.controller');
+            const createContentsBulk = jest
+                .spyOn(contentController.contentService, 'createContentsBulk')
+                .mockResolvedValue([{ id: 1 }, { id: 2 }]);
+
+            const res = await request(app)
+                .post('/api/batches/1/contents/bulk')
+                .send({ titles: '["File 1","File 2"]' });
+
+            expect(res.status).toBe(201);
+            expect(res.body.data).toHaveLength(2);
+            expect(createContentsBulk).toHaveBeenCalledWith(
+                1,
+                expect.objectContaining({ items: expect.arrayContaining([expect.objectContaining({ title: 'File 1' })]) }),
+                expect.objectContaining({ id: 1 })
+            );
         });
     });
 
