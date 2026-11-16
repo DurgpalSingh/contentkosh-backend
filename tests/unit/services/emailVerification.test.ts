@@ -249,7 +249,6 @@ describe('Email verification', () => {
 
     beforeEach(() => {
       jest.spyOn(AuthService, 'verifyPassword').mockResolvedValue(true);
-      (refreshTokenRepo.findActiveTokenByUserId as jest.Mock).mockResolvedValue(null);
     });
 
     it('blocks an unverified account after the password matched, before any session is issued', async () => {
