@@ -1,0 +1,8 @@
+
+
+
+
+export const AUTH_TOKEN_CONFIG = {
+  REFRESH_TOKEN_RANDOM_BYTES: 64,
+  REFRESH_TOKEN_ENCODING: 'hex',
+} as const;

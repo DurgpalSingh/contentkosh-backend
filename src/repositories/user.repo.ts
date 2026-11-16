@@ -11,6 +11,7 @@ export async function createUser(data: {
   role?: UserRole | undefined;
   businessId?: number | undefined;
   status?: UserStatus | undefined;
+  emailVerified?: boolean | undefined;
 }) {
   try {
     return await publicPrisma.user.create({
@@ -24,8 +25,9 @@ export async function createUser(data: {
         ...(data.role !== undefined && { role: data.role }),
         ...(data.businessId !== undefined && { businessId: data.businessId }),
         ...(data.status !== undefined && { status: data.status }),
+        ...(data.emailVerified !== undefined && { emailVerified: data.emailVerified }),
       },
-      select: { id: true, email: true, name: true, role: true, businessId: true, mobile: true, createdAt: true, updatedAt: true },
+      select: { id: true, email: true, name: true, role: true, businessId: true, mobile: true, emailVerified: true, createdAt: true, updatedAt: true },
     });
   } catch (e: any) {
     if (e.code === 'P2002') {
@@ -51,6 +53,20 @@ export function findByBusinessAndEmail(businessId: number, email: string) {
         email: email.toLowerCase().trim()
       }
     }
+  });
+}
+
+export function findLoginCandidates(email: string, businessId?: number) {
+  return publicPrisma.user.findMany({
+    where: {
+      email: email.toLowerCase().trim(),
+      ...(businessId !== undefined ? { businessId } : {}),
+    },
+    include: {
+      business: {
+        select: { id: true, slug: true, schemaName: true, status: true, statusReason: true },
+      },
+    },
   });
 }
 
@@ -121,7 +137,7 @@ export async function findByBusinessId(businessId: number, role?: UserRole) {
   }));
 }
 
-export function updateUser(id: number, data: { name?: string; mobile?: string; role?: UserRole; status?: UserStatus; password?: string; businessId?: number; profilePicture?: string | null }) {
+export function updateUser(id: number, data: { name?: string; mobile?: string; role?: UserRole; status?: UserStatus; password?: string; businessId?: number; profilePicture?: string | null; emailVerified?: boolean }) {
   return publicPrisma.user.update({
     where: { id },
     data,
@@ -182,6 +198,7 @@ export function findSettingsProfileByUserId(userId: number) {
           contactNumber: true,
           email: true,
           address: true,
+          allowContentDownloads: true,
           youtubeUrl: true,
           instagramUrl: true,
           linkedinUrl: true,
