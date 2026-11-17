@@ -21,6 +21,7 @@ import { registerAnnouncementSocket } from './sockets/announcement.socket';
 import { FILE_STORAGE_CONFIG } from './config/fileStorage.config';
 import { authenticate } from './middlewares/auth.middleware';
 import { authorizeUploadedFileAccess } from './middlewares/uploadedFileAccess.middleware';
+import { HTTP_HEADERS } from './constants/httpHeaders.constants';
 
 // Load environment variables
 dotenv.config();
@@ -39,6 +40,7 @@ async function start() {
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Tenant-Slug'],
+      exposedHeaders: [HTTP_HEADERS.ACCEPT_RANGES, HTTP_HEADERS.CONTENT_RANGE],
     }));
     app.use(cookieParser());
     app.use(express.json());

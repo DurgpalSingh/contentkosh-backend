@@ -1,6 +1,8 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import express from 'express';
+import request from 'supertest';
 import {
   FileStorageService,
   appendOriginalFileName,
@@ -46,6 +48,45 @@ describe('FileStorageService', () => {
 
     expect(commitResult).toBe('saved');
     expect(fs.existsSync(path.join(rootDir, 'subjective/1/st-1/paper.pdf'))).toBe(true);
+  });
+
+  it('serves requested byte ranges for progressive previews', async () => {
+    fs.writeFileSync(path.join(rootDir, 'preview.pdf'), '0123456789');
+    const app = express();
+    app.get('/preview', async (_req, res) => {
+      await fileStorage.streamToResponse(res, {
+        storageKey: 'preview.pdf',
+        downloadFileName: 'preview.pdf',
+        contentType: 'application/pdf',
+      });
+    });
+
+    const response = await request(app).get('/preview').set('Range', 'bytes=2-5');
+
+    expect(response.status).toBe(206);
+    expect(response.body.toString()).toBe('2345');
+    expect(response.headers['content-range']).toBe('bytes 2-5/10');
+    expect(response.headers['accept-ranges']).toBe('bytes');
+    expect(response.headers['content-type']).toContain('application/pdf');
+    expect(response.headers['content-disposition']).toContain('inline');
+    expect(response.headers['cache-control']).toBe('private, no-store');
+  });
+
+  it('returns 416 for a byte range outside the file', async () => {
+    fs.writeFileSync(path.join(rootDir, 'preview.pdf'), '0123456789');
+    const app = express();
+    app.get('/preview', async (_req, res) => {
+      await fileStorage.streamToResponse(res, {
+        storageKey: 'preview.pdf',
+        downloadFileName: 'preview.pdf',
+        contentType: 'application/pdf',
+      });
+    });
+
+    const response = await request(app).get('/preview').set('Range', 'bytes=10-');
+
+    expect(response.status).toBe(416);
+    expect(response.headers['content-range']).toBe('bytes */10');
   });
 
   it('deletes the replaced file only after a successful commit', async () => {

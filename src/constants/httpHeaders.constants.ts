@@ -1,8 +1,13 @@
 export const HTTP_HEADERS = {
   CONTENT_TYPE: 'Content-Type',
-  CONTENT_LENGTH: 'Content-Length',
   CONTENT_DISPOSITION: 'Content-Disposition',
   CACHE_CONTROL: 'Cache-Control',
+  ACCEPT_RANGES: 'Accept-Ranges',
+  CONTENT_RANGE: 'Content-Range',
+} as const;
+
+export const CONTENT_DISPOSITION_VALUES = {
+  INLINE: 'inline',
 } as const;
 
 export const CACHE_CONTROL_VALUES = {
