@@ -1,5 +1,11 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.51] - fixed stream content issue
+**P.R Raised by** : shubh404-SE on **Date** : 2026-11-17
+
+### Fixed
+  - fixed issue in stream content api, now user can stream content without any issue.
+---
 ## Version [1.2.50] - verify email on signup
 **P.R Raised by** : shubh404-SE on **Date** : 2026-11-03
 

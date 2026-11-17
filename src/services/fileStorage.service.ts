@@ -4,7 +4,11 @@ import { Response } from 'express';
 import { NotFoundError } from '../errors/api.errors';
 import { FILE_STORAGE_CONFIG } from '../config/fileStorage.config';
 import { FILE_ENTITY_LABEL, FILE_NAME_RULES, FILE_PATH_REGEX } from '../constants/file.constants';
-import { CACHE_CONTROL_VALUES, HTTP_HEADERS } from '../constants/httpHeaders.constants';
+import {
+  CACHE_CONTROL_VALUES,
+  CONTENT_DISPOSITION_VALUES,
+  HTTP_HEADERS,
+} from '../constants/httpHeaders.constants';
 import logger from '../utils/logger';
 
 export type StoredFileDownload = {
@@ -72,20 +76,32 @@ export class FileStorageService {
       throw new NotFoundError(FILE_ENTITY_LABEL);
     }
 
-    res.setHeader(HTTP_HEADERS.CONTENT_TYPE, download.contentType);
-    res.setHeader(HTTP_HEADERS.CONTENT_LENGTH, fileStats.size);
-    res.setHeader(
-      HTTP_HEADERS.CONTENT_DISPOSITION,
-      `inline; filename*=UTF-8''${encodeURIComponent(toHeaderSafeFileName(download.downloadFileName))}`,
-    );
-    res.setHeader(HTTP_HEADERS.CACHE_CONTROL, CACHE_CONTROL_VALUES.PRIVATE_NO_STORE);
-
-    const fileStream = fs.createReadStream(absolutePath);
-    fileStream.on('error', (error) => {
-      logger.error(`[file-storage] stream failed storageKey=${download.storageKey}: ${error.message}`);
-      res.destroy(error);
+    return new Promise<void>((resolve, reject) => {
+      res.sendFile(
+        absolutePath,
+        {
+          headers: {
+            [HTTP_HEADERS.CONTENT_TYPE]: download.contentType,
+            [HTTP_HEADERS.CONTENT_DISPOSITION]:
+              `${CONTENT_DISPOSITION_VALUES.INLINE}; filename*=UTF-8''${encodeURIComponent(toHeaderSafeFileName(download.downloadFileName))}`,
+            [HTTP_HEADERS.CACHE_CONTROL]: CACHE_CONTROL_VALUES.PRIVATE_NO_STORE,
+          },
+        },
+        (error) => {
+          if (!error) {
+            resolve();
+            return;
+          }
+          if (res.headersSent) {
+            logger.error(`[file-storage] stream failed storageKey=${download.storageKey}: ${error.message}`);
+            res.destroy(error);
+            resolve();
+            return;
+          }
+          reject(error);
+        },
+      );
     });
-    fileStream.pipe(res);
   }
 
   /** Best-effort delete; a leftover file is logged, never thrown, so cleanup can't fail a request. */
