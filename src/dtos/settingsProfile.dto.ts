@@ -1,6 +1,7 @@
 import { Type, Transform } from 'class-transformer';
 import {
   IsArray,
+  IsBoolean,
   IsEmail,
   IsEnum,
   IsInt,
@@ -133,6 +134,10 @@ export class BusinessDetailsDto {
   @IsOptional()
   @IsString()
   logo?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  allowContentDownloads?: boolean;
 }
 
 export class UpdateSettingsProfileDto {

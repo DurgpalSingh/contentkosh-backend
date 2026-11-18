@@ -15,6 +15,7 @@ const BUSINESS_COLUMNS: Record<string, string> = {
   email: 'email',
   address: 'address',
   logo: 'logo',
+  allowContentDownloads: 'allow_content_downloads',
 };
 
 const TEACHER_COLUMNS: Record<string, string> = {

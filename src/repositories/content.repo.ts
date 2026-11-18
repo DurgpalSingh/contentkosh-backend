@@ -53,6 +53,20 @@ export const createContent = async (data: Prisma.ContentCreateInput, businessId:
   return rows[0] ?? created;
 };
 
+export const createContents = async (
+  dataList: Prisma.ContentCreateInput[],
+  businessId: number
+): Promise<Content[]> => {
+  const schemaName = await getTenantSchemaNameForBusiness(businessId);
+  const tenantPrisma = getTenantPrisma(schemaName);
+  const created = await tenantPrisma.$transaction(
+    dataList.map((data) => tenantPrisma.content.create({ data: toUncheckedCreate(data) as any }))
+  );
+  const ids = created.map((item) => item.id);
+  const rows = await findContentWithPublicRelations(businessId, 'c.id = ANY($1::int[])', ids);
+  return rows.length > 0 ? rows : created;
+};
+
 export const findContentById = async (
   id: number,
   options: Pick<ContentFindOptions, 'include' | 'select'> = {}

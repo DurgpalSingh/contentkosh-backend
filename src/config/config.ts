@@ -14,6 +14,7 @@ export const config = {
     port: process.env.PORT || 8080,
     nodeEnv: process.env.NODE_ENV || 'development',
     frontendUrl: process.env.FRONTEND_URL || DEVELOPMENT_URL,
+    backendUrl: (process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 8080}`).replace(/\/+$/, ''),
   },
   cookies: {
     accessCookieName: process.env.ACCESS_COOKIE_NAME || 'ck_access_token',

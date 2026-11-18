@@ -1,6 +1,7 @@
 import { IsString, IsNotEmpty, IsOptional, IsUrl, Matches, IsEmail, MaxLength } from 'class-validator';
 
-export class CreateBusinessDto {
+/** The minimum needed to register an institute: used by signup and extended by the full create DTO. */
+export class BusinessIdentityDto {
     @IsString()
     @IsNotEmpty({ message: 'Institute name is required' })
     @MaxLength(100)
@@ -10,7 +11,9 @@ export class CreateBusinessDto {
     @IsNotEmpty({ message: 'Slug is required' })
     @Matches(/^[a-z0-9-]+$/, { message: 'Slug must contain only lowercase letters, numbers, and hyphens' })
     slug!: string;
+}
 
+export class CreateBusinessDto extends BusinessIdentityDto {
     @IsOptional()
     @IsString()
     @IsUrl({}, { message: 'Logo must be a valid URL' })

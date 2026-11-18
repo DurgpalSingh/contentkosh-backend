@@ -8,7 +8,7 @@ export const TEACHER_PROFESSIONAL_FIELDS = [
 ] as const;
 export const TEACHER_PERSONAL_FIELDS = ['gender', 'dob', 'address'] as const;
 export const STUDENT_UPDATE_FIELDS = ['gender', 'dob', 'languages', 'address', 'city', 'bio'] as const;
-export const BUSINESS_UPDATE_FIELDS = ['instituteName', 'tagline', 'contactNumber', 'email', 'address', 'logo'] as const;
+export const BUSINESS_UPDATE_FIELDS = ['instituteName', 'tagline', 'contactNumber', 'email', 'address', 'logo', 'allowContentDownloads'] as const;
 
 export type UserUpdateField = typeof USER_UPDATE_FIELDS[number];
 export type TeacherProfessionalField = typeof TEACHER_PROFESSIONAL_FIELDS[number];

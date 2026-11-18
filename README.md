@@ -63,6 +63,7 @@ Create a `.env` file in `contentkosh-backend/`. Use `.env.local` (local dev) or 
 | `DATABASE_URL` | PostgreSQL connection string used by Prisma, e.g. `postgresql://postgres:postgres@localhost:5432/contentkosh?schema=public` |
 | `JWT_SECRET` | Long random secret used to sign JWTs. Generate one with `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"` |
 | `FRONTEND_URL` | Frontend base URL, used for CORS and callbacks (e.g. `http://localhost:3000`) |
+| `BACKEND_URL` | Public base URL of this API (e.g. `https://api.yourdomain.com`). Emails load their logo and icons from `<BACKEND_URL>/uploads/assets/...`, so it must be reachable from the internet. Defaults to `http://localhost:<PORT>`, which only works on your own machine |
 
 ### Server, auth and cookies (optional)
 
@@ -102,6 +103,8 @@ Needed for sending emails (e.g. the new-business-signup notification and busines
 | `MAIL_FROM_NAME` | Display name on outgoing mail. Defaults to `ContentKosh` |
 | `MAIL_FROM_EMAIL` | Address emails are sent **from**. Defaults to `SMTP_USER`. Most providers require it to match the mailbox in `SMTP_USER` |
 | `BUSINESS_SIGNUP_NOTIFICATION_EMAIL` | Inbox that receives a notification when a new business signs up. Optional — defaults to `info@contentkosh.in` |
+| `BUSINESS_SIGNUP_NOTIFICATION_CC` | Comma separated emails copied (CC) on the signup notification. Optional |
+| `BUSINESS_SIGNUP_NOTIFICATION_BCC` | Comma separated emails blind-copied (BCC) on the signup notification. Optional |
 
 Final result in `.env`:
 
@@ -114,6 +117,8 @@ SMTP_PASSWORD=/etc/contentkosh/secrets.json
 MAIL_FROM_NAME=ContentKosh
 MAIL_FROM_EMAIL=noreply@yourdomain.com
 BUSINESS_SIGNUP_NOTIFICATION_EMAIL=admin@yourdomain.com
+BUSINESS_SIGNUP_NOTIFICATION_CC=ops@yourdomain.com,founder@yourdomain.com
+BUSINESS_SIGNUP_NOTIFICATION_BCC=audit@yourdomain.com
 ```
 
 ## SMTP setup (email sending)

@@ -4,6 +4,8 @@ import { MAIL_ERROR_MESSAGES } from '../constants/mail.constants';
 
 export interface SendMailParams {
   to: string | string[];
+  cc?: string | string[];
+  bcc?: string | string[];
   subject: string;
   html: string;
 }
@@ -33,7 +35,7 @@ function getTransporter(): Transporter {
  * Generic and reusable across features — throws on failure so each caller can
  * decide whether a failed send should be fatal to its own flow.
  */
-export async function sendMail({ to, subject, html }: SendMailParams): Promise<void> {
+export async function sendMail({ to, cc, bcc, subject, html }: SendMailParams): Promise<void> {
   const { name, email } = mailConfig.from;
   if (!email) {
     throw new Error(MAIL_ERROR_MESSAGES.MISSING_SENDER);
@@ -42,6 +44,8 @@ export async function sendMail({ to, subject, html }: SendMailParams): Promise<v
   await getTransporter().sendMail({
     from: { name, address: email },
     to,
+    ...(cc?.length && { cc }),
+    ...(bcc?.length && { bcc }),
     subject,
     html,
   });
