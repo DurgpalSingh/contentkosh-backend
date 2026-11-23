@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import logger from '../utils/logger';
+import { config } from '../config/config';
 
 const router = Router();
 
@@ -24,6 +25,9 @@ const router = Router();
  *                 message:
  *                   type: string
  *                   example: API is running
+ *                 environment:
+ *                   type: string
+ *                   example: uat
  *                 timestamp:
  *                   type: string
  *                   format: date-time
@@ -34,6 +38,7 @@ router.get('/health', (req, res) => {
     res.json({
       success: true,
       message: 'API is running',
+      environment: config.server.appEnv,
       timestamp: new Date().toISOString()
     });
   });
