@@ -56,7 +56,7 @@ The server runs on port `8080` by default (see `PORT`). Swagger UI: `http://loca
 
 Create a `.env` file in `contentkosh-backend/`. Use `.env.local` (local dev) or `.env.uat` (UAT) as a starting point. Set `APP_ENV` to `local`, `uat`, or `production` in each environment's configuration. Production deployments should set `APP_ENV=production` in their hosting platform's environment variables. `.env` is git-ignored — never commit real secrets.
 
-The application logs its environment at startup and returns it as `environment` from `GET /health`. If `APP_ENV` is missing, it reports `unknown`; this is separate from `NODE_ENV`, which controls Node.js runtime behavior.
+The application logs its environment at startup and returns it as `environment` from `GET /health`. The platform's new-business notification email also shows the environment in its subject and body. If `APP_ENV` is missing, it reports `unknown`; this is separate from `NODE_ENV`, which controls Node.js runtime behavior.
 
 ### Core (required)
 
