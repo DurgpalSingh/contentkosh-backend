@@ -13,6 +13,7 @@ export const config = {
   server: {
     port: process.env.PORT || 8080,
     nodeEnv: process.env.NODE_ENV || 'development',
+    appEnv: process.env.APP_ENV || 'unknown',
     frontendUrl: process.env.FRONTEND_URL || DEVELOPMENT_URL,
     backendUrl: (process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 8080}`).replace(/\/+$/, ''),
   },
