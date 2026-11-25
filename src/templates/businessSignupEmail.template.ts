@@ -11,6 +11,7 @@ const BUSINESS_SIGNUP_EMAIL_TEXT = {
   LABEL_SLUG: 'Slug',
   LABEL_ADMIN_NAME: 'Admin Name',
   LABEL_ADMIN_EMAIL: 'Admin Email',
+  LABEL_ENVIRONMENT: 'Environment',
   LABEL_REGISTERED_ON: 'Registered On',
   CTA_LABEL: 'View Business',
 } as const;
@@ -22,13 +23,14 @@ export interface BusinessSignupEmailData {
   slug: string | null;
   adminName: string;
   adminEmail: string;
+  environment: string;
   registeredOn: Date;
   dashboardUrl: string;
   privacyUrl: string;
 }
 
-export function buildBusinessSignupEmailSubject(instituteName: string): string {
-  return `${BUSINESS_SIGNUP_EMAIL_TEXT.SUBJECT_PREFIX}${instituteName}`;
+export function buildBusinessSignupEmailSubject(instituteName: string, environment: string): string {
+  return `[${environment.toUpperCase()}] ${BUSINESS_SIGNUP_EMAIL_TEXT.SUBJECT_PREFIX}${instituteName}`;
 }
 
 export function buildBusinessSignupEmailHtml(data: BusinessSignupEmailData): string {
@@ -37,6 +39,7 @@ export function buildBusinessSignupEmailHtml(data: BusinessSignupEmailData): str
     { icon: 'link', label: BUSINESS_SIGNUP_EMAIL_TEXT.LABEL_SLUG, value: data.slug },
     { icon: 'person', label: BUSINESS_SIGNUP_EMAIL_TEXT.LABEL_ADMIN_NAME, value: data.adminName },
     { icon: 'mail', label: BUSINESS_SIGNUP_EMAIL_TEXT.LABEL_ADMIN_EMAIL, value: data.adminEmail },
+    { icon: 'document', label: BUSINESS_SIGNUP_EMAIL_TEXT.LABEL_ENVIRONMENT, value: data.environment },
     {
       icon: 'calendar',
       label: BUSINESS_SIGNUP_EMAIL_TEXT.LABEL_REGISTERED_ON,

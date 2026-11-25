@@ -1,8 +1,8 @@
+import 'dotenv/config';
 import 'reflect-metadata';
 import http from 'http';
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import swaggerUi from 'swagger-ui-express';
 import { Server as SocketIOServer } from 'socket.io';
 import routes from './routes';
@@ -22,9 +22,6 @@ import { FILE_STORAGE_CONFIG } from './config/fileStorage.config';
 import { authenticate } from './middlewares/auth.middleware';
 import { authorizeUploadedFileAccess } from './middlewares/uploadedFileAccess.middleware';
 import { HTTP_HEADERS } from './constants/httpHeaders.constants';
-
-// Load environment variables
-dotenv.config();
 
 const app = express();
 
@@ -104,6 +101,7 @@ async function start() {
 
     httpServer.listen(PORT, () => {
       logger.info(`Server is running on port ${PORT}`);
+      logger.info(`Application environment: ${config.server.appEnv}`);
       logger.info(`Health check: http://localhost:${PORT}/health`);
       logger.info(`API Base URL: http://localhost:${PORT}/api`);
       logger.info(`API Documentation: http://localhost:${PORT}/api-docs`);

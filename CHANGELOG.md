@@ -1,5 +1,11 @@
 # Changelog
 All notable changes to this project will be documented in this file.
+## Version [1.2.52] - APP_ENV variable added to env files
+**P.R Raised by** : shubh404-SE on **Date** : 2026-11-23
+
+### Added
+  - added a new env variable `APP_ENV` to env files, this variable will be used to identify the environment of the application.
+---
 ## Version [1.2.51] - fixed stream content issue
 **P.R Raised by** : shubh404-SE on **Date** : 2026-11-17
 
